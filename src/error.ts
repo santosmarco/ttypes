@@ -1,5 +1,5 @@
 import type { ParseContext, ParsePath, TParsedType } from './parse'
-import type { AnyTType } from './types_v2'
+import type { AnyTType, TLiteralValue } from './types'
 import type { SimplifyFlat } from './utils'
 
 /* ------------------------------------------------------------------------------------------------------------------ */
@@ -9,6 +9,7 @@ import type { SimplifyFlat } from './utils'
 export enum TIssueKind {
   Required = 'required',
   InvalidType = 'invalid_type',
+  InvalidLiteral = 'invalid_literal',
   InvalidArray = 'invalid_array',
   InvalidSet = 'invalid_set',
   Forbidden = 'forbidden',
@@ -29,6 +30,11 @@ export type TInvalidTypeIssue = TIssueBase<
   { readonly expected: TParsedType; readonly received: TParsedType }
 >
 
+export type TInvalidLiteralIssue = TIssueBase<
+  TIssueKind.InvalidLiteral,
+  { readonly expected: TLiteralValue; readonly received: TLiteralValue }
+>
+
 export type TInvalidArrayIssue = TIssueBase<
   TIssueKind.InvalidArray,
   | {
@@ -42,8 +48,7 @@ export type TInvalidArrayIssue = TIssueBase<
       readonly received: number
     }
   | { readonly check: 'length'; readonly expected: number; readonly received: number }
-  | { readonly check: 'unique'; readonly expected: boolean; readonly received: boolean }
-  | { readonly check: 'sparse'; readonly expected: boolean; readonly received: boolean }
+  | { readonly check: 'unique' }
   | { readonly check: 'ordered'; readonly expected: boolean; readonly received: boolean }
 >
 
@@ -64,7 +69,13 @@ export type TInvalidSetIssue = TIssueBase<
 
 export type TForbiddenIssue = TIssueBase<TIssueKind.Forbidden, null>
 
-export type TIssue = TRequiredIssue | TInvalidTypeIssue | TInvalidArrayIssue | TInvalidSetIssue | TForbiddenIssue
+export type TIssue =
+  | TRequiredIssue
+  | TInvalidTypeIssue
+  | TInvalidLiteralIssue
+  | TInvalidArrayIssue
+  | TInvalidSetIssue
+  | TForbiddenIssue
 
 /* ------------------------------------------------------------------------------------------------------------------ */
 /*                                                       TError                                                       */

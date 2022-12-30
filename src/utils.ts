@@ -11,6 +11,8 @@ export type SimplifyFlat<T> = { [K in keyof T]: T[K] }
 export type StrictOmit<T, K extends keyof T> = Omit<T, K>
 export type StripKey<T, K extends keyof T> = T extends unknown ? StrictOmit<T, K> : never
 
+export type Defined<T> = T extends undefined ? never : T
+
 export type EnforcePartialTuple<T extends readonly unknown[]> = T extends readonly []
   ? T
   : T extends readonly [infer H, ...infer R]
@@ -19,6 +21,7 @@ export type EnforcePartialTuple<T extends readonly unknown[]> = T extends readon
 
 export const isAsync = <T>(x: T | Promise<T>): x is Promise<T> => x instanceof Promise
 export const isArray = <T>(x: T | readonly T[]): x is readonly T[] => Array.isArray(x)
+export const isFunction = (x: unknown): x is (...args: readonly unknown[]) => unknown => typeof x === 'function'
 
 export const omit = <T extends object>(x: T, predicate: (value: T) => boolean): T =>
   Object.fromEntries(Object.entries(x).filter(([_, value]) => !predicate(value))) as T

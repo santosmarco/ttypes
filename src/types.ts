@@ -14,7 +14,7 @@ import {
   type ParseResultOf,
   type SyncParseResultOf,
 } from './parse'
-import { isArray, isAsync, omit, type Merge, type SimplifyFlat } from './utils'
+import { Defined, isArray, isAsync, isFunction, omit, type Merge, type SimplifyFlat } from './utils'
 
 /* ---------------------------------------------------- TTypeName --------------------------------------------------- */
 
@@ -25,9 +25,11 @@ export enum TTypeName {
   Boolean = 'TBoolean',
   Brand = 'TBrand',
   Date = 'TDate',
+  Default = 'TDefault',
   False = 'TFalse',
   Intersection = 'TIntersection',
   Lazy = 'TLazy',
+  Literal = 'TLiteral',
   NaN = 'TNaN',
   Never = 'TNever',
   Null = 'TNull',
@@ -36,6 +38,7 @@ export enum TTypeName {
   Optional = 'TOptional',
   Pipeline = 'TPipeline',
   Promise = 'TPromise',
+  Required = 'TRequired',
   Set = 'TSet',
   String = 'TString',
   Symbol = 'TSymbol',
@@ -75,6 +78,42 @@ export const getDefaultManifest = <T>(): TManifest<T> => ({
   nullable: false,
   readonly: false,
 })
+
+export interface TRequiredManifest<T> extends TManifest<T> {
+  readonly required: true
+}
+
+export interface TOptionalManifest<T> extends TManifest<T> {
+  readonly required: false
+}
+
+export interface TNullableManifest<T> extends TManifest<T> {
+  readonly nullable: true
+}
+
+export interface TNullishManifest<T> extends TManifest<T> {
+  readonly required: false
+  readonly nullable: true
+}
+
+export interface TLiteralManifest<T extends TLiteralValue> extends TManifest<T> {
+  readonly value: T
+}
+
+export interface TIterableManifest<T extends AnyTType, O> extends TManifest<O> {
+  readonly type: TParsedType.Array | TParsedType.Set
+  readonly items: T['manifest']
+  readonly minItems?: number
+  readonly maxItems?: number
+}
+
+export interface TPromiseManifest<T> extends TManifest<T> {
+  readonly promise: true
+}
+
+export interface TBrandManifest<T, B extends PropertyKey> extends TManifest<T> {
+  readonly brand: B
+}
 
 /* ----------------------------------------------------- Options ---------------------------------------------------- */
 
@@ -128,6 +167,7 @@ abstract class TType<O, D extends TDef, I = O> {
     this.optional = this.optional.bind(this)
     this.nullable = this.nullable.bind(this)
     this.nullish = this.nullish.bind(this)
+    this.required = this.required.bind(this)
     this.array = this.array.bind(this)
     this.promise = this.promise.bind(this)
     this.brand = this.brand.bind(this)
@@ -222,6 +262,10 @@ abstract class TType<O, D extends TDef, I = O> {
     return TOptional.create(TNullable.create(this, this.options), this.options)
   }
 
+  required(): TRequired<this> {
+    return TRequired.create(this, this.options)
+  }
+
   array(): TArray<this> {
     return TArray.create(this, this.options)
   }
@@ -232,6 +276,13 @@ abstract class TType<O, D extends TDef, I = O> {
 
   brand<B extends PropertyKey>(brand: B): TBrand<this, B> {
     return TBrand.create(this, brand, this.options)
+  }
+
+  default<D extends Defined<O>>(defaultValue: D): TDefault<this, D>
+  default<D extends Defined<O>>(getDefault: () => D): TDefault<this, D>
+  default<D extends Defined<O>>(defaultValueOrGetter: D | (() => D)): TDefault<this, D>
+  default<D extends Defined<O>>(defaultValueOrGetter: D | (() => D)): TDefault<this, D> {
+    return TDefault.create(this, defaultValueOrGetter, this.options)
   }
 
   lazy(): TLazy<this> {
@@ -339,8 +390,6 @@ export type InputOf<T extends AnyTType> = T['$I']
 /* ------------------------------------------------------------------------------------------------------------------ */
 /*                                                        TAny                                                        */
 /* ------------------------------------------------------------------------------------------------------------------ */
-
-export type TNullishManifest<T> = Merge<TManifest<T>, { readonly required: false; readonly nullable: true }>
 
 export interface TAnyDef extends TDef {
   readonly typeName: TTypeName.Any
@@ -594,26 +643,104 @@ export class TSymbol extends TType<symbol, TSymbolDef> {
   }
 }
 
-/* ---------------------------------------------------- TIterable --------------------------------------------------- */
+/* ------------------------------------------------------------------------------------------------------------------ */
+/*                                                      TLiteral                                                      */
+/* ------------------------------------------------------------------------------------------------------------------ */
 
-export interface TIterableManifest<T extends AnyTType, O> extends TManifest<O> {
-  readonly type: TParsedType.Array | TParsedType.Set
-  readonly items: T['manifest']
-  readonly minItems?: number
-  readonly maxItems?: number
+export type TLiteralValue = string | number | bigint | boolean | symbol | null | undefined
+
+export type TLiteralOptions = TOptions<{
+  additionalIssueKind: TIssueKind.InvalidLiteral
+}>
+
+export interface TLiteralDef<T extends TLiteralValue> extends TDef {
+  readonly typeName: TTypeName.Literal
+  readonly options: TLiteralOptions
+  readonly value: T
 }
+
+export class TLiteral<T extends TLiteralValue> extends TType<T, TLiteralDef<T>> {
+  get _manifest(): TLiteralManifest<T> {
+    return { ...getDefaultManifest(), value: this._def.value }
+  }
+
+  _parse(ctx: ParseContext<this>): ParseResultOf<this> {
+    let expectedParsedType: TParsedType
+
+    if (this._def.value === null) {
+      expectedParsedType = TParsedType.Null
+    } else {
+      switch (typeof this._def.value) {
+        case 'string':
+          expectedParsedType = TParsedType.String
+          break
+        case 'number':
+          expectedParsedType = TParsedType.Number
+          break
+        case 'bigint':
+          expectedParsedType = TParsedType.BigInt
+          break
+        case 'boolean':
+          expectedParsedType = TParsedType.Boolean
+          break
+        case 'symbol':
+          expectedParsedType = TParsedType.Symbol
+          break
+        case 'undefined':
+          expectedParsedType = TParsedType.Undefined
+          break
+
+        default:
+          expectedParsedType = TParsedType.Unknown
+      }
+    }
+
+    if (ctx.parsedType !== expectedParsedType) {
+      return ctx.invalidType({ expected: expectedParsedType }).abort()
+    }
+
+    if (ctx.data !== this._def.value) {
+      return ctx
+        .addIssue(
+          {
+            kind: TIssueKind.InvalidLiteral,
+            payload: { expected: this._def.value, received: ctx.data as TLiteralValue },
+          },
+          this.options.messages?.invalidLiteral
+        )
+        .abort()
+    }
+
+    return OK(ctx.data as T)
+  }
+
+  get value() {
+    return this._def.value
+  }
+
+  static create<T extends TLiteralValue>(value: T, options?: SimplifyFlat<TLiteralOptions>): TLiteral<T> {
+    return new TLiteral({ typeName: TTypeName.Literal, options: { ...options }, value })
+  }
+}
+
+/* ---------------------------------------------------- TIterable --------------------------------------------------- */
 
 export interface TIterableDef<T extends AnyTType> extends TDef {
   readonly typeName: TTypeName.Array | TTypeName.Set
   readonly element: T
   readonly minItems?: { readonly value: number; readonly inclusive: boolean; readonly message: string | undefined }
   readonly maxItems?: { readonly value: number; readonly inclusive: boolean; readonly message: string | undefined }
-  readonly length?: this['typeName'] extends TTypeName.Set
-    ? never
-    : { readonly value: number; readonly message: string | undefined }
-  readonly size?: this['typeName'] extends TTypeName.Array
-    ? never
-    : { readonly value: number; readonly message: string | undefined }
+}
+
+export interface TArrayDef<T extends AnyTType> extends TIterableDef<T> {
+  readonly typeName: TTypeName.Array
+  readonly length?: { readonly value: number; readonly message: string | undefined }
+  readonly unique?: { readonly message: string | undefined }
+}
+
+export interface TSetDef<T extends AnyTType> extends TIterableDef<T> {
+  readonly typeName: TTypeName.Set
+  readonly size?: { readonly value: number; readonly message: string | undefined }
 }
 
 export interface TIterable<T extends AnyTType> extends AnyTType {
@@ -626,6 +753,9 @@ export interface TIterable<T extends AnyTType> extends AnyTType {
     value: NonNegativeInteger<V>,
     options?: { readonly inclusive?: boolean; readonly message?: string }
   ): TIterable<T>
+  sparse(enabled?: true): TIterable<TOptional<T>>
+  sparse(enabled: false): TIterable<TRequired<T>>
+  partial(): TIterable<TOptional<T>>
 }
 
 /* ------------------------------------------------------------------------------------------------------------------ */
@@ -642,10 +772,6 @@ export type TArrayIO<T extends AnyTType, C extends TArrayCardinality, IO extends
 export interface TArrayManifest<T extends AnyTType, C extends TArrayCardinality = 'many'>
   extends TIterableManifest<T, TArrayIO<T, C>> {
   readonly type: TParsedType.Array
-}
-
-export interface TArrayDef<T extends AnyTType> extends TIterableDef<T> {
-  readonly typeName: TTypeName.Array
 }
 
 export class TArray<T extends AnyTType, C extends TArrayCardinality = 'many'>
@@ -667,7 +793,7 @@ export class TArray<T extends AnyTType, C extends TArrayCardinality = 'many'>
       return ctx.invalidType({ expected: TParsedType.Array }).abort()
     }
 
-    const { element, minItems, maxItems, length } = this._def
+    const { element, minItems, maxItems, length, unique } = this._def
     const data = ctx.data
 
     const result: OutputOf<T>[] = []
@@ -680,33 +806,29 @@ export class TArray<T extends AnyTType, C extends TArrayCardinality = 'many'>
       if (ctx.common.abortEarly) {
         return ctx.abort()
       }
-    } else if (minItems && (minItems.inclusive ? data.length < minItems.value : data.length <= minItems.value)) {
-      ctx.addIssue(
-        {
-          kind: TIssueKind.InvalidArray,
-          payload: {
-            check: 'min',
-            expected: { value: minItems.value, inclusive: minItems.inclusive },
-            received: data.length,
-          },
-        },
-        minItems.message
-      )
-      if (ctx.common.abortEarly) {
-        return ctx.abort()
+    } else {
+      if (minItems && (minItems.inclusive ? data.length < minItems.value : data.length <= minItems.value)) {
+        ctx.addIssue(
+          { kind: TIssueKind.InvalidArray, payload: { check: 'min', expected: minItems, received: data.length } },
+          minItems.message
+        )
+        if (ctx.common.abortEarly) {
+          return ctx.abort()
+        }
       }
-    } else if (maxItems && (maxItems.inclusive ? data.length > maxItems.value : data.length >= maxItems.value)) {
-      ctx.addIssue(
-        {
-          kind: TIssueKind.InvalidArray,
-          payload: {
-            check: 'max',
-            expected: { value: maxItems.value, inclusive: maxItems.inclusive },
-            received: data.length,
-          },
-        },
-        maxItems.message
-      )
+      if (maxItems && (maxItems.inclusive ? data.length > maxItems.value : data.length >= maxItems.value)) {
+        ctx.addIssue(
+          { kind: TIssueKind.InvalidArray, payload: { check: 'min', expected: maxItems, received: data.length } },
+          maxItems.message
+        )
+        if (ctx.common.abortEarly) {
+          return ctx.abort()
+        }
+      }
+    }
+
+    if (unique && new Set(ctx.data).size !== ctx.data.length) {
+      ctx.addIssue({ kind: TIssueKind.InvalidArray, payload: { check: 'unique' } }, unique.message)
       if (ctx.common.abortEarly) {
         return ctx.abort()
       }
@@ -795,6 +917,24 @@ export class TArray<T extends AnyTType, C extends TArrayCardinality = 'many'>
     })
   }
 
+  sparse(enabled?: true): TArray<TOptional<T>, C>
+  sparse(enabled: false): TArray<TRequired<T>, C>
+  sparse(enabled = true): TArray<TOptional<T> | TRequired<T>, C> {
+    return new TArray({ ...this._def, element: this.element[enabled ? 'optional' : 'required']() })
+  }
+
+  partial(): TArray<TOptional<T>, C> {
+    return this.sparse(true)
+  }
+
+  unique(options?: { readonly message?: string }): TArray<T, C> {
+    return new TArray({ ...this._def, unique: { message: options?.message } })
+  }
+
+  toSet(): TSet<T> {
+    return new TSet({ ...this._def, typeName: TTypeName.Set, size: this._def.length })
+  }
+
   static create<T extends AnyTType>(element: T, options?: SimplifyFlat<TOptions>): TArray<T> {
     return new TArray({ typeName: TTypeName.Array, element, options: { ...options } })
   }
@@ -808,10 +948,6 @@ export type AnyTArray = TArray<AnyTType, TArrayCardinality>
 
 export interface TSetManifest<T extends AnyTType> extends TIterableManifest<T, Set<OutputOf<T>>> {
   readonly type: TParsedType.Set
-}
-
-export interface TSetDef<T extends AnyTType> extends TIterableDef<T> {
-  readonly typeName: TTypeName.Set
 }
 
 export class TSet<T extends AnyTType>
@@ -846,35 +982,24 @@ export class TSet<T extends AnyTType>
       if (ctx.common.abortEarly) {
         return ctx.abort()
       }
-    } else if (minItems && (minItems.inclusive ? data.size < minItems.value : data.size <= minItems.value)) {
-      ctx.addIssue(
-        {
-          kind: TIssueKind.InvalidSet,
-          payload: {
-            check: 'min',
-            expected: { value: minItems.value, inclusive: minItems.inclusive },
-            received: data.size,
-          },
-        },
-        minItems.message
-      )
-      if (ctx.common.abortEarly) {
-        return ctx.abort()
+    } else {
+      if (minItems && (minItems.inclusive ? data.size < minItems.value : data.size <= minItems.value)) {
+        ctx.addIssue(
+          { kind: TIssueKind.InvalidSet, payload: { check: 'min', expected: minItems, received: data.size } },
+          minItems.message
+        )
+        if (ctx.common.abortEarly) {
+          return ctx.abort()
+        }
       }
-    } else if (maxItems && (maxItems.inclusive ? data.size > maxItems.value : data.size >= maxItems.value)) {
-      ctx.addIssue(
-        {
-          kind: TIssueKind.InvalidSet,
-          payload: {
-            check: 'max',
-            expected: { value: maxItems.value, inclusive: maxItems.inclusive },
-            received: data.size,
-          },
-        },
-        maxItems.message
-      )
-      if (ctx.common.abortEarly) {
-        return ctx.abort()
+      if (maxItems && (maxItems.inclusive ? data.size > maxItems.value : data.size >= maxItems.value)) {
+        ctx.addIssue(
+          { kind: TIssueKind.InvalidSet, payload: { check: 'min', expected: maxItems, received: data.size } },
+          maxItems.message
+        )
+        if (ctx.common.abortEarly) {
+          return ctx.abort()
+        }
       }
     }
 
@@ -944,6 +1069,20 @@ export class TSet<T extends AnyTType>
     })
   }
 
+  sparse(enabled?: true): TSet<TOptional<T>>
+  sparse(enabled: false): TSet<TRequired<T>>
+  sparse(enabled = true): TSet<TOptional<T> | TRequired<T>> {
+    return new TSet({ ...this._def, element: this.element[enabled ? 'optional' : 'required']() })
+  }
+
+  partial(): TSet<TOptional<T>> {
+    return this.sparse(true)
+  }
+
+  toArray(): TArray<T> {
+    return new TArray({ ...this._def, typeName: TTypeName.Array, length: this._def.size })
+  }
+
   static create<T extends AnyTType>(element: T, options?: SimplifyFlat<TOptions>): TSet<T> {
     return new TSet({ typeName: TTypeName.Set, element, options: { ...options } })
   }
@@ -955,14 +1094,12 @@ export type AnyTSet = TSet<AnyTType>
 /*                                                     TUndefined                                                     */
 /* ------------------------------------------------------------------------------------------------------------------ */
 
-export type TNonRequiredManifest<T extends undefined | void> = Merge<TManifest<T>, { readonly required: false }>
-
 export interface TUndefinedDef extends TDef {
   readonly typeName: TTypeName.Undefined
 }
 
 export class TUndefined extends TType<undefined, TUndefinedDef> {
-  get _manifest(): TNonRequiredManifest<undefined> {
+  get _manifest(): TOptionalManifest<undefined> {
     return { ...getDefaultManifest(), required: false }
   }
 
@@ -984,7 +1121,7 @@ export interface TVoidDef extends TDef {
 }
 
 export class TVoid extends TType<void, TVoidDef> {
-  get _manifest(): TNonRequiredManifest<void> {
+  get _manifest(): TOptionalManifest<void> {
     return { ...getDefaultManifest(), required: false }
   }
 
@@ -1001,14 +1138,12 @@ export class TVoid extends TType<void, TVoidDef> {
 /*                                                        TNull                                                       */
 /* ------------------------------------------------------------------------------------------------------------------ */
 
-export type TNullManifest = Merge<TManifest<null>, { readonly nullable: true }>
-
 export interface TNullDef extends TDef {
   readonly typeName: TTypeName.Null
 }
 
 export class TNull extends TType<null, TNullDef> {
-  get _manifest(): TNullManifest {
+  get _manifest(): TNullableManifest<null> {
     return { ...getDefaultManifest(), nullable: true }
   }
 
@@ -1025,9 +1160,13 @@ export class TNull extends TType<null, TNullDef> {
 /*                                                       TNever                                                       */
 /* ------------------------------------------------------------------------------------------------------------------ */
 
+export type TNeverOptions = TOptions<{
+  additionalIssueKind: TIssueKind.Forbidden
+}>
+
 export interface TNeverDef extends TDef {
   readonly typeName: TTypeName.Never
-  readonly options: TOptions<{ readonly additionalIssueKind: TIssueKind.Forbidden }>
+  readonly options: TNeverOptions
 }
 
 export class TNever extends TType<never, TNeverDef> {
@@ -1039,13 +1178,7 @@ export class TNever extends TType<never, TNeverDef> {
     return ctx.addIssue({ kind: TIssueKind.Forbidden }, this.options.messages?.forbidden).abort()
   }
 
-  static create(
-    options?: SimplifyFlat<
-      TOptions<{
-        readonly additionalIssueKind: TIssueKind.Forbidden
-      }>
-    >
-  ): TNever {
+  static create(options?: SimplifyFlat<TNeverOptions>): TNever {
     return new TNever({ typeName: TTypeName.Never, options: { ...options } })
   }
 }
@@ -1069,8 +1202,6 @@ export interface TUnwrappable<T extends AnyTType> extends AnyTType {
 /*                                                      TOptional                                                     */
 /* ------------------------------------------------------------------------------------------------------------------ */
 
-export type TOptionalManifest<T extends AnyTType> = Merge<T['manifest'], { readonly required: false }>
-
 export interface TOptionalDef<T extends AnyTType> extends TDef {
   readonly typeName: TTypeName.Optional
   readonly underlying: T
@@ -1080,15 +1211,14 @@ export class TOptional<T extends AnyTType>
   extends TType<OutputOf<T> | undefined, TOptionalDef<T>, InputOf<T> | undefined>
   implements TUnwrappable<T>
 {
-  get _manifest(): TOptionalManifest<T> {
+  get _manifest(): TOptionalManifest<OutputOf<T> | undefined> {
     return { ...this.underlying.manifest, required: false }
   }
 
   _parse(ctx: ParseContext): ParseResultOf<this> {
-    if (ctx.data === undefined) {
-      return OK(undefined)
-    }
-    return this._def.underlying._parse(ctx.clone(this._def.underlying, ctx.data))
+    return ctx.data === undefined
+      ? OK(undefined)
+      : this._def.underlying._parse(ctx.clone(this._def.underlying, ctx.data))
   }
 
   get underlying(): T {
@@ -1118,8 +1248,6 @@ export class TOptional<T extends AnyTType>
 /*                                                      TNullable                                                     */
 /* ------------------------------------------------------------------------------------------------------------------ */
 
-export type TNullableManifest<T extends AnyTType> = Merge<T['manifest'], { readonly nullable: true }>
-
 export interface TNullableDef<T extends AnyTType> extends TDef {
   readonly typeName: TTypeName.Nullable
   readonly underlying: T
@@ -1129,15 +1257,12 @@ export class TNullable<T extends AnyTType>
   extends TType<OutputOf<T> | null, TNullableDef<T>, InputOf<T> | null>
   implements TUnwrappable<T>
 {
-  get _manifest(): TNullableManifest<T> {
+  get _manifest(): TNullableManifest<OutputOf<T> | null> {
     return { ...this.underlying.manifest, nullable: true }
   }
 
   _parse(ctx: ParseContext): ParseResultOf<this> {
-    if (ctx.data === null) {
-      return OK(null)
-    }
-    return this._def.underlying._parse(ctx.clone(this._def.underlying, ctx.data))
+    return ctx.data === null ? OK(null) : this._def.underlying._parse(ctx.clone(this._def.underlying, ctx.data))
   }
 
   get underlying(): T {
@@ -1164,10 +1289,48 @@ export class TNullable<T extends AnyTType>
 }
 
 /* ------------------------------------------------------------------------------------------------------------------ */
-/*                                                      TPromise                                                      */
+/*                                                      TRequired                                                     */
 /* ------------------------------------------------------------------------------------------------------------------ */
 
-export type TPromiseManifest<T extends AnyTType> = Merge<T['manifest'], { readonly promise: true }>
+export interface TRequiredDef<T extends AnyTType> extends TDef {
+  readonly typeName: TTypeName.Required
+  readonly underlying: T
+}
+
+export class TRequired<T extends AnyTType>
+  extends TType<Defined<OutputOf<T>>, TRequiredDef<T>, Defined<InputOf<T>>>
+  implements TUnwrappable<T>
+{
+  get _manifest(): TRequiredManifest<Defined<OutputOf<T>>> {
+    return { ...this.underlying.manifest, required: true } as TRequiredManifest<Defined<OutputOf<T>>>
+  }
+
+  _parse(ctx: ParseContext<this>): ParseResultOf<this> {
+    return ctx.data === undefined
+      ? ctx.addIssue({ kind: TIssueKind.Required }, this.options.messages?.required).abort()
+      : (this._def.underlying._parse(ctx.clone(this._def.underlying, ctx.data)) as ParseResultOf<this>)
+  }
+
+  get underlying(): T {
+    return this._def.underlying
+  }
+
+  unwrap(): T {
+    return this.underlying
+  }
+
+  unwrapDeep(): UnwrapDeep<T, TTypeName.Required> {
+    return this.underlying instanceof TRequired ? this.underlying.unwrapDeep() : this.underlying
+  }
+
+  static create<T extends AnyTType>(underlying: T, options?: SimplifyFlat<TOptions>): TRequired<T> {
+    return new TRequired({ typeName: TTypeName.Required, underlying, options: { ...options } })
+  }
+}
+
+/* ------------------------------------------------------------------------------------------------------------------ */
+/*                                                      TPromise                                                      */
+/* ------------------------------------------------------------------------------------------------------------------ */
 
 export interface TPromiseDef<T extends AnyTType> extends TDef {
   readonly typeName: TTypeName.Promise
@@ -1175,7 +1338,7 @@ export interface TPromiseDef<T extends AnyTType> extends TDef {
 }
 
 export class TPromise<T extends AnyTType> extends TType<Promise<OutputOf<T>>, TPromiseDef<T>, Promise<InputOf<T>>> {
-  get _manifest(): TPromiseManifest<T> {
+  get _manifest(): TPromiseManifest<OutputOf<T>> {
     return { ...this.underlying.manifest, promise: true }
   }
 
@@ -1202,6 +1365,126 @@ export class TPromise<T extends AnyTType> extends TType<Promise<OutputOf<T>>, TP
 
   static create<T extends AnyTType>(underlying: T, options?: SimplifyFlat<TOptions>): TPromise<T> {
     return new TPromise({ typeName: TTypeName.Promise, underlying, options: { ...options } })
+  }
+}
+
+/* ------------------------------------------------------------------------------------------------------------------ */
+/*                                                       TBrand                                                       */
+/* ------------------------------------------------------------------------------------------------------------------ */
+
+export const BRAND = Symbol('BRAND')
+export type BRAND = typeof BRAND
+export type BRANDED<T, B extends PropertyKey> = T & { readonly [BRAND]: { readonly [K in B]: true } }
+
+export interface TBrandDef<T extends AnyTType, B extends PropertyKey> extends TDef {
+  readonly typeName: TTypeName.Brand
+  readonly underlying: T
+  readonly brand: B
+}
+
+export class TBrand<T extends AnyTType, B extends PropertyKey>
+  extends TType<BRANDED<OutputOf<T>, B>, TBrandDef<T, B>, InputOf<T>>
+  implements TUnwrappable<T>
+{
+  get _manifest(): TBrandManifest<OutputOf<T>, B> {
+    return { ...this.underlying.manifest, brand: this.getBrand() }
+  }
+
+  _parse(ctx: ParseContext<this>): ParseResultOf<this> {
+    return this.underlying._parse(ctx.clone(this.underlying, ctx.data)) as ParseResultOf<this>
+  }
+
+  get underlying(): T {
+    return this._def.underlying
+  }
+
+  getBrand(): B {
+    return this._def.brand
+  }
+
+  unwrap(): T {
+    return this.underlying
+  }
+
+  unwrapDeep(): UnwrapDeep<T, TTypeName.Brand> {
+    return this.underlying instanceof TBrand ? this.underlying.unwrapDeep() : this.underlying
+  }
+
+  static create<T extends AnyTType, B extends PropertyKey>(
+    underlying: T,
+    brand: B,
+    options?: SimplifyFlat<TOptions>
+  ): TBrand<T, B> {
+    return new TBrand({ typeName: TTypeName.Brand, underlying, brand, options: { ...options } })
+  }
+}
+
+/* ------------------------------------------------------------------------------------------------------------------ */
+/*                                                      TDefault                                                      */
+/* ------------------------------------------------------------------------------------------------------------------ */
+
+export interface TDefaultDef<T extends AnyTType, D extends Defined<OutputOf<T>>> extends TDef {
+  readonly typeName: TTypeName.Default
+  readonly underlying: T
+  readonly getDefault: () => D
+}
+
+export class TDefault<T extends AnyTType, D extends Defined<OutputOf<T>>>
+  extends TType<Defined<OutputOf<T>>, TDefaultDef<T, D>, InputOf<T> | undefined>
+  implements TUnwrappable<T>
+{
+  get _manifest(): T['manifest'] {
+    return { ...this.underlying.manifest, default: this.getDefault() }
+  }
+
+  _parse(ctx: ParseContext<this>): ParseResultOf<this> {
+    return this.underlying._parse(
+      ctx.clone(this.underlying, ctx.data === undefined ? this.getDefault() : ctx.data)
+    ) as ParseResultOf<this>
+  }
+
+  get underlying(): T {
+    return this._def.underlying
+  }
+
+  getDefault(): D {
+    return this._def.getDefault()
+  }
+
+  unwrap(): T {
+    return this.underlying
+  }
+
+  unwrapDeep(): UnwrapDeep<T, TTypeName.Default> {
+    return this.underlying instanceof TDefault ? this.underlying.unwrapDeep() : this.underlying
+  }
+
+  static create<T extends AnyTType, D extends Defined<OutputOf<T>>>(
+    underlying: T,
+    defaultValue: D,
+    options?: SimplifyFlat<TOptions>
+  ): TDefault<T, D>
+  static create<T extends AnyTType, D extends Defined<OutputOf<T>>>(
+    underlying: T,
+    getDefault: () => D,
+    options?: SimplifyFlat<TOptions>
+  ): TDefault<T, D>
+  static create<T extends AnyTType, D extends Defined<OutputOf<T>>>(
+    underlying: T,
+    defaultValueOrGetter: D | (() => D),
+    options?: SimplifyFlat<TOptions>
+  ): TDefault<T, D>
+  static create<T extends AnyTType, D extends Defined<OutputOf<T>>>(
+    underlying: T,
+    defaultValueOrGetter: D | (() => D),
+    options?: SimplifyFlat<TOptions>
+  ): TDefault<T, D> {
+    return new TDefault({
+      typeName: TTypeName.Default,
+      underlying,
+      getDefault: isFunction(defaultValueOrGetter) ? defaultValueOrGetter : () => defaultValueOrGetter,
+      options: { ...options },
+    })
   }
 }
 
@@ -1238,59 +1521,6 @@ export class TLazy<T extends AnyTType> extends TType<OutputOf<T>, TLazyDef<T>, I
 
   static create<T extends AnyTType>(factory: () => T, options?: SimplifyFlat<TOptions>): TLazy<T> {
     return new TLazy({ typeName: TTypeName.Lazy, getType: factory, options: { ...options } })
-  }
-}
-
-/* ------------------------------------------------------------------------------------------------------------------ */
-/*                                                       TBrand                                                       */
-/* ------------------------------------------------------------------------------------------------------------------ */
-
-export const BRAND = Symbol('BRAND')
-export type BRAND = typeof BRAND
-export type BRANDED<T, B extends PropertyKey> = T & { readonly [BRAND]: { readonly [K in B]: true } }
-
-export type TBrandManifest<T extends AnyTType, B extends PropertyKey> = Merge<T['manifest'], { readonly brand: B }>
-
-export interface TBrandDef<T extends AnyTType, B extends PropertyKey> extends TDef {
-  readonly typeName: TTypeName.Brand
-  readonly underlying: T
-  readonly brand: B
-}
-
-export class TBrand<T extends AnyTType, B extends PropertyKey>
-  extends TType<BRANDED<OutputOf<T>, B>, TBrandDef<T, B>, InputOf<T>>
-  implements TUnwrappable<T>
-{
-  get _manifest(): TBrandManifest<T, B> {
-    return { ...this.underlying.manifest, brand: this.getBrand() }
-  }
-
-  _parse(ctx: ParseContext<this>): ParseResultOf<this> {
-    return this.underlying._parse(ctx.clone(this.underlying, ctx.data)) as ParseResultOf<this>
-  }
-
-  get underlying(): T {
-    return this._def.underlying
-  }
-
-  getBrand(): B {
-    return this._def.brand
-  }
-
-  unwrap(): T {
-    return this.underlying
-  }
-
-  unwrapDeep(): UnwrapDeep<T, TTypeName.Brand> {
-    return this.underlying instanceof TBrand ? this.underlying.unwrapDeep() : this.underlying
-  }
-
-  static create<T extends AnyTType, B extends PropertyKey>(
-    underlying: T,
-    brand: B,
-    options?: SimplifyFlat<TOptions>
-  ): TBrand<T, B> {
-    return new TBrand({ typeName: TTypeName.Brand, underlying, brand, options: { ...options } })
   }
 }
 
@@ -1360,8 +1590,10 @@ export const bigintType = TBigInt.create
 export const booleanType = TBoolean.create
 export const brandType = TBrand.create
 export const dateType = TDate.create
+export const defaultType = TDefault.create
 export const falseType = TFalse.create
 export const lazyType = TLazy.create
+export const literalType = TLiteral.create
 export const nanType = TNaN.create
 export const neverType = TNever.create
 export const nullableType = TNullable.create
@@ -1369,6 +1601,7 @@ export const nullType = TNull.create
 export const numberType = TNumber.create
 export const optionalType = TOptional.create
 export const promiseType = TPromise.create
+export const requiredType = TRequired.create
 export const setType = TSet.create
 export const stringType = TString.create
 export const symbolType = TSymbol.create
@@ -1381,11 +1614,13 @@ export {
   anyType as any,
   arrayType as array,
   bigintType as bigint,
+  booleanType as bool,
   booleanType as boolean,
   brandType as brand,
   dateType as date,
   falseType as false,
   lazyType as lazy,
+  literalType as literal,
   nanType as nan,
   neverType as never,
   nullableType as nullable,
@@ -1393,6 +1628,7 @@ export {
   numberType as number,
   optionalType as optional,
   promiseType as promise,
+  requiredType as required,
   setType as set,
   stringType as string,
   symbolType as symbol,

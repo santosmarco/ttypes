@@ -11,5 +11,7 @@ module.exports = {
     project: './tsconfig.json',
   },
   plugins: ['prettier'],
-  rules: {},
+  rules: {
+    '@typescript-eslint/explicit-return-type': 'warn',
+  },
 }

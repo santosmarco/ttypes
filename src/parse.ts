@@ -1,6 +1,6 @@
 import cloneDeep from 'clone-deep'
 import { TError, TIssue, TIssueKind } from './error'
-import type { AnyTType, InputOf, OutputOf } from './types_v2'
+import type { AnyTType, InputOf, OutputOf } from './types'
 import { isArray, isAsync, type StrictOmit, type StripKey } from './utils'
 
 /* --------------------------------------------------- TParsedType -------------------------------------------------- */
@@ -240,15 +240,12 @@ export const ParseContext = <T extends AnyTType>(
   return ctx
 }
 
-ParseContext.of = <T extends AnyTType>(schema: T, data: unknown, common: ParseCommon) =>
-  ParseContext(schema, data, [], null, common)
-
 export const ParseContextSync = {
-  of: <T extends AnyTType>(schema: T, data: unknown, options: ParseOptions | undefined) =>
-    ParseContext.of(schema, data, { async: false, ...options }),
+  of: <T extends AnyTType>(type: T, data: unknown, options: ParseOptions | undefined) =>
+    ParseContext(type, data, [], null, { ...type.options, ...options, async: false }),
 }
 
 export const ParseContextAsync = {
-  of: <T extends AnyTType>(schema: T, data: unknown, options: ParseOptions | undefined) =>
-    ParseContext.of(schema, data, { async: true, ...options }),
+  of: <T extends AnyTType>(type: T, data: unknown, options: ParseOptions | undefined) =>
+    ParseContext(type, data, [], null, { ...type.options, ...options, async: true }),
 }

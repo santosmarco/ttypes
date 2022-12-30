@@ -1,4 +1,4 @@
-import * as t from "./types_v2";
-export * from "./types_v2";
-export { t };
-export default t;
+import * as t from './types'
+export * from './types'
+export { t }
+export default t
