@@ -3,7 +3,7 @@ import memoize from 'micro-memoize'
 import { nanoid } from 'nanoid'
 import type { CamelCase, NonNegativeInteger } from 'type-fest'
 import { TIssueKind } from './error'
-import { TGlobal } from './global'
+import { getGlobal } from './global'
 import {
   OK,
   ParseContextAsync,
@@ -1683,7 +1683,7 @@ export const undefinedType = TUndefined.create
 export const unknownType = TUnknown.create
 export const voidType = TVoid.create
 
-export const global = TGlobal.get
+export const global = getGlobal
 
 export {
   anyType as any,

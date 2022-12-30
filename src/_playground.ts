@@ -1,4 +1,6 @@
-import { t } from './src'
+import { t } from '.'
+
+console.log(t.global())
 
 console.log(t.any().optional().optional().optional().unwrapDeep().color('red').nullable().array())
 
@@ -17,7 +19,7 @@ const s = t
   })
   .sparse(false)
 
-// console.log(s.safeParse(['s', 'a', 2, 3]).error._issues)
+// Console.log(s.safeParse(['s', 'a', 2, 3]).error._issues)
 
 type as = t.infer<typeof s>
 

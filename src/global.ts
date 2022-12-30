@@ -21,3 +21,5 @@ export class TGlobal {
     return this._instance
   }
 }
+
+export const getGlobal = (): TGlobal => TGlobal.get()

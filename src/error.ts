@@ -1,4 +1,4 @@
-import { TGlobal } from './global'
+import { getGlobal } from './global'
 import type { ParseContext, ParsePath, TParsedType } from './parse'
 import type { AnyTType, TLiteralValue } from './types'
 import type { SimplifyFlat } from './utils'
@@ -87,7 +87,7 @@ export class TError<Input> extends Error {
   private readonly _issues: readonly TIssue[]
 
   constructor(type: AnyTType<unknown, Input>, issues: readonly TIssue[]) {
-    super(TGlobal.get().getErrorFormatter()(issues))
+    super(getGlobal().getErrorFormatter()(issues))
     this._type = type
     this._issues = issues
   }
