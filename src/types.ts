@@ -228,7 +228,6 @@ abstract class TType<O, D extends TDef, I = O> {
 
   parse(data: unknown, options?: SimplifyFlat<ParseOptions>): OutputOf<this> {
     const result = this.safeParse(data, options)
-
     if (!result.ok) {
       throw result.error
     }
@@ -244,12 +243,11 @@ abstract class TType<O, D extends TDef, I = O> {
 
   async parseAsync(data: unknown, options?: SimplifyFlat<ParseOptions>): Promise<OutputOf<this>> {
     const result = await this.safeParseAsync(data, options)
-
-    if (result.ok) {
-      return result.data
+    if (!result.ok) {
+      throw result.error
     }
 
-    throw result.error
+    return result.data
   }
 
   async safeParseAsync(data: unknown, options?: SimplifyFlat<ParseOptions>): AsyncParseResultOf<this> {
