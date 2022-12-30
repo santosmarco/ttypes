@@ -14,7 +14,7 @@ import {
   type ParseResultOf,
   type SyncParseResultOf,
 } from './parse'
-import { isArray, isAsync, omit, type Merge, type SimplifyFlat, type StrictOmit } from './utils'
+import { isArray, isAsync, omit, type Merge, type SimplifyFlat } from './utils'
 
 /* ---------------------------------------------------- TTypeName --------------------------------------------------- */
 
@@ -34,6 +34,7 @@ export enum TTypeName {
   Nullable = 'TNullable',
   Number = 'TNumber',
   Optional = 'TOptional',
+  Pipeline = 'TPipeline',
   Promise = 'TPromise',
   Set = 'TSet',
   String = 'TString',
@@ -104,320 +105,231 @@ export interface TDef {
 /*                                                        TType                                                       */
 /* ------------------------------------------------------------------------------------------------------------------ */
 
-/* ---------------------------------------------------- Managers ---------------------------------------------------- */
+abstract class TType<O, D extends TDef, I = O> {
+  declare readonly $O: O
+  declare readonly $I: I
+  declare readonly $D: D
 
-export interface ParseManager<T extends AnyTType> {
-  _parseSync(ctx: ParseContext<T>): SyncParseResultOf<T>
-  _parseAsync(ctx: ParseContext<T>): AsyncParseResultOf<T>
-  parse(data: unknown, options?: SimplifyFlat<ParseOptions>): OutputOf<T>
-  safeParse(data: unknown, options?: SimplifyFlat<ParseOptions>): SyncParseResultOf<T>
-  parseAsync(data: unknown, options?: SimplifyFlat<ParseOptions>): Promise<OutputOf<T>>
-  safeParseAsync(data: unknown, options?: SimplifyFlat<ParseOptions>): AsyncParseResultOf<T>
-}
+  abstract readonly _manifest: TManifest
+  abstract _parse(ctx: ParseContext<this>): ParseResultOf<this>
 
-export const ParseManager = {
-  of: <T extends AnyTType>(type: T): ParseManager<T> => ({
-    _parseSync(ctx) {
-      const result = type._parse(ctx)
-      if (isAsync(result)) {
-        throw new Error('Synchronous parse encountered Promise. Use `.parseAsync()`/`.safeParseAsync()` instead.')
-      }
-      return result
-    },
-    async _parseAsync(ctx) {
-      const result = type._parse(ctx)
-      return Promise.resolve(result)
-    },
-    parse(data, options) {
-      const result = type.safeParse(data, options)
-      if (!result.ok) {
-        throw result.error
-      }
-      return result.data
-    },
-    safeParse(data, options) {
-      const ctx = ParseContextSync.of(type, data, options)
-      const result = type._parseSync(ctx)
-      return result
-    },
-    async parseAsync(data, options) {
-      const result = await type.safeParseAsync(data, options)
-      if (!result.ok) {
-        throw result.error
-      }
-      return result.data
-    },
-    async safeParseAsync(data, options) {
-      const ctx = ParseContextAsync.of(type, data, options)
-      const result = type._parseAsync(ctx)
-      return result
-    },
-  }),
-}
+  readonly _def: D & { readonly manifest?: TManifest }
 
-export interface ManifestManager<T extends AnyTType> {
-  title(title: string): T
-  summary(summary: string): T
-  description(description: string): T
-  version(version: string): T
-  examples(...examples: readonly [OutputOf<T>, ...OutputOf<T>[]]): T
-  tags(...tags: readonly [string, ...string[]]): T
-  notes(...notes: readonly [string, ...string[]]): T
-  unit(unit: string): T
-  deprecated(deprecated?: boolean): T
-  meta(meta: { readonly [x: string]: unknown }): T
-}
+  protected constructor(def: D) {
+    this._def = cloneDeep(def)
 
-export const ManifestManager = {
-  of: <T extends AnyTType>(type: T): ManifestManager<T> => {
-    const updateManifest = <K extends keyof NonNullable<T['_def']['manifest']>>(
-      key: K,
-      value: NonNullable<T['_def']['manifest']>[K]
-    ): T => type._reconstruct({ ...type._def, manifest: { ...type.manifest, [key]: value } })
+    this._parse = memoize(this._parse.bind(this))
+    this._parseSync = this._parseSync.bind(this)
+    this._parseAsync = this._parseAsync.bind(this)
+    this.parse = this.parse.bind(this)
+    this.safeParse = this.safeParse.bind(this)
+    this.parseAsync = this.parseAsync.bind(this)
+    this.safeParseAsync = this.safeParseAsync.bind(this)
+    this.optional = this.optional.bind(this)
+    this.nullable = this.nullable.bind(this)
+    this.nullish = this.nullish.bind(this)
+    this.array = this.array.bind(this)
+    this.promise = this.promise.bind(this)
+    this.brand = this.brand.bind(this)
+    this.lazy = this.lazy.bind(this)
+    this.pipe = this.pipe.bind(this)
+    this.title = this.title.bind(this)
+    this.summary = this.summary.bind(this)
+    this.description = this.description.bind(this)
+    this.version = this.version.bind(this)
+    this.examples = this.examples.bind(this)
+    this.tags = this.tags.bind(this)
+    this.notes = this.notes.bind(this)
+    this.unit = this.unit.bind(this)
+    this.deprecated = this.deprecated.bind(this)
+    this.meta = this.meta.bind(this)
+    this.abortEarly = this.abortEarly.bind(this)
+    this.color = this.color.bind(this)
+    this.debug = this.debug.bind(this)
+    this.isOptional = this.isOptional.bind(this)
+    this.isNullable = this.isNullable.bind(this)
+    this.isNullish = this.isNullish.bind(this)
+    this.isReadonly = this.isReadonly.bind(this)
+    this.isDeprecated = this.isDeprecated.bind(this)
+  }
 
-    return {
-      title(title) {
-        return updateManifest('title', title)
-      },
-      summary(summary) {
-        return updateManifest('summary', summary)
-      },
-      description(description) {
-        return updateManifest('description', description)
-      },
-      version(version) {
-        return updateManifest('version', version)
-      },
-      examples(...examples) {
-        return updateManifest('examples', (type._manifest.examples ?? []).concat(examples))
-      },
-      tags(...tags) {
-        return updateManifest('tags', (type._manifest.tags ?? []).concat(tags))
-      },
-      notes(...notes) {
-        return updateManifest('notes', (type._manifest.notes ?? []).concat(notes))
-      },
-      unit(unit) {
-        return updateManifest('unit', unit)
-      },
-      deprecated(deprecated = true) {
-        return updateManifest('deprecated', deprecated)
-      },
-      meta(meta) {
-        return updateManifest('meta', meta)
-      },
-    }
-  },
-}
+  readonly id: string = nanoid()
 
-export interface OptionsManager<T extends AnyTType> {
-  abortEarly(abortEarly?: boolean): T
-  color(color: string): T
-  debug(debug?: boolean): T
-}
+  get typeName(): D['typeName'] {
+    return this._def.typeName
+  }
 
-export const OptionsManager = {
-  of: <T extends AnyTType>(type: T): OptionsManager<T> => {
-    const updateOptions = <K extends keyof TOptions>(key: K, value: TOptions[K]): T =>
-      type._reconstruct({ ...type._def, options: { ...type.options, [key]: value } })
-
-    return {
-      abortEarly(abortEarly = true) {
-        return updateOptions('abortEarly', abortEarly)
-      },
-      color(color) {
-        return updateOptions('color', color)
-      },
-      debug(debug = true) {
-        return updateOptions('debug', debug)
-      },
-    }
-  },
-}
-
-export interface UtilitiesManager<T extends AnyTType> {
-  optional(): TOptional<T>
-  nullable(): TNullable<T>
-  nullish(): TOptional<TNullable<T>>
-  array(): TArray<T>
-  promise(): TPromise<T>
-  brand<B extends PropertyKey>(brand: B): TBrand<T, B>
-  lazy(): TLazy<T>
-}
-
-export const UtilitiesManager = {
-  of: <T extends AnyTType>(type: T): UtilitiesManager<T> => ({
-    optional() {
-      return TOptional.create(type, type.options)
-    },
-    nullable() {
-      return TNullable.create(type, type.options)
-    },
-    nullish() {
-      return TOptional.create(TNullable.create(type, type.options), type.options)
-    },
-    array() {
-      return TArray.create(type, type.options)
-    },
-    promise() {
-      return TPromise.create(type, type.options)
-    },
-    brand(brand) {
-      return TBrand.create(type, brand, type.options)
-    },
-    lazy() {
-      return TLazy.create(() => type, type.options)
-    },
-  }),
-}
-
-export interface ChecksManager<T extends AnyTType> {
-  isOptional(): boolean
-  isNullable(): boolean
-  isNullish(): boolean
-  isReadonly(): boolean
-  isDeprecated(): boolean
-}
-
-export const ChecksManager = {
-  of: <T extends AnyTType>(type: T): ChecksManager<T> => ({
-    isOptional() {
-      return !type.manifest.required
-    },
-    isNullable() {
-      return type.manifest.nullable
-    },
-    isNullish() {
-      return !type.manifest.required && type.manifest.nullable
-    },
-    isReadonly() {
-      return type.manifest.readonly
-    },
-    isDeprecated() {
-      return !!type.manifest.deprecated
-    },
-  }),
-}
-
-export interface TManagers<T extends AnyTType>
-  extends ParseManager<T>,
-    ManifestManager<T>,
-    OptionsManager<T>,
-    UtilitiesManager<T>,
-    ChecksManager<T> {}
-
-export interface InternalManagers<T extends AnyTType> {
-  readonly parse: ParseManager<T>
-  readonly manifest: ManifestManager<T>
-  readonly options: OptionsManager<T>
-  readonly utilities: UtilitiesManager<T>
-  readonly checks: ChecksManager<T>
-}
-
-export interface TType<Output, Def extends TDef, Input = Output> extends TManagers<TType<Output, Def, Input>> {
-  readonly $O: Output
-  readonly $I: Input
-  readonly $D: Def
-  readonly _manifest: TManifest
-  _parse(ctx: ParseContext<this>): ParseResultOf<this>
-  readonly _def: StrictOmit<Def, 'typeName'> & { readonly manifest?: TManifest }
-  readonly _managers: InternalManagers<this>
-  readonly id: string
-  readonly typeName: Def['typeName']
-  readonly manifest: { [K in keyof this['_manifest']]: this['_manifest'][K] }
-  readonly options: Def['options']
-  _reconstruct(def?: Partial<this['_def']>): this
-}
-
-export const ttype = <TN extends TTypeName>(typeName: TN) => {
-  abstract class T<Output, Def extends Merge<TDef, { readonly typeName: TN }>, Input = Output>
-    implements TType<Output, Def, Input>
-  {
-    declare readonly $O: Output
-    declare readonly $I: Input
-    declare readonly $D: Def
-
-    abstract readonly _manifest: TManifest
-    abstract _parse(ctx: ParseContext<this>): ParseResultOf<this>
-
-    readonly _def: StrictOmit<Def, 'typeName'> & { readonly manifest?: TManifest }
-
-    readonly _managers: InternalManagers<this> = {
-      parse: ParseManager.of(this),
-      manifest: ManifestManager.of(this),
-      options: OptionsManager.of(this),
-      utilities: UtilitiesManager.of(this),
-      checks: ChecksManager.of(this),
-    }
-
-    protected constructor(def: StrictOmit<Def, 'typeName'>) {
-      this._def = cloneDeep(def)
-      this._parse = memoize(this._parse.bind(this))
-    }
-
-    readonly id: string = nanoid()
-
-    get typeName(): TN {
-      return typeName
-    }
-
-    get manifest(): { [K in keyof this['_manifest']]: this['_manifest'][K] } {
-      return omit({ ...cloneDeep(this._manifest), ...cloneDeep(this._def.manifest) }, (val) => val === undefined) as {
-        [K in keyof this['_manifest']]: this['_manifest'][K]
-      }
-    }
-
-    get options(): Def['options'] {
-      return this._def.options
-    }
-
-    _parseSync = this._managers.parse._parseSync.bind(this)
-    _parseAsync = this._managers.parse._parseAsync.bind(this)
-    parse = this._managers.parse.parse.bind(this)
-    safeParse = this._managers.parse.safeParse.bind(this)
-    parseAsync = this._managers.parse.parseAsync.bind(this)
-    safeParseAsync = this._managers.parse.safeParseAsync.bind(this)
-
-    title = this._managers.manifest.title.bind(this)
-    summary = this._managers.manifest.summary.bind(this)
-    description = this._managers.manifest.description.bind(this)
-    version = this._managers.manifest.version.bind(this)
-    examples = this._managers.manifest.examples.bind(this)
-    tags = this._managers.manifest.tags.bind(this)
-    notes = this._managers.manifest.notes.bind(this)
-    unit = this._managers.manifest.unit.bind(this)
-    deprecated = this._managers.manifest.deprecated.bind(this)
-    meta = this._managers.manifest.meta.bind(this)
-
-    abortEarly = this._managers.options.abortEarly.bind(this)
-    color = this._managers.options.color.bind(this)
-    debug = this._managers.options.debug.bind(this)
-
-    optional = this._managers.utilities.optional.bind(this)
-    nullable = this._managers.utilities.nullable.bind(this)
-    nullish = this._managers.utilities.nullish.bind(this)
-    array = this._managers.utilities.array.bind(this)
-    promise = this._managers.utilities.promise.bind(this)
-    brand = this._managers.utilities.brand.bind(this)
-    lazy = this._managers.utilities.lazy.bind(this)
-
-    isOptional = this._managers.checks.isOptional.bind(this)
-    isNullable = this._managers.checks.isNullable.bind(this)
-    isNullish = this._managers.checks.isNullish.bind(this)
-    isReadonly = this._managers.checks.isReadonly.bind(this)
-    isDeprecated = this._managers.checks.isDeprecated.bind(this)
-
-    _reconstruct(def?: this['_def']): this {
-      return Reflect.construct<[def: this['_def']], this>(this.constructor as new (def: this['_def']) => this, [
-        { ...this._def, ...def },
-      ])
+  get manifest(): { [K in keyof this['_manifest']]: this['_manifest'][K] } {
+    return omit({ ...cloneDeep(this._manifest), ...cloneDeep(this._def.manifest) }, (val) => val === undefined) as {
+      [K in keyof this['_manifest']]: this['_manifest'][K]
     }
   }
 
-  return T
+  get options(): D['options'] {
+    return this._def.options
+  }
+
+  _parseSync(ctx: ParseContext<this>): SyncParseResultOf<this> {
+    const result = this._parse(ctx)
+    if (isAsync(result)) {
+      throw new Error('Synchronous parse encountered Promise. Use `.parseAsync()`/`.safeParseAsync()` instead.')
+    }
+    return result
+  }
+
+  async _parseAsync(ctx: ParseContext<this>): AsyncParseResultOf<this> {
+    const result = this._parse(ctx)
+    return Promise.resolve(result)
+  }
+
+  parse(data: unknown, options?: SimplifyFlat<ParseOptions>): OutputOf<this> {
+    const result = this.safeParse(data, options)
+    if (!result.ok) {
+      throw result.error
+    }
+    return result.data
+  }
+
+  safeParse(data: unknown, options?: SimplifyFlat<ParseOptions>): SyncParseResultOf<this> {
+    const ctx = ParseContextSync.of(this, data, options)
+    const result = this._parseSync(ctx)
+    return result
+  }
+
+  async parseAsync(data: unknown, options?: SimplifyFlat<ParseOptions>): Promise<OutputOf<this>> {
+    const result = await this.safeParseAsync(data, options)
+    if (!result.ok) {
+      throw result.error
+    }
+    return result.data
+  }
+
+  safeParseAsync(data: unknown, options?: SimplifyFlat<ParseOptions>): AsyncParseResultOf<this> {
+    const ctx = ParseContextAsync.of(this, data, options)
+    const result = this._parseAsync(ctx)
+    return result
+  }
+
+  optional(): TOptional<this> {
+    return TOptional.create(this, this.options)
+  }
+
+  nullable(): TNullable<this> {
+    return TNullable.create(this, this.options)
+  }
+
+  nullish(): TOptional<TNullable<this>> {
+    return TOptional.create(TNullable.create(this, this.options), this.options)
+  }
+
+  array(): TArray<this> {
+    return TArray.create(this, this.options)
+  }
+
+  promise(): TPromise<this> {
+    return TPromise.create(this, this.options)
+  }
+
+  brand<B extends PropertyKey>(brand: B): TBrand<this, B> {
+    return TBrand.create(this, brand, this.options)
+  }
+
+  lazy(): TLazy<this> {
+    return TLazy.create(() => this, this.options)
+  }
+
+  pipe<U extends AnyTType<unknown, I>>(toType: U): TPipeline<this, U> {
+    return TPipeline.create(this, toType, this.options)
+  }
+
+  title(title: string): this {
+    return this._updateManifest('title', title)
+  }
+
+  summary(summary: string): this {
+    return this._updateManifest('summary', summary)
+  }
+
+  description(description: string): this {
+    return this._updateManifest('description', description)
+  }
+
+  version(version: string): this {
+    return this._updateManifest('version', version)
+  }
+
+  examples(...examples: readonly [OutputOf<this>, ...OutputOf<this>[]]): this {
+    return this._updateManifest('examples', (this._manifest.examples ?? []).concat(examples))
+  }
+
+  tags(...tags: readonly [string, ...string[]]): this {
+    return this._updateManifest('tags', (this._manifest.tags ?? []).concat(tags))
+  }
+
+  notes(...notes: readonly [string, ...string[]]): this {
+    return this._updateManifest('notes', (this._manifest.notes ?? []).concat(notes))
+  }
+
+  unit(unit: string): this {
+    return this._updateManifest('unit', unit)
+  }
+
+  deprecated(deprecated?: boolean): this {
+    return this._updateManifest('deprecated', deprecated)
+  }
+
+  meta(meta: { readonly [x: string]: unknown }): this {
+    return this._updateManifest('meta', meta)
+  }
+
+  abortEarly(abortEarly = true): this {
+    return this._updateOptions('abortEarly', abortEarly)
+  }
+
+  color(color: string): this {
+    return this._updateOptions('color', color)
+  }
+
+  debug(debug = true): this {
+    return this._updateOptions('debug', debug)
+  }
+
+  isOptional(): boolean {
+    return !this.manifest.required
+  }
+
+  isNullable(): boolean {
+    return this.manifest.nullable
+  }
+
+  isNullish(): boolean {
+    return !this.manifest.required && this.manifest.nullable
+  }
+
+  isReadonly(): boolean {
+    return this.manifest.readonly
+  }
+
+  isDeprecated(): boolean {
+    return !!this.manifest.deprecated
+  }
+
+  protected _updateManifest<K extends keyof TManifest>(key: K, value: TManifest[K]): this {
+    return this._reconstruct({ ...this._def, manifest: { ...this.manifest, [key]: value } })
+  }
+
+  protected _updateOptions<K extends keyof TOptions>(key: K, value: TOptions[K]): this {
+    return this._reconstruct({ ...this._def, options: { ...this.options, [key]: value } })
+  }
+
+  protected _reconstruct(def?: this['_def']): this {
+    return Reflect.construct<[def: this['_def']], this>(this.constructor as new (def: this['_def']) => this, [
+      { ...this._def, ...def },
+    ])
+  }
 }
 
-export type AnyTType<O = unknown, I = unknown> = TType<O, any, I>
+export type AnyTType<O = unknown, I = unknown> = TType<O, TDef, I>
 
 export type OutputOf<T extends AnyTType> = T['$O']
 export type InputOf<T extends AnyTType> = T['$I']
@@ -434,7 +346,7 @@ export interface TAnyDef extends TDef {
   readonly typeName: TTypeName.Any
 }
 
-export class TAny extends ttype(TTypeName.Any)<any, TAnyDef> {
+export class TAny extends TType<any, TAnyDef> {
   get _manifest(): TNullishManifest<any> {
     return { ...getDefaultManifest(), required: false, nullable: true }
   }
@@ -444,7 +356,7 @@ export class TAny extends ttype(TTypeName.Any)<any, TAnyDef> {
   }
 
   static create(options?: SimplifyFlat<TOptions>): TAny {
-    return new TAny({ options: { ...options } })
+    return new TAny({ typeName: TTypeName.Any, options: { ...options } })
   }
 }
 
@@ -456,7 +368,7 @@ export interface TUnknownDef extends TDef {
   readonly typeName: TTypeName.Unknown
 }
 
-export class TUnknown extends ttype(TTypeName.Unknown)<unknown, TUnknownDef> {
+export class TUnknown extends TType<unknown, TUnknownDef> {
   get _manifest(): TNullishManifest<unknown> {
     return { ...getDefaultManifest(), required: false, nullable: true }
   }
@@ -466,7 +378,7 @@ export class TUnknown extends ttype(TTypeName.Unknown)<unknown, TUnknownDef> {
   }
 
   static create(options?: SimplifyFlat<TOptions>): TUnknown {
-    return new TUnknown({ options: { ...options } })
+    return new TUnknown({ typeName: TTypeName.Unknown, options: { ...options } })
   }
 }
 
@@ -478,7 +390,7 @@ export interface TStringDef extends TDef {
   readonly typeName: TTypeName.String
 }
 
-export class TString extends ttype(TTypeName.String)<string, TStringDef> {
+export class TString extends TType<string, TStringDef> {
   get _manifest(): TManifest<string> {
     return { ...getDefaultManifest() }
   }
@@ -492,7 +404,7 @@ export class TString extends ttype(TTypeName.String)<string, TStringDef> {
   }
 
   static create(options?: SimplifyFlat<TOptions>): TString {
-    return new TString({ options: { ...options } })
+    return new TString({ typeName: TTypeName.String, options: { ...options } })
   }
 }
 
@@ -504,7 +416,7 @@ export interface TNumberDef extends TDef {
   readonly typeName: TTypeName.Number
 }
 
-export class TNumber extends ttype(TTypeName.Number)<number, TNumberDef> {
+export class TNumber extends TType<number, TNumberDef> {
   get _manifest(): TManifest<number> {
     return { ...getDefaultManifest() }
   }
@@ -518,7 +430,7 @@ export class TNumber extends ttype(TTypeName.Number)<number, TNumberDef> {
   }
 
   static create(options?: SimplifyFlat<TOptions>): TNumber {
-    return new TNumber({ options: { ...options } })
+    return new TNumber({ typeName: TTypeName.Number, options: { ...options } })
   }
 }
 
@@ -530,7 +442,7 @@ export interface TNaNDef extends TDef {
   readonly typeName: TTypeName.NaN
 }
 
-export class TNaN extends ttype(TTypeName.NaN)<number, TNaNDef> {
+export class TNaN extends TType<number, TNaNDef> {
   get _manifest(): TManifest<number> {
     return { ...getDefaultManifest() }
   }
@@ -542,7 +454,7 @@ export class TNaN extends ttype(TTypeName.NaN)<number, TNaNDef> {
   }
 
   static create(options?: SimplifyFlat<TOptions>): TNaN {
-    return new TNaN({ options: { ...options } })
+    return new TNaN({ typeName: TTypeName.NaN, options: { ...options } })
   }
 }
 
@@ -554,7 +466,7 @@ export interface TBigIntDef extends TDef {
   readonly typeName: TTypeName.BigInt
 }
 
-export class TBigInt extends ttype(TTypeName.BigInt)<bigint, TBigIntDef> {
+export class TBigInt extends TType<bigint, TBigIntDef> {
   get _manifest(): TManifest<bigint> {
     return { ...getDefaultManifest() }
   }
@@ -568,7 +480,7 @@ export class TBigInt extends ttype(TTypeName.BigInt)<bigint, TBigIntDef> {
   }
 
   static create(options?: SimplifyFlat<TOptions>): TBigInt {
-    return new TBigInt({ options: { ...options } })
+    return new TBigInt({ typeName: TTypeName.BigInt, options: { ...options } })
   }
 }
 
@@ -580,7 +492,7 @@ export interface TBooleanDef extends TDef {
   readonly typeName: TTypeName.Boolean
 }
 
-export class TBoolean extends ttype(TTypeName.Boolean)<boolean, TBooleanDef> {
+export class TBoolean extends TType<boolean, TBooleanDef> {
   get _manifest(): TManifest<boolean> {
     return { ...getDefaultManifest() }
   }
@@ -590,7 +502,7 @@ export class TBoolean extends ttype(TTypeName.Boolean)<boolean, TBooleanDef> {
   }
 
   static create(options?: SimplifyFlat<TOptions>): TBoolean {
-    return new TBoolean({ options: { ...options } })
+    return new TBoolean({ typeName: TTypeName.Boolean, options: { ...options } })
   }
 }
 
@@ -600,7 +512,7 @@ export interface TTrueDef extends TDef {
   readonly typeName: TTypeName.True
 }
 
-export class TTrue extends ttype(TTypeName.True)<true, TTrueDef> {
+export class TTrue extends TType<true, TTrueDef> {
   get _manifest(): TManifest<true> {
     return { ...getDefaultManifest() }
   }
@@ -610,7 +522,7 @@ export class TTrue extends ttype(TTypeName.True)<true, TTrueDef> {
   }
 
   static create(options?: SimplifyFlat<TOptions>): TTrue {
-    return new TTrue({ options: { ...options } })
+    return new TTrue({ typeName: TTypeName.True, options: { ...options } })
   }
 }
 
@@ -620,7 +532,7 @@ export interface TFalseDef extends TDef {
   readonly typeName: TTypeName.False
 }
 
-export class TFalse extends ttype(TTypeName.False)<false, TFalseDef> {
+export class TFalse extends TType<false, TFalseDef> {
   get _manifest(): TManifest<false> {
     return { ...getDefaultManifest() }
   }
@@ -630,7 +542,7 @@ export class TFalse extends ttype(TTypeName.False)<false, TFalseDef> {
   }
 
   static create(options?: SimplifyFlat<TOptions>): TFalse {
-    return new TFalse({ options: { ...options } })
+    return new TFalse({ typeName: TTypeName.False, options: { ...options } })
   }
 }
 
@@ -642,7 +554,7 @@ export interface TDateDef extends TDef {
   readonly typeName: TTypeName.Date
 }
 
-export class TDate extends ttype(TTypeName.Date)<Date, TDateDef> {
+export class TDate extends TType<Date, TDateDef> {
   get _manifest(): TManifest<Date> {
     return { ...getDefaultManifest() }
   }
@@ -656,7 +568,7 @@ export class TDate extends ttype(TTypeName.Date)<Date, TDateDef> {
   }
 
   static create(options?: SimplifyFlat<TOptions>): TDate {
-    return new TDate({ options: { ...options } })
+    return new TDate({ typeName: TTypeName.Date, options: { ...options } })
   }
 }
 
@@ -668,7 +580,7 @@ export interface TSymbolDef extends TDef {
   readonly typeName: TTypeName.Symbol
 }
 
-export class TSymbol extends ttype(TTypeName.Symbol)<symbol, TSymbolDef> {
+export class TSymbol extends TType<symbol, TSymbolDef> {
   get _manifest(): TManifest<symbol> {
     return { ...getDefaultManifest() }
   }
@@ -678,7 +590,7 @@ export class TSymbol extends ttype(TTypeName.Symbol)<symbol, TSymbolDef> {
   }
 
   static create(options?: SimplifyFlat<TOptions>): TSymbol {
-    return new TSymbol({ options: { ...options } })
+    return new TSymbol({ typeName: TTypeName.Symbol, options: { ...options } })
   }
 }
 
@@ -737,7 +649,7 @@ export interface TArrayDef<T extends AnyTType> extends TIterableDef<T> {
 }
 
 export class TArray<T extends AnyTType, C extends TArrayCardinality = 'many'>
-  extends ttype(TTypeName.Array)<TArrayIO<T, C>, TArrayDef<T>, TArrayIO<T, C, '$I'>>
+  extends TType<TArrayIO<T, C>, TArrayDef<T>, TArrayIO<T, C, '$I'>>
   implements TIterable<T>
 {
   get _manifest(): TArrayManifest<T, C> {
@@ -884,7 +796,7 @@ export class TArray<T extends AnyTType, C extends TArrayCardinality = 'many'>
   }
 
   static create<T extends AnyTType>(element: T, options?: SimplifyFlat<TOptions>): TArray<T> {
-    return new TArray({ element, options: { ...options } })
+    return new TArray({ typeName: TTypeName.Array, element, options: { ...options } })
   }
 }
 
@@ -903,7 +815,7 @@ export interface TSetDef<T extends AnyTType> extends TIterableDef<T> {
 }
 
 export class TSet<T extends AnyTType>
-  extends ttype(TTypeName.Set)<Set<OutputOf<T>>, TSetDef<T>, Set<InputOf<T>>>
+  extends TType<Set<OutputOf<T>>, TSetDef<T>, Set<InputOf<T>>>
   implements TIterable<T>
 {
   get _manifest(): TSetManifest<T> {
@@ -1033,7 +945,7 @@ export class TSet<T extends AnyTType>
   }
 
   static create<T extends AnyTType>(element: T, options?: SimplifyFlat<TOptions>): TSet<T> {
-    return new TSet({ element, options: { ...options } })
+    return new TSet({ typeName: TTypeName.Set, element, options: { ...options } })
   }
 }
 
@@ -1049,7 +961,7 @@ export interface TUndefinedDef extends TDef {
   readonly typeName: TTypeName.Undefined
 }
 
-export class TUndefined extends ttype(TTypeName.Undefined)<undefined, TUndefinedDef> {
+export class TUndefined extends TType<undefined, TUndefinedDef> {
   get _manifest(): TNonRequiredManifest<undefined> {
     return { ...getDefaultManifest(), required: false }
   }
@@ -1059,7 +971,7 @@ export class TUndefined extends ttype(TTypeName.Undefined)<undefined, TUndefined
   }
 
   static create(options?: SimplifyFlat<TOptions>): TUndefined {
-    return new TUndefined({ options: { ...options } })
+    return new TUndefined({ typeName: TTypeName.Undefined, options: { ...options } })
   }
 }
 
@@ -1071,7 +983,7 @@ export interface TVoidDef extends TDef {
   readonly typeName: TTypeName.Void
 }
 
-export class TVoid extends ttype(TTypeName.Void)<void, TVoidDef> {
+export class TVoid extends TType<void, TVoidDef> {
   get _manifest(): TNonRequiredManifest<void> {
     return { ...getDefaultManifest(), required: false }
   }
@@ -1081,7 +993,7 @@ export class TVoid extends ttype(TTypeName.Void)<void, TVoidDef> {
   }
 
   static create(options?: SimplifyFlat<TOptions>): TVoid {
-    return new TVoid({ options: { ...options } })
+    return new TVoid({ typeName: TTypeName.Void, options: { ...options } })
   }
 }
 
@@ -1095,7 +1007,7 @@ export interface TNullDef extends TDef {
   readonly typeName: TTypeName.Null
 }
 
-export class TNull extends ttype(TTypeName.Null)<null, TNullDef> {
+export class TNull extends TType<null, TNullDef> {
   get _manifest(): TNullManifest {
     return { ...getDefaultManifest(), nullable: true }
   }
@@ -1105,7 +1017,7 @@ export class TNull extends ttype(TTypeName.Null)<null, TNullDef> {
   }
 
   static create(options?: SimplifyFlat<TOptions>): TNull {
-    return new TNull({ options: { ...options } })
+    return new TNull({ typeName: TTypeName.Null, options: { ...options } })
   }
 }
 
@@ -1118,7 +1030,7 @@ export interface TNeverDef extends TDef {
   readonly options: TOptions<{ readonly additionalIssueKind: TIssueKind.Forbidden }>
 }
 
-export class TNever extends ttype(TTypeName.Never)<never, TNeverDef> {
+export class TNever extends TType<never, TNeverDef> {
   get _manifest(): TManifest<never> {
     return getDefaultManifest()
   }
@@ -1134,7 +1046,7 @@ export class TNever extends ttype(TTypeName.Never)<never, TNeverDef> {
       }>
     >
   ): TNever {
-    return new TNever({ options: { ...options } })
+    return new TNever({ typeName: TTypeName.Never, options: { ...options } })
   }
 }
 
@@ -1165,12 +1077,9 @@ export interface TOptionalDef<T extends AnyTType> extends TDef {
 }
 
 export class TOptional<T extends AnyTType>
-  extends ttype(TTypeName.Optional)<OutputOf<T> | undefined, TOptionalDef<T>, InputOf<T> | undefined>
+  extends TType<OutputOf<T> | undefined, TOptionalDef<T>, InputOf<T> | undefined>
   implements TUnwrappable<T>
 {
-  brand<B extends PropertyKey>(brand: B): TBrand<TType<unknown, any, unknown>, B> {
-    throw new Error('Method not implemented.')
-  }
   get _manifest(): TOptionalManifest<T> {
     return { ...this.underlying.manifest, required: false }
   }
@@ -1201,7 +1110,7 @@ export class TOptional<T extends AnyTType>
   }
 
   static create<T extends AnyTType>(underlying: T, options?: SimplifyFlat<TOptions>): TOptional<T> {
-    return new TOptional({ underlying, options: { ...options } })
+    return new TOptional({ typeName: TTypeName.Optional, underlying, options: { ...options } })
   }
 }
 
@@ -1217,12 +1126,9 @@ export interface TNullableDef<T extends AnyTType> extends TDef {
 }
 
 export class TNullable<T extends AnyTType>
-  extends ttype(TTypeName.Nullable)<OutputOf<T> | null, TNullableDef<T>, InputOf<T> | null>
+  extends TType<OutputOf<T> | null, TNullableDef<T>, InputOf<T> | null>
   implements TUnwrappable<T>
 {
-  brand<B extends PropertyKey>(brand: B): TBrand<TType<unknown, any, unknown>, B> {
-    throw new Error('Method not implemented.')
-  }
   get _manifest(): TNullableManifest<T> {
     return { ...this.underlying.manifest, nullable: true }
   }
@@ -1253,7 +1159,7 @@ export class TNullable<T extends AnyTType>
   }
 
   static create<T extends AnyTType>(underlying: T, options?: SimplifyFlat<TOptions>): TNullable<T> {
-    return new TNullable({ underlying, options: { ...options } })
+    return new TNullable({ typeName: TTypeName.Nullable, underlying, options: { ...options } })
   }
 }
 
@@ -1268,11 +1174,7 @@ export interface TPromiseDef<T extends AnyTType> extends TDef {
   readonly underlying: T
 }
 
-export class TPromise<T extends AnyTType> extends ttype(TTypeName.Promise)<
-  Promise<OutputOf<T>>,
-  TPromiseDef<T>,
-  Promise<InputOf<T>>
-> {
+export class TPromise<T extends AnyTType> extends TType<Promise<OutputOf<T>>, TPromiseDef<T>, Promise<InputOf<T>>> {
   get _manifest(): TPromiseManifest<T> {
     return { ...this.underlying.manifest, promise: true }
   }
@@ -1299,7 +1201,7 @@ export class TPromise<T extends AnyTType> extends ttype(TTypeName.Promise)<
   }
 
   static create<T extends AnyTType>(underlying: T, options?: SimplifyFlat<TOptions>): TPromise<T> {
-    return new TPromise({ underlying, options: { ...options } })
+    return new TPromise({ typeName: TTypeName.Promise, underlying, options: { ...options } })
   }
 }
 
@@ -1312,13 +1214,7 @@ export interface TLazyDef<T extends AnyTType> extends TDef {
   readonly getType: () => T
 }
 
-export class TLazy<T extends AnyTType>
-  extends ttype(TTypeName.Lazy)<OutputOf<T>, TLazyDef<T>, InputOf<T>>
-  implements TUnwrappable<T>
-{
-  brand<B extends PropertyKey>(brand: B): TBrand<TType<unknown, any, unknown>, B> {
-    throw new Error('Method not implemented.')
-  }
+export class TLazy<T extends AnyTType> extends TType<OutputOf<T>, TLazyDef<T>, InputOf<T>> implements TUnwrappable<T> {
   get _manifest(): T['manifest'] {
     return { ...this.underlying.manifest }
   }
@@ -1341,7 +1237,7 @@ export class TLazy<T extends AnyTType>
   }
 
   static create<T extends AnyTType>(factory: () => T, options?: SimplifyFlat<TOptions>): TLazy<T> {
-    return new TLazy({ getType: factory, options: { ...options } })
+    return new TLazy({ typeName: TTypeName.Lazy, getType: factory, options: { ...options } })
   }
 }
 
@@ -1362,12 +1258,9 @@ export interface TBrandDef<T extends AnyTType, B extends PropertyKey> extends TD
 }
 
 export class TBrand<T extends AnyTType, B extends PropertyKey>
-  extends ttype(TTypeName.Brand)<BRANDED<OutputOf<T>, B>, TBrandDef<T, B>, InputOf<T>>
+  extends TType<BRANDED<OutputOf<T>, B>, TBrandDef<T, B>, InputOf<T>>
   implements TUnwrappable<T>
 {
-  brand<B extends PropertyKey>(brand: B): TBrand<TType<unknown, any, unknown>, B> {
-    throw new Error('Method not implemented.')
-  }
   get _manifest(): TBrandManifest<T, B> {
     return { ...this.underlying.manifest, brand: this.getBrand() }
   }
@@ -1397,7 +1290,65 @@ export class TBrand<T extends AnyTType, B extends PropertyKey>
     brand: B,
     options?: SimplifyFlat<TOptions>
   ): TBrand<T, B> {
-    return new TBrand({ underlying, brand, options: { ...options } })
+    return new TBrand({ typeName: TTypeName.Brand, underlying, brand, options: { ...options } })
+  }
+}
+
+/* ------------------------------------------------------------------------------------------------------------------ */
+/*                                                      TPipeline                                                     */
+/* ------------------------------------------------------------------------------------------------------------------ */
+
+export interface TPipelineDef<A extends AnyTType, B extends AnyTType> extends TDef {
+  readonly typeName: TTypeName.Pipeline
+  readonly from: A
+  readonly to: B
+}
+
+export class TPipeline<A extends AnyTType, B extends AnyTType> extends TType<
+  OutputOf<B>,
+  TPipelineDef<A, B>,
+  InputOf<A>
+> {
+  get _manifest(): Merge<A['manifest'], B['manifest']> {
+    return { ...this.from.manifest, ...this.to.manifest }
+  }
+
+  _parse(ctx: ParseContext<this>): ParseResultOf<this> {
+    const { from, to } = this._def
+
+    if (ctx.common.async) {
+      return Promise.resolve().then(async () => {
+        const fromResult = await from._parseAsync(ctx.clone(from, ctx.data))
+        if (!fromResult.ok) {
+          return fromResult
+        } else {
+          return to._parseAsync(ctx.clone(to, fromResult.data))
+        }
+      })
+    } else {
+      const fromResult = from._parseSync(ctx.clone(from, ctx.data))
+      if (!fromResult.ok) {
+        return fromResult
+      } else {
+        return to._parse(ctx.clone(to, fromResult.data))
+      }
+    }
+  }
+
+  get from(): A {
+    return this._def.from
+  }
+
+  get to(): B {
+    return this._def.to
+  }
+
+  static create<T, TU, U, A extends AnyTType<T, TU>, B extends AnyTType<TU, U>>(
+    from: A,
+    to: B,
+    options?: SimplifyFlat<TOptions>
+  ): TPipeline<A, B> {
+    return new TPipeline({ typeName: TTypeName.Pipeline, from, to, options: { ...options } })
   }
 }
 
