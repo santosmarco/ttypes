@@ -15,15 +15,15 @@ export enum TIssueKind {
   Forbidden = 'forbidden',
 }
 
-export type TIssueBase<K extends TIssueKind, P extends Record<string, unknown> | null> = SimplifyFlat<
+export type TIssueBase<K extends TIssueKind, P extends Record<string, unknown> | undefined> = SimplifyFlat<
   {
     readonly kind: K
     readonly path: ParsePath
     readonly message: string
-  } & (P extends null ? unknown : { readonly payload: Readonly<P> })
+  } & (P extends undefined ? unknown : { readonly payload: Readonly<P> })
 >
 
-export type TRequiredIssue = TIssueBase<TIssueKind.Required, null>
+export type TRequiredIssue = TIssueBase<TIssueKind.Required, undefined>
 
 export type TInvalidTypeIssue = TIssueBase<
   TIssueKind.InvalidType,
@@ -67,7 +67,7 @@ export type TInvalidSetIssue = TIssueBase<
   | { readonly check: 'size'; readonly expected: number; readonly received: number }
 >
 
-export type TForbiddenIssue = TIssueBase<TIssueKind.Forbidden, null>
+export type TForbiddenIssue = TIssueBase<TIssueKind.Forbidden, undefined>
 
 export type TIssue =
   | TRequiredIssue
@@ -81,16 +81,21 @@ export type TIssue =
 /*                                                       TError                                                       */
 /* ------------------------------------------------------------------------------------------------------------------ */
 
-export class TError<Input> {
+export class TError<Input> extends Error {
   private readonly _type: AnyTType<unknown, Input>
   private readonly _issues: readonly TIssue[]
 
   constructor(type: AnyTType<unknown, Input>, issues: readonly TIssue[]) {
+    super()
     this._type = type
     this._issues = issues
   }
+
+  static readonly defaultFormatter: TErrorFormatter = (issues) => JSON.stringify(issues, null, 2)
 
   static fromContext<I>(ctx: ParseContext<AnyTType<unknown, I>>): TError<I> {
     return new TError(ctx.schema as AnyTType<unknown, I>, ctx.allIssues)
   }
 }
+
+export type TErrorFormatter = (issues: readonly TIssue[]) => string

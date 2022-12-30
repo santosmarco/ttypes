@@ -3,6 +3,7 @@ import memoize from 'micro-memoize'
 import { nanoid } from 'nanoid'
 import type { CamelCase, NonNegativeInteger } from 'type-fest'
 import { TIssueKind } from './error'
+import { TGlobal } from './global'
 import {
   OK,
   ParseContextAsync,
@@ -14,7 +15,7 @@ import {
   type ParseResultOf,
   type SyncParseResultOf,
 } from './parse'
-import { Defined, isArray, isAsync, isFunction, omit, type Merge, type SimplifyFlat } from './utils'
+import { isArray, isAsync, isFunction, omit, type Defined, type Merge, type SimplifyFlat } from './utils'
 
 /* ---------------------------------------------------- TTypeName --------------------------------------------------- */
 
@@ -61,7 +62,7 @@ export interface PublicManifest<T> {
   readonly notes?: readonly string[]
   readonly unit?: string
   readonly deprecated?: boolean
-  readonly meta?: { readonly [x: string]: unknown }
+  readonly meta?: Readonly<Record<string, unknown>>
 }
 
 export interface PrivateManifest<T> {
@@ -121,7 +122,7 @@ export interface TOptionsOpts {
   readonly additionalIssueKind?: Exclude<TIssueKind, TIssueKind.Required | TIssueKind.InvalidType>
 }
 
-export interface TOptions<Opts extends TOptionsOpts | null = null> extends ParseOptions {
+export interface TOptions<Opts extends TOptionsOpts | undefined = undefined> extends ParseOptions {
   readonly color?: string
   readonly messages?: {
     readonly [K in
@@ -189,6 +190,7 @@ abstract class TType<O, D extends TDef, I = O> {
     this.isOptional = this.isOptional.bind(this)
     this.isNullable = this.isNullable.bind(this)
     this.isNullish = this.isNullish.bind(this)
+    this.isRequired = this.isRequired.bind(this)
     this.isReadonly = this.isReadonly.bind(this)
     this.isDeprecated = this.isDeprecated.bind(this)
   }
@@ -200,9 +202,10 @@ abstract class TType<O, D extends TDef, I = O> {
   }
 
   get manifest(): { [K in keyof this['_manifest']]: this['_manifest'][K] } {
-    return omit({ ...cloneDeep(this._manifest), ...cloneDeep(this._def.manifest) }, (val) => val === undefined) as {
-      [K in keyof this['_manifest']]: this['_manifest'][K]
-    }
+    return omit(
+      { ...cloneDeep(this._manifest), ...cloneDeep(this._def.manifest) },
+      (val) => val === undefined
+    ) as SimplifyFlat<this['_manifest']>
   }
 
   get options(): D['options'] {
@@ -214,6 +217,7 @@ abstract class TType<O, D extends TDef, I = O> {
     if (isAsync(result)) {
       throw new Error('Synchronous parse encountered Promise. Use `.parseAsync()`/`.safeParseAsync()` instead.')
     }
+
     return result
   }
 
@@ -224,9 +228,11 @@ abstract class TType<O, D extends TDef, I = O> {
 
   parse(data: unknown, options?: SimplifyFlat<ParseOptions>): OutputOf<this> {
     const result = this.safeParse(data, options)
+
     if (!result.ok) {
       throw result.error
     }
+
     return result.data
   }
 
@@ -238,13 +244,15 @@ abstract class TType<O, D extends TDef, I = O> {
 
   async parseAsync(data: unknown, options?: SimplifyFlat<ParseOptions>): Promise<OutputOf<this>> {
     const result = await this.safeParseAsync(data, options)
-    if (!result.ok) {
-      throw result.error
+
+    if (result.ok) {
+      return result.data
     }
-    return result.data
+
+    throw result.error
   }
 
-  safeParseAsync(data: unknown, options?: SimplifyFlat<ParseOptions>): AsyncParseResultOf<this> {
+  async safeParseAsync(data: unknown, options?: SimplifyFlat<ParseOptions>): AsyncParseResultOf<this> {
     const ctx = ParseContextAsync.of(this, data, options)
     const result = this._parseAsync(ctx)
     return result
@@ -309,7 +317,7 @@ abstract class TType<O, D extends TDef, I = O> {
     return this._updateManifest('version', version)
   }
 
-  examples(...examples: readonly [OutputOf<this>, ...OutputOf<this>[]]): this {
+  examples(...examples: readonly [OutputOf<this>, ...Array<OutputOf<this>>]): this {
     return this._updateManifest('examples', (this._manifest.examples ?? []).concat(examples))
   }
 
@@ -329,7 +337,7 @@ abstract class TType<O, D extends TDef, I = O> {
     return this._updateManifest('deprecated', deprecated)
   }
 
-  meta(meta: { readonly [x: string]: unknown }): this {
+  meta(meta: Readonly<Record<string, unknown>>): this {
     return this._updateManifest('meta', meta)
   }
 
@@ -357,12 +365,16 @@ abstract class TType<O, D extends TDef, I = O> {
     return !this.manifest.required && this.manifest.nullable
   }
 
+  isRequired(): boolean {
+    return this.manifest.required
+  }
+
   isReadonly(): boolean {
     return this.manifest.readonly
   }
 
   isDeprecated(): boolean {
-    return !!this.manifest.deprecated
+    return Boolean(this.manifest.deprecated)
   }
 
   protected _updateManifest<K extends keyof TManifest>(key: K, value: TManifest[K]): this {
@@ -395,7 +407,9 @@ export interface TAnyDef extends TDef {
   readonly typeName: TTypeName.Any
 }
 
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
 export class TAny extends TType<any, TAnyDef> {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   get _manifest(): TNullishManifest<any> {
     return { ...getDefaultManifest(), required: false, nullable: true }
   }
@@ -547,7 +561,7 @@ export class TBoolean extends TType<boolean, TBooleanDef> {
   }
 
   _parse(ctx: ParseContext<this>): ParseResultOf<this> {
-    return typeof ctx.data !== 'boolean' ? ctx.invalidType({ expected: TParsedType.Boolean }).abort() : OK(ctx.data)
+    return typeof ctx.data === 'boolean' ? OK(ctx.data) : ctx.invalidType({ expected: TParsedType.Boolean }).abort()
   }
 
   static create(options?: SimplifyFlat<TOptions>): TBoolean {
@@ -567,7 +581,7 @@ export class TTrue extends TType<true, TTrueDef> {
   }
 
   _parse(ctx: ParseContext<this>): ParseResultOf<this> {
-    return ctx.data !== true ? ctx.invalidType({ expected: TParsedType.True }).abort() : OK(ctx.data)
+    return ctx.data === true ? OK(ctx.data) : ctx.invalidType({ expected: TParsedType.True }).abort()
   }
 
   static create(options?: SimplifyFlat<TOptions>): TTrue {
@@ -587,7 +601,7 @@ export class TFalse extends TType<false, TFalseDef> {
   }
 
   _parse(ctx: ParseContext<this>): ParseResultOf<this> {
-    return ctx.data !== false ? ctx.invalidType({ expected: TParsedType.False }).abort() : OK(ctx.data)
+    return ctx.data === false ? OK(ctx.data) : ctx.invalidType({ expected: TParsedType.False }).abort()
   }
 
   static create(options?: SimplifyFlat<TOptions>): TFalse {
@@ -635,7 +649,7 @@ export class TSymbol extends TType<symbol, TSymbolDef> {
   }
 
   _parse(ctx: ParseContext<this>): ParseResultOf<this> {
-    return typeof ctx.data !== 'symbol' ? ctx.invalidType({ expected: TParsedType.Symbol }).abort() : OK(ctx.data)
+    return typeof ctx.data === 'symbol' ? OK(ctx.data) : ctx.invalidType({ expected: TParsedType.Symbol }).abort()
   }
 
   static create(options?: SimplifyFlat<TOptions>): TSymbol {
@@ -647,6 +661,7 @@ export class TSymbol extends TType<symbol, TSymbolDef> {
 /*                                                      TLiteral                                                      */
 /* ------------------------------------------------------------------------------------------------------------------ */
 
+// eslint-disable-next-line @typescript-eslint/ban-types
 export type TLiteralValue = string | number | bigint | boolean | symbol | null | undefined
 
 export type TLiteralOptions = TOptions<{
@@ -714,7 +729,7 @@ export class TLiteral<T extends TLiteralValue> extends TType<T, TLiteralDef<T>> 
     return OK(ctx.data as T)
   }
 
-  get value() {
+  get value(): T {
     return this._def.value
   }
 
@@ -765,8 +780,8 @@ export interface TIterable<T extends AnyTType> extends AnyTType {
 export type TArrayCardinality = 'atleastone' | 'many'
 
 export type TArrayIO<T extends AnyTType, C extends TArrayCardinality, IO extends '$I' | '$O' = '$O'> = {
-  atleastone: [T[IO], ...T[IO][]]
-  many: T[IO][]
+  atleastone: [T[IO], ...Array<T[IO]>]
+  many: Array<T[IO]>
 }[C]
 
 export interface TArrayManifest<T extends AnyTType, C extends TArrayCardinality = 'many'>
@@ -794,9 +809,9 @@ export class TArray<T extends AnyTType, C extends TArrayCardinality = 'many'>
     }
 
     const { element, minItems, maxItems, length, unique } = this._def
-    const data = ctx.data
+    const { data } = ctx
 
-    const result: OutputOf<T>[] = []
+    const result: Array<OutputOf<T>> = []
 
     if (length && data.length !== length.value) {
       ctx.addIssue(
@@ -816,6 +831,7 @@ export class TArray<T extends AnyTType, C extends TArrayCardinality = 'many'>
           return ctx.abort()
         }
       }
+
       if (maxItems && (maxItems.inclusive ? data.length > maxItems.value : data.length >= maxItems.value)) {
         ctx.addIssue(
           { kind: TIssueKind.InvalidArray, payload: { check: 'min', expected: maxItems, received: data.length } },
@@ -835,34 +851,40 @@ export class TArray<T extends AnyTType, C extends TArrayCardinality = 'many'>
     }
 
     if (ctx.isAsync()) {
-      return Promise.all(data.map((value, i) => element._parseAsync(ctx.child(element, value, [i])))).then(
+      return Promise.all(data.map(async (value, i) => element._parseAsync(ctx.child(element, value, [i])))).then(
         (childResults) => {
           for (const childResult of childResults) {
             if (!childResult.ok) {
               if (ctx.common.abortEarly) {
                 return ctx.abort()
               }
+
               continue
             }
+
             result.push(childResult.data)
           }
+
           return ctx.isValid() ? OK(result as OutputOf<this>) : ctx.abort()
         }
       )
-    } else {
-      for (const [i, value] of data.entries()) {
-        const childCtx = ctx.child(element, value, [i])
-        const childResult = element._parseSync(childCtx)
-        if (!childResult.ok) {
-          if (ctx.common.abortEarly) {
-            return ctx.abort()
-          }
-          continue
-        }
-        result.push(childResult.data)
-      }
-      return ctx.isValid() ? OK(result as OutputOf<this>) : ctx.abort()
     }
+
+    for (const [i, value] of data.entries()) {
+      const childCtx = ctx.child(element, value, [i])
+      const childResult = element._parseSync(childCtx)
+      if (!childResult.ok) {
+        if (ctx.common.abortEarly) {
+          return ctx.abort()
+        }
+
+        continue
+      }
+
+      result.push(childResult.data)
+    }
+
+    return ctx.isValid() ? OK(result as OutputOf<this>) : ctx.abort()
   }
 
   get element(): T {
@@ -902,10 +924,13 @@ export class TArray<T extends AnyTType, C extends TArrayCardinality = 'many'>
 
   nonempty(options?: { readonly message?: string }): TArray<T, 'atleastone'> {
     const { minItems } = this._def
+
     if (!minItems) {
       return this.min(1, { inclusive: true, message: options?.message }) as TArray<T, 'atleastone'>
     }
+
     const updatedMin = minItems.value >= 1 ? minItems.value : 1
+
     return new TArray({
       ...this._def,
       length: undefined,
@@ -970,9 +995,9 @@ export class TSet<T extends AnyTType>
     }
 
     const { element, minItems, maxItems, size } = this._def
-    const data = ctx.data
+    const { data } = ctx
 
-    const result: Set<OutputOf<T>> = new Set()
+    const result = new Set<OutputOf<T>>()
 
     if (size && data.size !== size.value) {
       ctx.addIssue(
@@ -992,6 +1017,7 @@ export class TSet<T extends AnyTType>
           return ctx.abort()
         }
       }
+
       if (maxItems && (maxItems.inclusive ? data.size > maxItems.value : data.size >= maxItems.value)) {
         ctx.addIssue(
           { kind: TIssueKind.InvalidSet, payload: { check: 'min', expected: maxItems, received: data.size } },
@@ -1004,34 +1030,40 @@ export class TSet<T extends AnyTType>
     }
 
     if (ctx.isAsync()) {
-      return Promise.all(Array.from(data).map((value, i) => element._parseAsync(ctx.child(element, value, [i])))).then(
-        (childResults) => {
-          for (const childResult of childResults) {
-            if (!childResult.ok) {
-              if (ctx.common.abortEarly) {
-                return ctx.abort()
-              }
-              continue
+      return Promise.all(
+        Array.from(data).map(async (value, i) => element._parseAsync(ctx.child(element, value, [i])))
+      ).then((childResults) => {
+        for (const childResult of childResults) {
+          if (!childResult.ok) {
+            if (ctx.common.abortEarly) {
+              return ctx.abort()
             }
-            result.add(childResult.data)
+
+            continue
           }
-          return ctx.isValid() ? OK(result) : ctx.abort()
+
+          result.add(childResult.data)
         }
-      )
-    } else {
-      for (const [i, value] of data.entries()) {
-        const childCtx = ctx.child(element, value, [i])
-        const childResult = element._parseSync(childCtx)
-        if (!childResult.ok) {
-          if (ctx.common.abortEarly) {
-            return ctx.abort()
-          }
-          continue
-        }
-        result.add(childResult.data)
-      }
-      return ctx.isValid() ? OK(result) : ctx.abort()
+
+        return ctx.isValid() ? OK(result) : ctx.abort()
+      })
     }
+
+    for (const [i, value] of data.entries()) {
+      const childCtx = ctx.child(element, value, [i])
+      const childResult = element._parseSync(childCtx)
+      if (!childResult.ok) {
+        if (ctx.common.abortEarly) {
+          return ctx.abort()
+        }
+
+        continue
+      }
+
+      result.add(childResult.data)
+    }
+
+    return ctx.isValid() ? OK(result) : ctx.abort()
   }
 
   get element(): T {
@@ -1142,7 +1174,9 @@ export interface TNullDef extends TDef {
   readonly typeName: TTypeName.Null
 }
 
+// eslint-disable-next-line @typescript-eslint/ban-types
 export class TNull extends TType<null, TNullDef> {
+  // eslint-disable-next-line @typescript-eslint/ban-types
   get _manifest(): TNullableManifest<null> {
     return { ...getDefaultManifest(), nullable: true }
   }
@@ -1230,13 +1264,18 @@ export class TOptional<T extends AnyTType>
   }
 
   unwrapDeep(): UnwrapDeep<T, TTypeName.Optional> {
-    return this.underlying instanceof TOptional ? this.underlying.unwrapDeep() : this.underlying
+    return (this.underlying instanceof TOptional ? this.underlying.unwrapDeep() : this.underlying) as UnwrapDeep<
+      T,
+      TTypeName.Optional
+    >
   }
 
   unwrapNullishDeep(): UnwrapDeep<T, TTypeName.Optional | TTypeName.Nullable> {
-    return this.underlying instanceof TOptional || this.underlying instanceof TNullable
-      ? this.underlying.unwrapNullishDeep()
-      : this.underlying
+    return (
+      this.underlying instanceof TOptional || this.underlying instanceof TNullable
+        ? this.underlying.unwrapNullishDeep()
+        : this.underlying
+    ) as UnwrapDeep<T, TTypeName.Optional | TTypeName.Nullable>
   }
 
   static create<T extends AnyTType>(underlying: T, options?: SimplifyFlat<TOptions>): TOptional<T> {
@@ -1254,10 +1293,11 @@ export interface TNullableDef<T extends AnyTType> extends TDef {
 }
 
 export class TNullable<T extends AnyTType>
+  // eslint-disable-next-line @typescript-eslint/ban-types
   extends TType<OutputOf<T> | null, TNullableDef<T>, InputOf<T> | null>
   implements TUnwrappable<T>
 {
-  get _manifest(): TNullableManifest<OutputOf<T> | null> {
+  get _manifest(): TNullableManifest<OutputOf<T> | undefined> {
     return { ...this.underlying.manifest, nullable: true }
   }
 
@@ -1274,13 +1314,18 @@ export class TNullable<T extends AnyTType>
   }
 
   unwrapDeep(): UnwrapDeep<T, TTypeName.Nullable> {
-    return this.underlying instanceof TNullable ? this.underlying.unwrapDeep() : this.underlying
+    return (this.underlying instanceof TNullable ? this.underlying.unwrapDeep() : this.underlying) as UnwrapDeep<
+      T,
+      TTypeName.Nullable
+    >
   }
 
   unwrapNullishDeep(): UnwrapDeep<T, TTypeName.Optional | TTypeName.Nullable> {
-    return this.underlying instanceof TOptional || this.underlying instanceof TNullable
-      ? this.underlying.unwrapNullishDeep()
-      : this.underlying
+    return (
+      this.underlying instanceof TOptional || this.underlying instanceof TNullable
+        ? this.underlying.unwrapNullishDeep()
+        : this.underlying
+    ) as UnwrapDeep<T, TTypeName.Optional | TTypeName.Nullable>
   }
 
   static create<T extends AnyTType>(underlying: T, options?: SimplifyFlat<TOptions>): TNullable<T> {
@@ -1302,6 +1347,7 @@ export class TRequired<T extends AnyTType>
   implements TUnwrappable<T>
 {
   get _manifest(): TRequiredManifest<Defined<OutputOf<T>>> {
+    // eslint-disable-next-line @typescript-eslint/consistent-type-assertions
     return { ...this.underlying.manifest, required: true } as TRequiredManifest<Defined<OutputOf<T>>>
   }
 
@@ -1320,7 +1366,10 @@ export class TRequired<T extends AnyTType>
   }
 
   unwrapDeep(): UnwrapDeep<T, TTypeName.Required> {
-    return this.underlying instanceof TRequired ? this.underlying.unwrapDeep() : this.underlying
+    return (this.underlying instanceof TRequired ? this.underlying.unwrapDeep() : this.underlying) as UnwrapDeep<
+      T,
+      TTypeName.Required
+    >
   }
 
   static create<T extends AnyTType>(underlying: T, options?: SimplifyFlat<TOptions>): TRequired<T> {
@@ -1346,8 +1395,11 @@ export class TPromise<T extends AnyTType> extends TType<Promise<OutputOf<T>>, TP
     if (!isAsync(ctx.data) && !ctx.isAsync()) {
       return ctx.invalidType({ expected: TParsedType.Promise }).abort()
     }
+
     return OK(
-      (isAsync(ctx.data) ? ctx.data : Promise.resolve(ctx.data)).then((awaited) => this.underlying.parseAsync(awaited))
+      (isAsync(ctx.data) ? ctx.data : Promise.resolve(ctx.data)).then(async (awaited) =>
+        this.underlying.parseAsync(awaited)
+      )
     )
   }
 
@@ -1360,7 +1412,10 @@ export class TPromise<T extends AnyTType> extends TType<Promise<OutputOf<T>>, TP
   }
 
   unwrapDeep(): UnwrapDeep<T, TTypeName.Promise> {
-    return this.underlying instanceof TPromise ? this.underlying.unwrapDeep() : this.underlying
+    return (this.underlying instanceof TPromise ? this.underlying.unwrapDeep() : this.underlying) as UnwrapDeep<
+      T,
+      TTypeName.Promise
+    >
   }
 
   static create<T extends AnyTType>(underlying: T, options?: SimplifyFlat<TOptions>): TPromise<T> {
@@ -1373,6 +1428,7 @@ export class TPromise<T extends AnyTType> extends TType<Promise<OutputOf<T>>, TP
 /* ------------------------------------------------------------------------------------------------------------------ */
 
 export const BRAND = Symbol('BRAND')
+// eslint-disable-next-line @typescript-eslint/no-redeclare
 export type BRAND = typeof BRAND
 export type BRANDED<T, B extends PropertyKey> = T & { readonly [BRAND]: { readonly [K in B]: true } }
 
@@ -1402,12 +1458,19 @@ export class TBrand<T extends AnyTType, B extends PropertyKey>
     return this._def.brand
   }
 
+  removeBrand(): T {
+    return this.underlying
+  }
+
   unwrap(): T {
     return this.underlying
   }
 
   unwrapDeep(): UnwrapDeep<T, TTypeName.Brand> {
-    return this.underlying instanceof TBrand ? this.underlying.unwrapDeep() : this.underlying
+    return (this.underlying instanceof TBrand ? this.underlying.unwrapDeep() : this.underlying) as UnwrapDeep<
+      T,
+      TTypeName.Brand
+    >
   }
 
   static create<T extends AnyTType, B extends PropertyKey>(
@@ -1451,12 +1514,19 @@ export class TDefault<T extends AnyTType, D extends Defined<OutputOf<T>>>
     return this._def.getDefault()
   }
 
+  removeDefault(): T {
+    return this.underlying
+  }
+
   unwrap(): T {
     return this.underlying
   }
 
   unwrapDeep(): UnwrapDeep<T, TTypeName.Default> {
-    return this.underlying instanceof TDefault ? this.underlying.unwrapDeep() : this.underlying
+    return (this.underlying instanceof TDefault ? this.underlying.unwrapDeep() : this.underlying) as UnwrapDeep<
+      T,
+      TTypeName.Default
+    >
   }
 
   static create<T extends AnyTType, D extends Defined<OutputOf<T>>>(
@@ -1482,7 +1552,7 @@ export class TDefault<T extends AnyTType, D extends Defined<OutputOf<T>>>
     return new TDefault({
       typeName: TTypeName.Default,
       underlying,
-      getDefault: isFunction(defaultValueOrGetter) ? defaultValueOrGetter : () => defaultValueOrGetter,
+      getDefault: isFunction(defaultValueOrGetter) ? defaultValueOrGetter : (): D => defaultValueOrGetter,
       options: { ...options },
     })
   }
@@ -1516,7 +1586,10 @@ export class TLazy<T extends AnyTType> extends TType<OutputOf<T>, TLazyDef<T>, I
   }
 
   unwrapDeep(): UnwrapDeep<T, TTypeName.Lazy> {
-    return this.underlying instanceof TLazy ? this.underlying.unwrapDeep() : this.underlying
+    return (this.underlying instanceof TLazy ? this.underlying.unwrapDeep() : this.underlying) as UnwrapDeep<
+      T,
+      TTypeName.Lazy
+    >
   }
 
   static create<T extends AnyTType>(factory: () => T, options?: SimplifyFlat<TOptions>): TLazy<T> {
@@ -1551,18 +1624,18 @@ export class TPipeline<A extends AnyTType, B extends AnyTType> extends TType<
         const fromResult = await from._parseAsync(ctx.clone(from, ctx.data))
         if (!fromResult.ok) {
           return fromResult
-        } else {
-          return to._parseAsync(ctx.clone(to, fromResult.data))
         }
+
+        return to._parseAsync(ctx.clone(to, fromResult.data))
       })
-    } else {
-      const fromResult = from._parseSync(ctx.clone(from, ctx.data))
-      if (!fromResult.ok) {
-        return fromResult
-      } else {
-        return to._parse(ctx.clone(to, fromResult.data))
-      }
     }
+
+    const fromResult = from._parseSync(ctx.clone(from, ctx.data))
+    if (!fromResult.ok) {
+      return fromResult
+    }
+
+    return to._parse(ctx.clone(to, fromResult.data))
   }
 
   get from(): A {
@@ -1573,7 +1646,7 @@ export class TPipeline<A extends AnyTType, B extends AnyTType> extends TType<
     return this._def.to
   }
 
-  static create<T, TU, U, A extends AnyTType<T, TU>, B extends AnyTType<TU, U>>(
+  static create<T, TU, U, A extends AnyTType<TU, T>, B extends AnyTType<U, TU>>(
     from: A,
     to: B,
     options?: SimplifyFlat<TOptions>
@@ -1609,6 +1682,8 @@ export const trueType = TTrue.create
 export const undefinedType = TUndefined.create
 export const unknownType = TUnknown.create
 export const voidType = TVoid.create
+
+export const global = TGlobal.get
 
 export {
   anyType as any,

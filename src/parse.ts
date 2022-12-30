@@ -1,5 +1,5 @@
 import cloneDeep from 'clone-deep'
-import { TError, TIssue, TIssueKind } from './error'
+import { TError, TIssueKind, type TIssue } from './error'
 import type { AnyTType, InputOf, OutputOf } from './types'
 import { isArray, isAsync, type StrictOmit, type StripKey } from './utils'
 
@@ -35,7 +35,7 @@ export const getParsedType = (x: unknown): TParsedType => {
       return TParsedType.String
     case 'number':
       if (Number.isNaN(x)) return TParsedType.NaN
-      else return TParsedType.Number
+      return TParsedType.Number
     case 'bigint':
       return TParsedType.BigInt
     case 'boolean':
@@ -55,7 +55,7 @@ export const getParsedType = (x: unknown): TParsedType => {
       if (x instanceof Set) return TParsedType.Set
       if (x instanceof RegExp) return TParsedType.RegExp
       if (x instanceof Buffer) return TParsedType.Buffer
-      else return TParsedType.Object
+      return TParsedType.Object
 
     default:
       return TParsedType.Unknown
@@ -98,7 +98,7 @@ export enum ParseStatus {
   Invalid = 'invalid',
 }
 
-export type ParsePath = readonly (string | number)[]
+export type ParsePath = ReadonlyArray<string | number>
 
 export interface ParseCommon {
   readonly async: boolean
@@ -116,7 +116,7 @@ export interface ParseContext<T extends AnyTType = AnyTType> {
   readonly parsedType: TParsedType
   readonly schema: AnyTType
   readonly path: ParsePath
-  readonly parent: ParseContext | null
+  readonly parent: ParseContext | undefined
   readonly common: ParseCommon
   readonly ownChildren: readonly ParseContext[]
   readonly allChildren: readonly ParseContext[]
@@ -133,11 +133,12 @@ export interface ParseContext<T extends AnyTType = AnyTType> {
   abort(): FailedParseResultOf<T>
 }
 
+// eslint-disable-next-line @typescript-eslint/no-redeclare
 export const ParseContext = <T extends AnyTType>(
   schema: T,
   data: unknown,
   path: ParsePath,
-  parent: ParseContext | null,
+  parent: ParseContext | undefined,
   common: ParseCommon
 ): ParseContext<T> => {
   const _internals: {
@@ -156,62 +157,77 @@ export const ParseContext = <T extends AnyTType>(
     get status() {
       return _internals.status
     },
+
     get data() {
       return _internals.data
     },
+
     get parsedType() {
       return getParsedType(this.data)
     },
+
     get schema() {
       return schema
     },
+
     get path() {
       return path
     },
+
     get parent() {
       return parent
     },
+
     get common() {
       return common
     },
+
     get ownChildren() {
       return _internals.ownChildren
     },
+
     get allChildren() {
       return this.ownChildren.concat(this.ownChildren.flatMap((child) => child.allChildren))
     },
+
     get ownIssues() {
       return _internals.ownIssues
     },
+
     get allIssues() {
       return this.ownIssues.concat(this.ownChildren.flatMap((child) => child.allIssues))
     },
+
     isValid() {
       return this.status === ParseStatus.Valid && this.allChildren.every((child) => child.isValid())
     },
+
     isInvalid() {
       return this.status === ParseStatus.Invalid || this.allChildren.some((child) => child.isInvalid())
     },
+
     setInvalid() {
       _internals.status = ParseStatus.Invalid
-      if (this.parent) {
-        this.parent.setInvalid()
-      }
+      this.parent?.setInvalid()
       return ctx
     },
+
     isAsync() {
       return this.common.async
     },
+
     child(schema, data, path) {
       const child = ParseContext(schema, data, this.path.concat(path), ctx, this.common)
       _internals.ownChildren.push(child)
       return child
     },
+
     clone(schema, data) {
       const clone = ParseContext(schema, data, this.path, this.parent, this.common)
       _internals.ownChildren.push(clone)
       return clone
     },
+
     addIssue(issue, message) {
       if (this.isInvalid()) {
         if (this.common.abortEarly) {
@@ -220,18 +236,24 @@ export const ParseContext = <T extends AnyTType>(
       } else {
         this.setInvalid()
       }
+
       _internals.ownIssues.push({ ...issue, path: this.path, message: message ?? '' })
+
       return this
     },
+
     invalidType(payload) {
       if (this.data === undefined) {
         return this.addIssue({ kind: TIssueKind.Required }, this.schema.options.messages?.required)
       }
+
       return this.addIssue(
         { kind: TIssueKind.InvalidType, payload: { expected: payload.expected, received: this.parsedType } },
+
         this.schema.options.messages?.invalidType
       )
     },
+
     abort() {
       return FAIL(TError.fromContext(this))
     },
@@ -241,11 +263,11 @@ export const ParseContext = <T extends AnyTType>(
 }
 
 export const ParseContextSync = {
-  of: <T extends AnyTType>(type: T, data: unknown, options: ParseOptions | undefined) =>
-    ParseContext(type, data, [], null, { ...type.options, ...options, async: false }),
+  of: <T extends AnyTType>(type: T, data: unknown, options: ParseOptions | undefined): ParseContext<T> =>
+    ParseContext(type, data, [], undefined, { ...type.options, ...options, async: false }),
 }
 
 export const ParseContextAsync = {
-  of: <T extends AnyTType>(type: T, data: unknown, options: ParseOptions | undefined) =>
-    ParseContext(type, data, [], null, { ...type.options, ...options, async: true }),
+  of: <T extends AnyTType>(type: T, data: unknown, options: ParseOptions | undefined): ParseContext<T> =>
+    ParseContext(type, data, [], undefined, { ...type.options, ...options, async: true }),
 }
