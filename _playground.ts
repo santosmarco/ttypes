@@ -19,5 +19,5 @@ const _t = console.log(
     .title('a')
     .nullable()
     .unwrap()
-    .abortEarly()
+    .abortEarly().
 )

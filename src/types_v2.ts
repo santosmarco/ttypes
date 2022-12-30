@@ -23,6 +23,7 @@ export enum TTypeName {
   Array = 'TArray',
   BigInt = 'TBigInt',
   Boolean = 'TBoolean',
+  Brand = 'TBrand',
   Date = 'TDate',
   False = 'TFalse',
   Intersection = 'TIntersection',
@@ -240,6 +241,7 @@ export interface UtilitiesManager<T extends AnyTType> {
   nullish(): TOptional<TNullable<T>>
   array(): TArray<T>
   promise(): TPromise<T>
+  brand<B extends PropertyKey>(brand: B): TBrand<T, B>
   lazy(): TLazy<T>
 }
 
@@ -259,6 +261,9 @@ export const UtilitiesManager = {
     },
     promise() {
       return TPromise.create(type, type.options)
+    },
+    brand(brand) {
+      return TBrand.create(type, brand, type.options)
     },
     lazy() {
       return TLazy.create(() => type, type.options)
@@ -393,6 +398,7 @@ export const ttype = <TN extends TTypeName>(typeName: TN) => {
     nullish = this._managers.utilities.nullish.bind(this)
     array = this._managers.utilities.array.bind(this)
     promise = this._managers.utilities.promise.bind(this)
+    brand = this._managers.utilities.brand.bind(this)
     lazy = this._managers.utilities.lazy.bind(this)
 
     isOptional = this._managers.checks.isOptional.bind(this)
@@ -1162,6 +1168,9 @@ export class TOptional<T extends AnyTType>
   extends ttype(TTypeName.Optional)<OutputOf<T> | undefined, TOptionalDef<T>, InputOf<T> | undefined>
   implements TUnwrappable<T>
 {
+  brand<B extends PropertyKey>(brand: B): TBrand<TType<unknown, any, unknown>, B> {
+    throw new Error('Method not implemented.')
+  }
   get _manifest(): TOptionalManifest<T> {
     return { ...this.underlying.manifest, required: false }
   }
@@ -1211,6 +1220,9 @@ export class TNullable<T extends AnyTType>
   extends ttype(TTypeName.Nullable)<OutputOf<T> | null, TNullableDef<T>, InputOf<T> | null>
   implements TUnwrappable<T>
 {
+  brand<B extends PropertyKey>(brand: B): TBrand<TType<unknown, any, unknown>, B> {
+    throw new Error('Method not implemented.')
+  }
   get _manifest(): TNullableManifest<T> {
     return { ...this.underlying.manifest, nullable: true }
   }
@@ -1304,6 +1316,9 @@ export class TLazy<T extends AnyTType>
   extends ttype(TTypeName.Lazy)<OutputOf<T>, TLazyDef<T>, InputOf<T>>
   implements TUnwrappable<T>
 {
+  brand<B extends PropertyKey>(brand: B): TBrand<TType<unknown, any, unknown>, B> {
+    throw new Error('Method not implemented.')
+  }
   get _manifest(): T['manifest'] {
     return { ...this.underlying.manifest }
   }
@@ -1330,12 +1345,69 @@ export class TLazy<T extends AnyTType>
   }
 }
 
+/* ------------------------------------------------------------------------------------------------------------------ */
+/*                                                       TBrand                                                       */
+/* ------------------------------------------------------------------------------------------------------------------ */
+
+export const BRAND = Symbol('BRAND')
+export type BRAND = typeof BRAND
+export type BRANDED<T, B extends PropertyKey> = T & { readonly [BRAND]: { readonly [K in B]: true } }
+
+export type TBrandManifest<T extends AnyTType, B extends PropertyKey> = Merge<T['manifest'], { readonly brand: B }>
+
+export interface TBrandDef<T extends AnyTType, B extends PropertyKey> extends TDef {
+  readonly typeName: TTypeName.Brand
+  readonly underlying: T
+  readonly brand: B
+}
+
+export class TBrand<T extends AnyTType, B extends PropertyKey>
+  extends ttype(TTypeName.Brand)<BRANDED<OutputOf<T>, B>, TBrandDef<T, B>, InputOf<T>>
+  implements TUnwrappable<T>
+{
+  brand<B extends PropertyKey>(brand: B): TBrand<TType<unknown, any, unknown>, B> {
+    throw new Error('Method not implemented.')
+  }
+  get _manifest(): TBrandManifest<T, B> {
+    return { ...this.underlying.manifest, brand: this.getBrand() }
+  }
+
+  _parse(ctx: ParseContext<this>): ParseResultOf<this> {
+    return this.underlying._parse(ctx.clone(this.underlying, ctx.data)) as ParseResultOf<this>
+  }
+
+  get underlying(): T {
+    return this._def.underlying
+  }
+
+  getBrand(): B {
+    return this._def.brand
+  }
+
+  unwrap(): T {
+    return this.underlying
+  }
+
+  unwrapDeep(): UnwrapDeep<T, TTypeName.Brand> {
+    return this.underlying instanceof TBrand ? this.underlying.unwrapDeep() : this.underlying
+  }
+
+  static create<T extends AnyTType, B extends PropertyKey>(
+    underlying: T,
+    brand: B,
+    options?: SimplifyFlat<TOptions>
+  ): TBrand<T, B> {
+    return new TBrand({ underlying, brand, options: { ...options } })
+  }
+}
+
 /* ---------------------------------------------------- External ---------------------------------------------------- */
 
 export const anyType = TAny.create
 export const arrayType = TArray.create
 export const bigintType = TBigInt.create
 export const booleanType = TBoolean.create
+export const brandType = TBrand.create
 export const dateType = TDate.create
 export const falseType = TFalse.create
 export const lazyType = TLazy.create
@@ -1359,6 +1431,7 @@ export {
   arrayType as array,
   bigintType as bigint,
   booleanType as boolean,
+  brandType as brand,
   dateType as date,
   falseType as false,
   lazyType as lazy,

@@ -126,8 +126,8 @@ export interface ParseContext<T extends AnyTType = AnyTType> {
   isInvalid(): boolean
   setInvalid(): this
   isAsync(): boolean
-  child(schema: AnyTType, data: unknown, path: ParsePath): ParseContext
-  clone(schema: AnyTType, data: unknown): ParseContext
+  child<T extends AnyTType>(schema: T, data: unknown, path: ParsePath): ParseContext<T>
+  clone<T extends AnyTType>(schema: T, data: unknown): ParseContext<T>
   addIssue(issue: ParseIssueInput, message: string | undefined): this
   invalidType(payload: { readonly expected: TParsedType }): this
   abort(): FailedParseResultOf<T>
