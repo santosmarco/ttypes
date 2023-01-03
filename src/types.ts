@@ -98,7 +98,7 @@ export interface TNullishManifest<T> extends TManifest<T> {
 }
 
 export interface TLiteralManifest<T extends TLiteralValue> extends TManifest<T> {
-  readonly value: T
+  readonly literal: T
 }
 
 export interface TIterableManifest<T extends AnyTType, O> extends TManifest<O> {
@@ -148,7 +148,6 @@ export interface TDef {
 abstract class TType<O, D extends TDef, I = O> {
   declare readonly $O: O
   declare readonly $I: I
-  declare readonly $D: D
 
   abstract readonly _manifest: TManifest
   abstract _parse(ctx: ParseContext<this>): ParseResultOf<this>
@@ -228,7 +227,6 @@ abstract class TType<O, D extends TDef, I = O> {
 
   parse(data: unknown, options?: SimplifyFlat<ParseOptions>): OutputOf<this> {
     const result = this.safeParse(data, options)
-
     if (!result.ok) {
       throw result.error
     }
@@ -244,11 +242,11 @@ abstract class TType<O, D extends TDef, I = O> {
 
   async parseAsync(data: unknown, options?: SimplifyFlat<ParseOptions>): Promise<OutputOf<this>> {
     const result = await this.safeParseAsync(data, options)
-    if (result.ok) {
-      return result.data
+    if (!result.ok) {
+      throw result.error
     }
 
-    throw result.error
+    return result.data
   }
 
   async safeParseAsync(data: unknown, options?: SimplifyFlat<ParseOptions>): AsyncParseResultOf<this> {
@@ -674,16 +672,18 @@ export interface TLiteralDef<T extends TLiteralValue> extends TDef {
 
 export class TLiteral<T extends TLiteralValue> extends TType<T, TLiteralDef<T>> {
   get _manifest(): TLiteralManifest<T> {
-    return { ...getDefaultManifest(), value: this._def.value }
+    return { ...getDefaultManifest(), literal: this.value }
   }
 
   _parse(ctx: ParseContext<this>): ParseResultOf<this> {
+    const { value } = this._def
+
     let expectedParsedType: TParsedType
 
-    if (this._def.value === null) {
+    if (value === null) {
       expectedParsedType = TParsedType.Null
     } else {
-      switch (typeof this._def.value) {
+      switch (typeof value) {
         case 'string':
           expectedParsedType = TParsedType.String
           break
@@ -712,13 +712,10 @@ export class TLiteral<T extends TLiteralValue> extends TType<T, TLiteralDef<T>> 
       return ctx.invalidType({ expected: expectedParsedType }).abort()
     }
 
-    if (ctx.data !== this._def.value) {
+    if (ctx.data !== value) {
       return ctx
         .addIssue(
-          {
-            kind: TIssueKind.InvalidLiteral,
-            payload: { expected: this._def.value, received: ctx.data as TLiteralValue },
-          },
+          { kind: TIssueKind.InvalidLiteral, payload: { expected: value, received: ctx.data as TLiteralValue } },
           this.options.messages?.invalidLiteral
         )
         .abort()
@@ -1452,14 +1449,6 @@ export class TBrand<T extends AnyTType, B extends PropertyKey>
     return this._def.underlying
   }
 
-  getBrand(): B {
-    return this._def.brand
-  }
-
-  removeBrand(): T {
-    return this.underlying
-  }
-
   unwrap(): T {
     return this.underlying
   }
@@ -1469,6 +1458,14 @@ export class TBrand<T extends AnyTType, B extends PropertyKey>
       T,
       TTypeName.Brand
     >
+  }
+
+  getBrand(): B {
+    return this._def.brand
+  }
+
+  removeBrand(): T {
+    return this.underlying
   }
 
   static create<T extends AnyTType, B extends PropertyKey>(
@@ -1508,14 +1505,6 @@ export class TDefault<T extends AnyTType, D extends Defined<OutputOf<T>>>
     return this._def.underlying
   }
 
-  getDefault(): D {
-    return this._def.getDefault()
-  }
-
-  removeDefault(): T {
-    return this.underlying
-  }
-
   unwrap(): T {
     return this.underlying
   }
@@ -1525,6 +1514,14 @@ export class TDefault<T extends AnyTType, D extends Defined<OutputOf<T>>>
       T,
       TTypeName.Default
     >
+  }
+
+  getDefault(): D {
+    return this._def.getDefault()
+  }
+
+  removeDefault(): T {
+    return this.underlying
   }
 
   static create<T extends AnyTType, D extends Defined<OutputOf<T>>>(
