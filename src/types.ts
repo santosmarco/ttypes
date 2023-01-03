@@ -244,7 +244,6 @@ abstract class TType<O, D extends TDef, I = O> {
 
   async parseAsync(data: unknown, options?: SimplifyFlat<ParseOptions>): Promise<OutputOf<this>> {
     const result = await this.safeParseAsync(data, options)
-
     if (result.ok) {
       return result.data
     }
@@ -288,7 +287,6 @@ abstract class TType<O, D extends TDef, I = O> {
 
   default<D extends Defined<O>>(defaultValue: D): TDefault<this, D>
   default<D extends Defined<O>>(getDefault: () => D): TDefault<this, D>
-  default<D extends Defined<O>>(defaultValueOrGetter: D | (() => D)): TDefault<this, D>
   default<D extends Defined<O>>(defaultValueOrGetter: D | (() => D)): TDefault<this, D> {
     return TDefault.create(this, defaultValueOrGetter, this.options)
   }
@@ -317,7 +315,7 @@ abstract class TType<O, D extends TDef, I = O> {
     return this._updateManifest('version', version)
   }
 
-  examples(...examples: readonly [OutputOf<this>, ...Array<OutputOf<this>>]): this {
+  examples(...examples: readonly [O, ...O[]]): this {
     return this._updateManifest('examples', (this._manifest.examples ?? []).concat(examples))
   }
 
