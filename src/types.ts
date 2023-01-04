@@ -10,9 +10,11 @@ import {
   SyncParseContext,
   TParsedType,
   type AsyncParseResultOf,
+  type FailedParseResult,
   type ParseContextOf,
   type ParseOptions,
   type ParseResultOf,
+  type SuccessfulParseResult,
   type SyncParseResultOf,
 } from './parse'
 import { isArray, isAsync, isFunction, omit, type Defined, type Merge, type SimplifyFlat } from './utils'
@@ -29,11 +31,13 @@ export enum TTypeName {
   Catch = 'TCatch',
   Date = 'TDate',
   Default = 'TDefault',
+  Enum = 'TEnum',
   False = 'TFalse',
   Intersection = 'TIntersection',
   Lazy = 'TLazy',
   Literal = 'TLiteral',
   NaN = 'TNaN',
+  NativeEnum = 'TNativeEnum',
   Never = 'TNever',
   Null = 'TNull',
   Nullable = 'TNullable',
@@ -46,13 +50,14 @@ export enum TTypeName {
   String = 'TString',
   Symbol = 'TSymbol',
   True = 'TTrue',
+  Tuple = 'TTuple',
   Undefined = 'TUndefined',
   Union = 'TUnion',
   Unknown = 'TUnknown',
   Void = 'TVoid',
 }
 
-/* ---------------------------------------------------- Manifest ---------------------------------------------------- */
+/* ---------------------------------------------------- TManifest --------------------------------------------------- */
 
 export interface PublicManifest<T> {
   readonly title?: string
@@ -111,17 +116,28 @@ export interface TLiteralManifest<T extends TLiteralValue> extends TManifest<T> 
   readonly literal: T
 }
 
+export interface TEnumManifest<T extends ReadonlyArray<string | number>> extends TManifest<T[number]> {
+  readonly enum: T
+}
+
 export interface TIterableManifest<T extends AnyTType, O> extends TManifest<O> {
   readonly items: T['manifest']
   readonly minItems?: number
   readonly maxItems?: number
 }
 
+export interface TTupleManifest<T extends TTupleItems, O> extends TManifest<O> {
+  readonly items: ReadonlyArray<T[number]['manifest']>
+  readonly minItems: number
+  readonly maxItems: number
+  readonly additionalItems: boolean
+}
+
 export interface TBrandManifest<T, B extends PropertyKey> extends TManifest<T> {
   readonly brand: B
 }
 
-/* ----------------------------------------------------- Options ---------------------------------------------------- */
+/* ---------------------------------------------------- TOptions ---------------------------------------------------- */
 
 export interface TOptionsOpts {
   readonly additionalIssueKind?: Exclude<TIssueKind, TIssueKind.Required | TIssueKind.InvalidType>
@@ -140,7 +156,7 @@ export interface TOptions<Opts extends TOptionsOpts | undefined = undefined> ext
   }
 }
 
-/* ------------------------------------------------------- Def ------------------------------------------------------ */
+/* ------------------------------------------------------ TDef ------------------------------------------------------ */
 
 export interface TDef {
   readonly typeName: TTypeName
@@ -777,6 +793,103 @@ export class TLiteral<T extends TLiteralValue> extends TType<T, TLiteralDef<T>> 
   }
 }
 
+export type AnyTLiteral = TLiteral<TLiteralValue>
+
+/* ------------------------------------------------------------------------------------------------------------------ */
+/*                                                        TEnum                                                       */
+/* ------------------------------------------------------------------------------------------------------------------ */
+
+export type TEnumValues = readonly [string | number, ...Array<string | number>]
+
+export type TEnumOptions = TOptions<{
+  additionalIssueKind: TIssueKind.InvalidEnumValue
+}>
+
+export interface TEnumDef<T extends readonly [string, ...string[]]> extends TDef {
+  readonly typeName: TTypeName.Enum
+  readonly options: TEnumOptions
+  readonly values: T
+}
+
+export class TEnum<T extends readonly [string, ...string[]]> extends TType<T[number], TEnumDef<T>> {
+  get _manifest(): TEnumManifest<T> {
+    return { ...getDefaultManifest({ type: TParsedType.String }), enum: this.values }
+  }
+
+  _parse(ctx: ParseContextOf<this>): ParseResultOf<this> {
+    if (typeof ctx.data !== 'string') {
+      return ctx.invalidType({ expected: TParsedType.String }).abort()
+    }
+
+    const { values } = this._def
+
+    if (!values.includes(ctx.data)) {
+      return ctx
+        .addIssue(
+          { kind: TIssueKind.InvalidEnumValue, payload: { expected: values, received: ctx.data } },
+          this.options.messages?.invalidEnumValue
+        )
+        .abort()
+    }
+
+    return OK(ctx.data)
+  }
+
+  get values(): T {
+    return this._def.values
+  }
+
+  get enum(): { readonly [K in T[number]]: K } {
+    return this.values.reduce((acc, value) => ({ ...acc, [value]: value }), {} as { readonly [K in T[number]]: K })
+  }
+
+  static create<T extends string, U extends readonly [T, ...T[]]>(
+    values: U,
+    options?: SimplifyFlat<TEnumOptions>
+  ): TEnum<U> {
+    return new TEnum({ typeName: TTypeName.Enum, values, options: { ...options } })
+  }
+}
+
+export type AnyTEnum = TEnum<readonly [string, ...string[]]>
+
+/* ------------------------------------------------------------------------------------------------------------------ */
+/*                                                     TNativeEnum                                                    */
+/* ------------------------------------------------------------------------------------------------------------------ */
+
+export interface EnumLike {
+  readonly [x: string]: string | number
+  readonly [x: number]: string
+}
+
+export interface TNativeEnumDef<T extends EnumLike> extends TDef {
+  readonly typeName: TTypeName.NativeEnum
+  readonly options: TEnumOptions
+  readonly enum: T
+}
+
+export class TNativeEnum<T extends EnumLike> extends TType<T[keyof T], TNativeEnumDef<T>> {
+  get _manifest(): TEnumManifest<ReadonlyArray<T[keyof T]>> {
+    return { ...getDefaultManifest({ type: TParsedType.String }), enum: this.values }
+  }
+
+  _parse(ctx: ParseContextOf<this>): ParseResultOf<this> {}
+
+  get enum(): T {
+    return this._def.enum
+  }
+
+  get values(): ReadonlyArray<T[keyof T]> {
+    return Object.values(this.enum) as Array<T[keyof T]>
+  }
+
+  static create<T extends EnumLike>(enum_: T, options?: SimplifyFlat<TEnumOptions>): TNativeEnum<T> {
+    return new TNativeEnum({ typeName: TTypeName.NativeEnum, enum: enum_, options: { ...options } })
+  }
+}
+
+export type AnyTNativeEnum = TNativeEnum<EnumLike>
+
 /* ---------------------------------------------------- TIterable --------------------------------------------------- */
 
 export interface TIterableDef<T extends AnyTType> extends TDef {
@@ -812,6 +925,29 @@ export interface TIterable<T extends AnyTType> extends AnyTType {
   partial(): TIterable<TOptional<T>>
 }
 
+export const handleArrayResults = <T extends AnyTType, U extends AnyTType>(
+  ctx: ParseContextOf<T>,
+  resultGetters: Array<() => SyncParseResultOf<U>>
+): SuccessfulParseResult<Array<OutputOf<U>>> | FailedParseResult<InputOf<T>> => {
+  const result = []
+
+  for (const getResult of resultGetters) {
+    const res = getResult()
+
+    if (!res.ok) {
+      if (ctx.common.abortEarly) {
+        return ctx.abort()
+      }
+
+      continue
+    }
+
+    result.push(res.data)
+  }
+
+  return ctx.isValid() ? OK(result) : ctx.abort()
+}
+
 /* ------------------------------------------------------------------------------------------------------------------ */
 /*                                                       TArray                                                       */
 /* ------------------------------------------------------------------------------------------------------------------ */
@@ -829,10 +965,10 @@ export type FlattenTArrayDeep<T extends AnyTArray> = T['element'] extends TArray
   ? FlattenTArrayDeep<TArray<U, C>>
   : T
 
-const flattenTArray = <T extends AnyTArray>(array: T): FlattenTArray<T> =>
+export const flattenTArray = <T extends AnyTArray>(array: T): FlattenTArray<T> =>
   (array.element instanceof TArray ? array.element : array) as FlattenTArray<T>
 
-const flattenTArrayDeep = <T extends AnyTArray>(array: T): FlattenTArrayDeep<T> =>
+export const flattenTArrayDeep = <T extends AnyTArray>(array: T): FlattenTArrayDeep<T> =>
   (array.element instanceof TArray ? flattenTArrayDeep(array.element) : array) as FlattenTArrayDeep<T>
 
 export class TArray<T extends AnyTType, C extends TArrayCardinality = 'many'>
@@ -855,8 +991,6 @@ export class TArray<T extends AnyTType, C extends TArrayCardinality = 'many'>
 
     const { element, minItems, maxItems, length, unique } = this._def
     const { data } = ctx
-
-    const result: Array<OutputOf<T>> = []
 
     if (length && data.length !== length.value) {
       ctx.addIssue(
@@ -897,38 +1031,18 @@ export class TArray<T extends AnyTType, C extends TArrayCardinality = 'many'>
 
     if (ctx.isAsync()) {
       return Promise.all(data.map(async (value, i) => element._parseAsync(ctx.child(element, value, [i])))).then(
-        (childResults) => {
-          for (const childResult of childResults) {
-            if (!childResult.ok) {
-              if (ctx.common.abortEarly) {
-                return ctx.abort()
-              }
-
-              continue
-            }
-
-            result.push(childResult.data)
-          }
-
-          return ctx.isValid() ? OK(result as OutputOf<this>) : ctx.abort()
-        }
+        (childResults) =>
+          handleArrayResults(
+            ctx,
+            childResults.map((res) => () => res)
+          ) as ParseResultOf<this>
       )
     }
 
-    for (const [i, value] of data.entries()) {
-      const childResult = element._parseSync(ctx.child(element, value, [i]))
-      if (!childResult.ok) {
-        if (ctx.common.abortEarly) {
-          return ctx.abort()
-        }
-
-        continue
-      }
-
-      result.push(childResult.data)
-    }
-
-    return ctx.isValid() ? OK(result as OutputOf<this>) : ctx.abort()
+    return handleArrayResults(
+      ctx,
+      data.map((value, i) => () => element._parseSync(ctx.child(element, value, [i])))
+    ) as ParseResultOf<this>
   }
 
   get element(): T {
@@ -1019,6 +1133,134 @@ export class TArray<T extends AnyTType, C extends TArrayCardinality = 'many'>
 export type AnyTArray = TArray<AnyTType, TArrayCardinality>
 
 /* ------------------------------------------------------------------------------------------------------------------ */
+/*                                                       TTuple                                                       */
+/* ------------------------------------------------------------------------------------------------------------------ */
+
+// eslint-disable-next-line @typescript-eslint/ban-types
+export type TTupleItems = readonly [AnyTType, ...AnyTType[]] | readonly []
+
+export type TTupleIO<
+  T extends TTupleItems,
+  R extends AnyTType | undefined,
+  IO extends '$I' | '$O' = '$O'
+  // eslint-disable-next-line @typescript-eslint/ban-types
+> = T extends readonly []
+  ? R extends AnyTType
+    ? [...Array<R[IO]>]
+    : // eslint-disable-next-line @typescript-eslint/ban-types
+      []
+  : T extends readonly [infer Head extends AnyTType, ...infer Rest extends TTupleItems]
+  ? [Head[IO], ...TTupleIO<Rest, R, IO>]
+  : never
+
+export type TTupleOptions = TOptions<{
+  additionalIssueKind: TIssueKind.InvalidTuple
+}>
+
+export interface TTupleDef<T extends TTupleItems, R extends AnyTType | undefined = undefined> extends TDef {
+  readonly typeName: TTypeName.Tuple
+  readonly options: TTupleOptions
+  readonly items: T
+  readonly rest: R
+}
+
+export class TTuple<T extends TTupleItems, R extends AnyTType | undefined = undefined> extends TType<
+  TTupleIO<T, R>,
+  TTupleDef<T, R>,
+  TTupleIO<T, R, '$I'>
+> {
+  get _manifest(): TTupleManifest<T, TTupleIO<T, R>> {
+    return {
+      ...getDefaultManifest({ type: TParsedType.Tuple }),
+      items: this.items.map((i) => i.manifest as T[number]['manifest']),
+      minItems: this.items.length,
+      maxItems: this.items.length,
+      additionalItems: Boolean(this.restType),
+    }
+  }
+
+  _parse(ctx: ParseContextOf<this>): ParseResultOf<this> {
+    if (!isArray(ctx.data)) {
+      return ctx.invalidType({ expected: TParsedType.Tuple }).abort()
+    }
+
+    const { items, rest } = this._def
+    const { data } = ctx
+
+    if (data.length < items.length || (!rest && data.length > items.length)) {
+      ctx.addIssue(
+        { kind: TIssueKind.InvalidTuple, payload: { check: 'length', expected: items.length, received: data.length } },
+        this.options.messages?.invalidTuple
+      )
+      if (ctx.common.abortEarly) {
+        return ctx.abort()
+      }
+    }
+
+    if (ctx.isAsync()) {
+      return Promise.all(
+        data
+          .map((value, i) => ({ value, schema: items[i] ?? rest }))
+          .filter((data): data is { value: typeof data.value; schema: NonNullable<typeof data.schema> } =>
+            Boolean(data.schema)
+          )
+          .map(async ({ value, schema }, i) => schema._parseAsync(ctx.child(schema, value, [i])))
+      ).then(
+        (childResults) =>
+          handleArrayResults(
+            ctx,
+            childResults.map((res) => () => res)
+          ) as ParseResultOf<this>
+      )
+    }
+
+    return handleArrayResults(
+      ctx,
+      data
+        .map((value, i) => ({ value, schema: items[i] ?? rest }))
+        .filter((data): data is { value: typeof data.value; schema: NonNullable<typeof data.schema> } =>
+          Boolean(data.schema)
+        )
+        .map(
+          ({ value, schema }, i) =>
+            () =>
+              schema._parseSync(ctx.child(schema, value, [i]))
+        )
+    ) as ParseResultOf<this>
+  }
+
+  get items(): T {
+    return this._def.items
+  }
+
+  get restType(): R {
+    return this._def.rest
+  }
+
+  rest<R_ extends AnyTType>(rest: R_): TTuple<T, R_> {
+    return new TTuple({ ...this._def, rest })
+  }
+
+  static create<T extends TTupleItems>(items: T, options?: SimplifyFlat<TTupleOptions>): TTuple<T>
+  static create<T extends TTupleItems, R extends AnyTType>(
+    items: T,
+    rest: R,
+    options?: SimplifyFlat<TTupleOptions>
+  ): TTuple<T, R>
+  static create<T extends TTupleItems, R extends AnyTType>(
+    items: T,
+    restOrOptions?: R | SimplifyFlat<TTupleOptions>,
+    maybeOptions?: SimplifyFlat<TTupleOptions>
+  ): TTuple<T, R | undefined> {
+    const rest = restOrOptions instanceof TType ? restOrOptions : undefined
+    const options = restOrOptions instanceof TType ? maybeOptions : restOrOptions
+    return new TTuple({ typeName: TTypeName.Tuple, items, rest, options: { ...options } })
+  }
+}
+
+export type AnyTTuple = TTuple<TTupleItems, AnyTType | undefined>
+
+/* ------------------------------------------------------------------------------------------------------------------ */
 /*                                                        TSet                                                        */
 /* ------------------------------------------------------------------------------------------------------------------ */
 
@@ -1046,8 +1288,6 @@ export class TSet<T extends AnyTType>
 
     const { element, minItems, maxItems, size } = this._def
     const { data } = ctx
-
-    const result = new Set<OutputOf<T>>()
 
     if (size && data.size !== size.value) {
       ctx.addIssue(
@@ -1080,39 +1320,23 @@ export class TSet<T extends AnyTType>
     }
 
     if (ctx.isAsync()) {
-      return Promise.all(
-        Array.from(data).map(async (value, i) => element._parseAsync(ctx.child(element, value, [i])))
-      ).then((childResults) => {
-        for (const childResult of childResults) {
-          if (!childResult.ok) {
-            if (ctx.common.abortEarly) {
-              return ctx.abort()
-            }
-
-            continue
-          }
-
-          result.add(childResult.data)
+      return Promise.all([...data].map(async (value, i) => element._parseAsync(ctx.child(element, value, [i])))).then(
+        (childResults) => {
+          const result = handleArrayResults(
+            ctx,
+            childResults.map((res) => () => res)
+          )
+          return result.ok ? OK(new Set(result.data)) : result
         }
-
-        return ctx.isValid() ? OK(result) : ctx.abort()
-      })
+      )
     }
 
-    for (const [i, value] of data.entries()) {
-      const childResult = element._parseSync(ctx.child(element, value, [i]))
-      if (!childResult.ok) {
-        if (ctx.common.abortEarly) {
-          return ctx.abort()
-        }
+    const result = handleArrayResults(
+      ctx,
+      [...data].map((value, i) => () => element._parseSync(ctx.child(element, value, [i])))
+    )
 
-        continue
-      }
-
-      result.add(childResult.data)
-    }
-
-    return ctx.isValid() ? OK(result) : ctx.abort()
+    return result.ok ? OK(new Set(result.data)) : result
   }
 
   get element(): T {
@@ -1332,6 +1556,8 @@ export class TOptional<T extends AnyTType>
   }
 }
 
+export type AnyTOptional = TOptional<AnyTType>
+
 /* ------------------------------------------------------------------------------------------------------------------ */
 /*                                                      TNullable                                                     */
 /* ------------------------------------------------------------------------------------------------------------------ */
@@ -1383,6 +1609,8 @@ export class TNullable<T extends AnyTType>
   }
 }
 
+export type AnyTNullable = TNullable<AnyTType>
+
 /* ------------------------------------------------------------------------------------------------------------------ */
 /*                                                      TRequired                                                     */
 /* ------------------------------------------------------------------------------------------------------------------ */
@@ -1426,6 +1654,8 @@ export class TRequired<T extends AnyTType>
     return new TRequired({ typeName: TTypeName.Required, underlying, options: { ...options } })
   }
 }
+
+export type AnyTRequired = TRequired<AnyTType>
 
 /* ------------------------------------------------------------------------------------------------------------------ */
 /*                                                      TPromise                                                      */
@@ -1472,6 +1702,8 @@ export class TPromise<T extends AnyTType> extends TType<Promise<OutputOf<T>>, TP
     return new TPromise({ typeName: TTypeName.Promise, underlying, options: { ...options } })
   }
 }
+
+export type AnyTPromise = TPromise<AnyTType>
 
 /* ------------------------------------------------------------------------------------------------------------------ */
 /*                                                       TBrand                                                       */
@@ -1531,6 +1763,8 @@ export class TBrand<T extends AnyTType, B extends PropertyKey>
     return new TBrand({ typeName: TTypeName.Brand, underlying, brand, options: { ...options } })
   }
 }
+
+export type AnyTBrand = TBrand<AnyTType, PropertyKey>
 
 /* ------------------------------------------------------------------------------------------------------------------ */
 /*                                                      TDefault                                                      */
@@ -1607,6 +1841,8 @@ export class TDefault<T extends AnyTType, D extends Defined<OutputOf<T>>>
     })
   }
 }
+
+export type AnyTDefault = TDefault<AnyTType, unknown>
 
 /* ------------------------------------------------------------------------------------------------------------------ */
 /*                                                       TCatch                                                       */
@@ -1686,6 +1922,8 @@ export class TCatch<T extends AnyTType, C extends OutputOf<T>>
   }
 }
 
+export type AnyTCatch = TCatch<AnyTType, unknown>
+
 /* ------------------------------------------------------------------------------------------------------------------ */
 /*                                                        TLazy                                                       */
 /* ------------------------------------------------------------------------------------------------------------------ */
@@ -1724,6 +1962,8 @@ export class TLazy<T extends AnyTType> extends TType<OutputOf<T>, TLazyDef<T>, I
     return new TLazy({ typeName: TTypeName.Lazy, getType: factory, options: { ...options } })
   }
 }
+
+export type AnyTLazy = TLazy<AnyTType>
 
 /* ------------------------------------------------------------------------------------------------------------------ */
 /*                                                       TUnion                                                       */
@@ -1790,6 +2030,8 @@ export class TUnion<T extends readonly AnyTType[]> extends TType<
   }
 }
 
+export type AnyTUnion = TUnion<readonly AnyTType[]>
+
 /* ------------------------------------------------------------------------------------------------------------------ */
 /*                                                    TIntersection                                                   */
 /* ------------------------------------------------------------------------------------------------------------------ */
@@ -1832,6 +2074,8 @@ export class TIntersection<T extends readonly AnyTType[]> extends TType<
     return new TIntersection({ typeName: TTypeName.Intersection, members: intersectees, options: { ...options } })
   }
 }
+
+export type AnyTIntersection = TIntersection<readonly AnyTType[]>
 
 /* ------------------------------------------------------------------------------------------------------------------ */
 /*                                                      TPipeline                                                     */
@@ -1891,6 +2135,8 @@ export class TPipeline<A extends AnyTType, B extends AnyTType> extends TType<
   }
 }
 
+export type AnyTPipeline = TPipeline<AnyTType, AnyTType>
+
 /* ---------------------------------------------------- External ---------------------------------------------------- */
 
 export const anyType = TAny.create
@@ -1902,11 +2148,13 @@ export const bufferType = TBuffer.create
 export const catchType = TCatch.create
 export const dateType = TDate.create
 export const defaultType = TDefault.create
+export const enumType = TEnum.create
 export const falseType = TFalse.create
 export const intersectionType = TIntersection.create
 export const lazyType = TLazy.create
 export const literalType = TLiteral.create
 export const nanType = TNaN.create
+export const nativeEnumType = TNativeEnum.create
 export const neverType = TNever.create
 export const nullableType = TNullable.create
 export const nullType = TNull.create
@@ -1919,6 +2167,7 @@ export const setType = TSet.create
 export const stringType = TString.create
 export const symbolType = TSymbol.create
 export const trueType = TTrue.create
+export const tupleType = TTuple.create
 export const undefinedType = TUndefined.create
 export const unionType = TUnion.create
 export const unknownType = TUnknown.create
@@ -1936,11 +2185,13 @@ export {
   bufferType as buffer,
   catchType as catch,
   dateType as date,
+  enumType as enum,
   falseType as false,
   intersectionType as intersection,
   lazyType as lazy,
   literalType as literal,
   nanType as nan,
+  nativeEnumType as nativeEnum,
   neverType as never,
   nullableType as nullable,
   nullType as null,
@@ -1954,6 +2205,7 @@ export {
   stringType as string,
   symbolType as symbol,
   trueType as true,
+  tupleType as tuple,
   undefinedType as undefined,
   unionType as union,
   unknownType as unknown,

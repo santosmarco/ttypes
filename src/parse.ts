@@ -27,6 +27,7 @@ export enum TParsedType {
   String = 'string',
   Symbol = 'symbol',
   True = 'true',
+  Tuple = 'Tuple',
   Undefined = 'undefined',
   Unknown = 'unknown',
   Void = 'void',
@@ -53,11 +54,11 @@ export const getParsedType = (x: unknown): TParsedType => {
       if (x === null) return TParsedType.Null
       if (isArray(x)) return TParsedType.Array
       if (isAsync(x)) return TParsedType.Promise
+      if (x instanceof Buffer) return TParsedType.Buffer
       if (x instanceof Date) return TParsedType.Date
       if (x instanceof Map) return TParsedType.Map
-      if (x instanceof Set) return TParsedType.Set
       if (x instanceof RegExp) return TParsedType.RegExp
-      if (x instanceof Buffer) return TParsedType.Buffer
+      if (x instanceof Set) return TParsedType.Set
       return TParsedType.Object
 
     default:

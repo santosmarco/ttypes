@@ -11,7 +11,9 @@ export enum TIssueKind {
   Required = 'required',
   InvalidType = 'invalid_type',
   InvalidLiteral = 'invalid_literal',
+  InvalidEnumValue = 'invalid_enum_value',
   InvalidArray = 'invalid_array',
+  InvalidTuple = 'invalid_tuple',
   InvalidSet = 'invalid_set',
   InvalidUnion = 'invalid_union',
   InvalidIntersection = 'invalid_intersection',
@@ -38,6 +40,11 @@ export type TInvalidLiteralIssue = TIssueBase<
   { readonly expected: TLiteralValue; readonly received: TLiteralValue }
 >
 
+export type TInvalidEnumValueIssue = TIssueBase<
+  TIssueKind.InvalidEnumValue,
+  { readonly expected: readonly [string, ...string[]]; readonly received: string }
+>
+
 export type TInvalidArrayIssue = TIssueBase<
   TIssueKind.InvalidArray,
   | {
@@ -53,6 +60,11 @@ export type TInvalidArrayIssue = TIssueBase<
   | { readonly check: 'length'; readonly expected: number; readonly received: number }
   | { readonly check: 'unique' }
   | { readonly check: 'ordered' }
+>
+
+export type TInvalidTupleIssue = TIssueBase<
+  TIssueKind.InvalidTuple,
+  { readonly check: 'length'; readonly expected: number; readonly received: number }
 >
 
 export type TInvalidSetIssue = TIssueBase<
@@ -83,7 +95,9 @@ export type TIssue =
   | TRequiredIssue
   | TInvalidTypeIssue
   | TInvalidLiteralIssue
+  | TInvalidEnumValueIssue
   | TInvalidArrayIssue
+  | TInvalidTupleIssue
   | TInvalidSetIssue
   | TInvalidUnionIssue
   | TInvalidIntersectionIssue
