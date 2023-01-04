@@ -574,8 +574,8 @@ export interface TTrueDef extends TDef {
 }
 
 export class TTrue extends TType<true, TTrueDef> {
-  get _manifest(): TManifest<true> {
-    return { ...getDefaultManifest() }
+  get _manifest(): TLiteralManifest<true> {
+    return { ...getDefaultManifest(), literal: true }
   }
 
   _parse(ctx: ParseContext<this>): ParseResultOf<this> {
@@ -594,8 +594,8 @@ export interface TFalseDef extends TDef {
 }
 
 export class TFalse extends TType<false, TFalseDef> {
-  get _manifest(): TManifest<false> {
-    return { ...getDefaultManifest() }
+  get _manifest(): TLiteralManifest<false> {
+    return { ...getDefaultManifest(), literal: false }
   }
 
   _parse(ctx: ParseContext<this>): ParseResultOf<this> {
