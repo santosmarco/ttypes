@@ -133,11 +133,25 @@ export interface TOptions<Opts extends TOptionsOpts | undefined = undefined> ext
   }
 }
 
+/* ---------------------------------------------------- TManifest --------------------------------------------------- */
+
+export interface TManifest<T = unknown> {
+  readonly title?: string
+  readonly summary?: string
+  readonly description?: string
+  readonly examples?: readonly T[]
+  readonly tags?: readonly string[]
+  readonly notes?: readonly string[]
+  readonly unit?: string
+  readonly meta?: Readonly<Record<string, unknown>>
+}
+
 /* ------------------------------------------------------ TDef ------------------------------------------------------ */
 
 export interface TDef {
   readonly typeName: TTypeName
   readonly options: TOptions
+  readonly manifest?: TManifest
   readonly isOptional?: boolean
   readonly isNullable?: boolean
   readonly isReadonly?: boolean
@@ -171,6 +185,9 @@ export abstract class TType<O, D extends TDef, I = O> {
     this.parseAsync = this.parseAsync.bind(this)
     this.safeParseAsync = this.safeParseAsync.bind(this)
     this.guard = this.guard.bind(this)
+    this.options = this.options.bind(this)
+    this.manifest = this.manifest.bind(this)
+    this.describe = this.describe.bind(this)
     this.optional = this.optional.bind(this)
     this.nullable = this.nullable.bind(this)
     this.nullish = this.nullish.bind(this)
@@ -252,12 +269,20 @@ export abstract class TType<O, D extends TDef, I = O> {
     return result
   }
 
+  guard(data: unknown, options?: Simplify<ParseOptions>): data is O {
+    return this.safeParse(data, options).ok
+  }
+
   options(options: D['options']): this {
     return this._construct({ ...this._def, options: { ...this._def.options, ...options } })
   }
 
-  guard(data: unknown, options?: Simplify<ParseOptions>): data is O {
-    return this.safeParse(data, options).ok
+  manifest(manifest: TManifest<O>): this {
+    return this._construct({ ...this._def, manifest: { ...this._def.manifest, ...manifest } })
+  }
+
+  describe(): TManifest<O> {
+    return { ...(this._def.manifest as TManifest<O>) }
   }
 
   optional(): TOptional<this> {

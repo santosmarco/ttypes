@@ -53,5 +53,11 @@ const a = t
   .readonly()
 type a = t.infer<typeof a>
 
-console.log(a.hint)
+console.log(
+  a
+    .manifest({
+      title: 'a',
+    })
+    .describe()
+)
 console.log(t.undefined().required().hint)

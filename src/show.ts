@@ -6,9 +6,8 @@ import {
   type AnyTType,
   type TEnumValues,
   type TLiteralValue,
-  type TObjectShape,
-  type AnyTObject,
   type TObject,
+  type TObjectShape,
 } from './types'
 
 export const TShow = (type: AnyTType, options?: { readonly parens?: boolean }): string => {
