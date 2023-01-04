@@ -11,6 +11,7 @@
   },
   "dependencies": {
     "clone-deep": "^4.0.1",
+    "fast-equals": "^4.0.3",
     "merge-deep": "^3.0.3",
     "micro-memoize": "^4.0.14",
     "nanoid": "3.3.4"

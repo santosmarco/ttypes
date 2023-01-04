@@ -157,6 +157,14 @@ export type ParseContextOf<T extends AnyTType> = ParseContext<OutputOf<T>, Input
 
 export type AnyParseContext = ParseContextOf<AnyTType>
 
+export const cloneContextData = <T>(data: T): T => {
+  if (typeof data === 'symbol') {
+    return data
+  }
+
+  return cloneDeep(data)
+}
+
 // eslint-disable-next-line @typescript-eslint/no-redeclare
 export const ParseContext = <T extends AnyTType>({
   schema,
@@ -167,7 +175,7 @@ export const ParseContext = <T extends AnyTType>({
 }: ParseContextDef<T>): ParseContextOf<T> => {
   const _internals: ParseContextInternals = {
     status: ParseStatus.Valid,
-    data: cloneDeep(data),
+    data: cloneContextData(data),
     ownChildren: [],
     ownIssues: [],
   }

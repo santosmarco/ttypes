@@ -1,6 +1,8 @@
 import { t } from '../index'
 import { assertEqual } from './_utils'
 
+const testSymbol = Symbol('foo')
+
 describe('TAny', () => {
   test('typeName', () => {
     expect(t.any().typeName).toStrictEqual('TAny')
@@ -15,6 +17,7 @@ describe('TAny', () => {
     expect(t.any().parse({})).toStrictEqual({})
     expect(t.any().parse(null)).toStrictEqual(null)
     expect(t.any().parse(undefined)).toStrictEqual(undefined)
+    expect(t.any().parse(testSymbol)).toStrictEqual(testSymbol)
     expect(String(t.any().parse(() => 'foo'))).toStrictEqual(String(() => 'foo'))
   })
 
@@ -70,6 +73,7 @@ describe('TUnknown', () => {
     expect(t.unknown().parse({})).toStrictEqual({})
     expect(t.unknown().parse(null)).toStrictEqual(null)
     expect(t.unknown().parse(undefined)).toStrictEqual(undefined)
+    expect(t.unknown().parse(testSymbol)).toStrictEqual(testSymbol)
     expect(String(t.unknown().parse(() => 'foo'))).toStrictEqual(String(() => 'foo'))
   })
 

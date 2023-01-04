@@ -1,3 +1,5 @@
+import { deepEqual } from 'fast-equals'
+
 import cloneDeep from 'clone-deep'
 import memoize from 'micro-memoize'
 import { nanoid } from 'nanoid'
@@ -179,13 +181,14 @@ export abstract class TType<O, D extends TDef, I = O> {
   protected constructor(def: D) {
     this._def = cloneDeep(def)
 
-    this._parse = memoize(this._parse.bind(this))
+    this._parse = memoize(this._parse.bind(this), { isEqual: deepEqual })
     this._parseSync = this._parseSync.bind(this)
     this._parseAsync = this._parseAsync.bind(this)
     this.parse = this.parse.bind(this)
     this.safeParse = this.safeParse.bind(this)
     this.parseAsync = this.parseAsync.bind(this)
     this.safeParseAsync = this.safeParseAsync.bind(this)
+    this.guard = this.guard.bind(this)
     this.optional = this.optional.bind(this)
     this.nullable = this.nullable.bind(this)
     this.nullish = this.nullish.bind(this)
@@ -212,12 +215,16 @@ export abstract class TType<O, D extends TDef, I = O> {
     this.abortEarly = this.abortEarly.bind(this)
     this.color = this.color.bind(this)
     this.debug = this.debug.bind(this)
+    this.errorMap = this.errorMap.bind(this)
+    this.clone = this.clone.bind(this)
     this.isOptional = this.isOptional.bind(this)
     this.isNullable = this.isNullable.bind(this)
     this.isNullish = this.isNullish.bind(this)
     this.isRequired = this.isRequired.bind(this)
     this.isReadonly = this.isReadonly.bind(this)
     this.isDeprecated = this.isDeprecated.bind(this)
+
+    Object.keys(this).forEach((k) => Object.defineProperty(this, k, { enumerable: !/^(?:_|\$)\w*/.exec(k) }))
   }
 
   readonly id: string = nanoid()
@@ -281,6 +288,10 @@ export abstract class TType<O, D extends TDef, I = O> {
     return result
   }
 
+  guard(data: unknown, options?: SimplifyFlat<ParseOptions>): data is O {
+    return this.safeParse(data, options).ok
+  }
+
   optional(): TOptional<this> {
     return TOptional.create(this, this.options)
   }
@@ -317,7 +328,7 @@ export abstract class TType<O, D extends TDef, I = O> {
     })
   }
 
-  brand<B extends PropertyKey>(brand: B): TBrand<this, B> {
+  brand<T extends PropertyKey>(brand: T): TBrand<this, T> {
     return TBrand.create(this, brand, this.options)
   }
 
@@ -327,9 +338,9 @@ export abstract class TType<O, D extends TDef, I = O> {
     return TDefault.create(this, defaultValueOrGetter, this.options)
   }
 
-  catch<C extends O>(catchValue: C): TCatch<this, C>
-  catch<C extends O>(getCatch: () => C): TCatch<this, C>
-  catch<C extends O>(catchValueOrGetter: C | (() => C)): TCatch<this, C> {
+  catch<T extends O>(catchValue: T): TCatch<this, T>
+  catch<T extends O>(getCatch: () => T): TCatch<this, T>
+  catch<T extends O>(catchValueOrGetter: T | (() => T)): TCatch<this, T> {
     return TCatch.create(this, catchValueOrGetter, this.options)
   }
 
@@ -393,6 +404,14 @@ export abstract class TType<O, D extends TDef, I = O> {
     return this._updateOptions('debug', debug)
   }
 
+  errorMap(map: TErrorMap): this {
+    return this._updateOptions('errorMap', map)
+  }
+
+  clone(): this {
+    return this._reconstruct()
+  }
+
   isOptional(): boolean {
     return !this.manifest.required
   }
@@ -417,15 +436,15 @@ export abstract class TType<O, D extends TDef, I = O> {
     return Boolean(this.manifest.deprecated)
   }
 
-  protected _updateManifest<K extends keyof TManifest>(key: K, value: TManifest[K]): this {
+  private _updateManifest<K extends keyof TManifest>(key: K, value: TManifest[K]): this {
     return this._reconstruct({ ...this._def, manifest: { ...this.manifest, [key]: value } })
   }
 
-  protected _updateOptions<K extends keyof TOptions>(key: K, value: TOptions[K]): this {
+  private _updateOptions<K extends keyof TOptions>(key: K, value: TOptions[K]): this {
     return this._reconstruct({ ...this._def, options: { ...this.options, [key]: value } })
   }
 
-  protected _reconstruct(def?: D): this {
+  private _reconstruct(def?: D): this {
     return Reflect.construct<[def: D], this>(this.constructor as new (def: D) => this, [{ ...this._def, ...def }])
   }
 }
