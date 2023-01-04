@@ -13,6 +13,7 @@ export enum TIssueKind {
   InvalidLiteral = 'invalid_literal',
   InvalidArray = 'invalid_array',
   InvalidSet = 'invalid_set',
+  InvalidUnion = 'invalid_union',
   Forbidden = 'forbidden',
 }
 
@@ -68,6 +69,8 @@ export type TInvalidSetIssue = TIssueBase<
   | { readonly check: 'size'; readonly expected: number; readonly received: number }
 >
 
+export type TUnionIssue = TIssueBase<TIssueKind.InvalidUnion, { readonly issues: readonly TIssue[] }>
+
 export type TForbiddenIssue = TIssueBase<TIssueKind.Forbidden, undefined>
 
 export type TIssue =
@@ -76,20 +79,29 @@ export type TIssue =
   | TInvalidLiteralIssue
   | TInvalidArrayIssue
   | TInvalidSetIssue
+  | TUnionIssue
   | TForbiddenIssue
 
 /* ------------------------------------------------------------------------------------------------------------------ */
 /*                                                       TError                                                       */
 /* ------------------------------------------------------------------------------------------------------------------ */
 
-export class TError<Input> extends Error {
-  private readonly _type: AnyTType<unknown, Input>
+export class TError<I> extends Error {
+  private readonly _type: AnyTType<unknown, I>
   private readonly _issues: readonly TIssue[]
 
-  constructor(type: AnyTType<unknown, Input>, issues: readonly TIssue[]) {
+  constructor(type: AnyTType<unknown, I>, issues: readonly TIssue[]) {
     super(getGlobal().getErrorFormatter()(issues))
     this._type = type
     this._issues = issues
+  }
+
+  get origin(): AnyTType<unknown, I> {
+    return this._type
+  }
+
+  get issues(): readonly TIssue[] {
+    return this._issues
   }
 
   static readonly defaultFormatter: TErrorFormatter = (issues) => JSON.stringify(issues, null, 2)
