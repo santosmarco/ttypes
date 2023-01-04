@@ -69,6 +69,7 @@ export interface PrivateManifest<T> {
   readonly required: boolean
   readonly nullable: boolean
   readonly readonly: boolean
+  readonly promise: boolean
   readonly default?: T
 }
 
@@ -78,6 +79,7 @@ export const getDefaultManifest = <T>(): TManifest<T> => ({
   required: true,
   nullable: false,
   readonly: false,
+  promise: false,
 })
 
 export interface TRequiredManifest<T> extends TManifest<T> {
@@ -95,6 +97,10 @@ export interface TNullableManifest<T> extends TManifest<T> {
 export interface TNullishManifest<T> extends TManifest<T> {
   readonly required: false
   readonly nullable: true
+}
+
+export interface TPromiseManifest<T> extends TManifest<T> {
+  readonly promise: true
 }
 
 export interface TLiteralManifest<T extends TLiteralValue> extends TManifest<T> {
