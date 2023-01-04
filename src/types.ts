@@ -397,10 +397,8 @@ abstract class TType<O, D extends TDef, I = O> {
     return this._reconstruct({ ...this._def, options: { ...this.options, [key]: value } })
   }
 
-  protected _reconstruct(def?: this['_def']): this {
-    return Reflect.construct<[def: this['_def']], this>(this.constructor as new (def: this['_def']) => this, [
-      { ...this._def, ...def },
-    ])
+  protected _reconstruct(def?: D): this {
+    return Reflect.construct<[def: D], this>(this.constructor as new (def: D) => this, [{ ...this._def, ...def }])
   }
 }
 
@@ -788,17 +786,29 @@ export interface TIterable<T extends AnyTType> extends AnyTType {
 /*                                                       TArray                                                       */
 /* ------------------------------------------------------------------------------------------------------------------ */
 
-export type TArrayCardinality = 'atleastone' | 'many'
+export type TArrayCardinality = 'many' | 'atleastone'
 
 export type TArrayIO<T extends AnyTType, C extends TArrayCardinality, IO extends '$I' | '$O' = '$O'> = {
-  atleastone: [T[IO], ...Array<T[IO]>]
   many: Array<T[IO]>
+  atleastone: [T[IO], ...Array<T[IO]>]
 }[C]
 
 export interface TArrayManifest<T extends AnyTType, C extends TArrayCardinality = 'many'>
   extends TIterableManifest<T, TArrayIO<T, C>> {
   readonly type: TParsedType.Array
 }
+
+export type FlattenTArray<T extends AnyTArray> = T['element'] extends TArray<infer U, infer C> ? TArray<U, C> : T
+
+export type FlattenTArrayDeep<T extends AnyTArray> = T['element'] extends TArray<infer U, infer C>
+  ? FlattenTArrayDeep<TArray<U, C>>
+  : T
+
+const flattenTArray = <T extends AnyTArray>(array: T): FlattenTArray<T> =>
+  (array.element instanceof TArray ? array.element : array) as FlattenTArray<T>
+
+const flattenTArrayDeep = <T extends AnyTArray>(array: T): FlattenTArrayDeep<T> =>
+  (array.element instanceof TArray ? flattenTArrayDeep(array.element) : array) as FlattenTArrayDeep<T>
 
 export class TArray<T extends AnyTType, C extends TArrayCardinality = 'many'>
   extends TType<TArrayIO<T, C>, TArrayDef<T>, TArrayIO<T, C, '$I'>>
@@ -924,18 +934,17 @@ export class TArray<T extends AnyTType, C extends TArrayCardinality = 'many'>
     })
   }
 
-  length<L extends number>(value: NonNegativeInteger<L>, options?: { readonly message?: string }): TArray<T, C> {
+  length<L extends number>(length: NonNegativeInteger<L>, options?: { readonly message?: string }): TArray<T, C> {
     return new TArray({
       ...this._def,
       minItems: undefined,
       maxItems: undefined,
-      length: { value, message: options?.message },
+      length: { value: length, message: options?.message },
     })
   }
 
   nonempty(options?: { readonly message?: string }): TArray<T, 'atleastone'> {
     const { minItems } = this._def
-
     if (!minItems) {
       return this.min(1, { inclusive: true, message: options?.message }) as TArray<T, 'atleastone'>
     }
@@ -965,6 +974,14 @@ export class TArray<T extends AnyTType, C extends TArrayCardinality = 'many'>
 
   unique(options?: { readonly message?: string }): TArray<T, C> {
     return new TArray({ ...this._def, unique: { message: options?.message } })
+  }
+
+  flatten(): FlattenTArray<this> {
+    return new TArray({ ...this._def, element: flattenTArray(this) }) as FlattenTArray<this>
+  }
+
+  flattenDeep(): FlattenTArrayDeep<this> {
+    return new TArray({ ...this._def, element: flattenTArrayDeep(this) }) as FlattenTArrayDeep<this>
   }
 
   toSet(): TSet<T> {
@@ -1103,12 +1120,12 @@ export class TSet<T extends AnyTType>
     })
   }
 
-  size<S extends number>(value: NonNegativeInteger<S>, options?: { readonly message?: string }): TSet<T> {
+  size<S extends number>(size: NonNegativeInteger<S>, options?: { readonly message?: string }): TSet<T> {
     return new TSet({
       ...this._def,
       minItems: undefined,
       maxItems: undefined,
-      size: { value, message: options?.message },
+      size: { value: size, message: options?.message },
     })
   }
 
@@ -1216,7 +1233,7 @@ export interface TNeverDef extends TDef {
 
 export class TNever extends TType<never, TNeverDef> {
   get _manifest(): TManifest<never> {
-    return getDefaultManifest()
+    return { ...getDefaultManifest() }
   }
 
   _parse(ctx: ParseContext<this>): ParseResultOf<this> {
@@ -1308,7 +1325,8 @@ export class TNullable<T extends AnyTType>
   extends TType<OutputOf<T> | null, TNullableDef<T>, InputOf<T> | null>
   implements TUnwrappable<T>
 {
-  get _manifest(): TNullableManifest<OutputOf<T> | undefined> {
+  // eslint-disable-next-line @typescript-eslint/ban-types
+  get _manifest(): TNullableManifest<OutputOf<T> | null> {
     return { ...this.underlying.manifest, nullable: true }
   }
 
@@ -1789,7 +1807,7 @@ export class TPipeline<A extends AnyTType, B extends AnyTType> extends TType<
       return fromResult
     }
 
-    return to._parse(ctx.clone(to, fromResult.data))
+    return to._parseSync(ctx.clone(to, fromResult.data))
   }
 
   get from(): A {
