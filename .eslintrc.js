@@ -27,4 +27,12 @@ module.exports = {
     'new-cap': 'off',
     complexity: 'off',
   },
+  overrides: [
+    {
+      files: ['./src/__tests__/*.ts', './src/_playground.ts', '.eslintrc.js'],
+      parserOptions: {
+        project: './tsconfig.no-emit.json',
+      },
+    },
+  ],
 }

@@ -23,23 +23,12 @@ describe('TBoolean', () => {
     expect(() => t.boolean().parse(undefined)).toThrow()
   })
 
-  test('manifest', () => {
-    expect(t.boolean().manifest).toStrictEqual({
-      type: 'boolean',
-      required: true,
-      nullable: false,
-      readonly: false,
-      promise: false,
-    })
-  })
-
   test('is', () => {
     expect(t.boolean().isOptional()).toStrictEqual(false)
     expect(t.boolean().isNullable()).toStrictEqual(false)
     expect(t.boolean().isNullish()).toStrictEqual(false)
     expect(t.boolean().isRequired()).toStrictEqual(true)
     expect(t.boolean().isReadonly()).toStrictEqual(false)
-    expect(t.boolean().isDeprecated()).toStrictEqual(false)
   })
 
   test('inference', () => {
@@ -69,24 +58,12 @@ describe('TTrue', () => {
     expect(() => t.true().parse(undefined)).toThrow()
   })
 
-  test('manifest', () => {
-    expect(t.true().manifest).toStrictEqual({
-      type: 'true',
-      required: true,
-      nullable: false,
-      readonly: false,
-      promise: false,
-      literal: true,
-    })
-  })
-
   test('is', () => {
     expect(t.true().isOptional()).toStrictEqual(false)
     expect(t.true().isNullable()).toStrictEqual(false)
     expect(t.true().isNullish()).toStrictEqual(false)
     expect(t.true().isRequired()).toStrictEqual(true)
     expect(t.true().isReadonly()).toStrictEqual(false)
-    expect(t.true().isDeprecated()).toStrictEqual(false)
   })
 
   test('inference', () => {
@@ -116,24 +93,12 @@ describe('TFalse', () => {
     expect(() => t.false().parse(undefined)).toThrow()
   })
 
-  test('manifest', () => {
-    expect(t.false().manifest).toStrictEqual({
-      type: 'false',
-      required: true,
-      nullable: false,
-      readonly: false,
-      promise: false,
-      literal: false,
-    })
-  })
-
   test('is', () => {
     expect(t.false().isOptional()).toStrictEqual(false)
     expect(t.false().isNullable()).toStrictEqual(false)
     expect(t.false().isNullish()).toStrictEqual(false)
     expect(t.false().isRequired()).toStrictEqual(true)
     expect(t.false().isReadonly()).toStrictEqual(false)
-    expect(t.false().isDeprecated()).toStrictEqual(false)
   })
 
   test('inference', () => {

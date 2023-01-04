@@ -1,8 +1,8 @@
 import safeJsonStringify from 'safe-json-stringify'
 import { getGlobal } from './global'
 import type { AnyParseContext, ParsePath, TParsedType } from './parse'
-import type { AnyTType, TLiteralValue } from './types'
-import type { SimplifyFlat, StripKey } from './utils'
+import type { AnyTType, TEnumValues, TLiteralValue } from './types'
+import type { Simplify, StripKey } from './utils'
 
 /* ------------------------------------------------------------------------------------------------------------------ */
 /*                                                       TIssue                                                       */
@@ -16,12 +16,13 @@ export enum TIssueKind {
   InvalidArray = 'invalid_array',
   InvalidTuple = 'invalid_tuple',
   InvalidSet = 'invalid_set',
+  UnrecognizedKeys = 'unrecognized_keys',
   InvalidUnion = 'invalid_union',
   InvalidIntersection = 'invalid_intersection',
   Forbidden = 'forbidden',
 }
 
-export type TIssueBase<K extends TIssueKind, P extends Record<string, unknown> | undefined> = SimplifyFlat<
+export type TIssueBase<K extends TIssueKind, P extends Record<string, unknown> | undefined> = Simplify<
   {
     readonly kind: K
     readonly path: ParsePath
@@ -43,7 +44,7 @@ export type TInvalidLiteralIssue = TIssueBase<
 
 export type TInvalidEnumValueIssue = TIssueBase<
   TIssueKind.InvalidEnumValue,
-  { readonly expected: readonly [string, ...string[]]; readonly received: string }
+  { readonly expected: TEnumValues; readonly received: string }
 >
 
 export type TInvalidArrayIssue = TIssueBase<
@@ -83,12 +84,11 @@ export type TInvalidSetIssue = TIssueBase<
   | { readonly check: 'size'; readonly expected: number; readonly received: number }
 >
 
+export type TUrecognizedKeysIssue = TIssueBase<TIssueKind.UnrecognizedKeys, { readonly keys: readonly string[] }>
+
 export type TInvalidUnionIssue = TIssueBase<TIssueKind.InvalidUnion, { readonly issues: readonly TIssue[] }>
 
-export type TInvalidIntersectionIssue = TIssueBase<
-  TIssueKind.InvalidIntersection,
-  { readonly issues: readonly TIssue[] }
->
+export type TInvalidIntersectionIssue = TIssueBase<TIssueKind.InvalidIntersection, undefined>
 
 export type TForbiddenIssue = TIssueBase<TIssueKind.Forbidden, undefined>
 
@@ -100,6 +100,7 @@ export type TIssue =
   | TInvalidArrayIssue
   | TInvalidTupleIssue
   | TInvalidSetIssue
+  | TUrecognizedKeysIssue
   | TInvalidUnionIssue
   | TInvalidIntersectionIssue
   | TForbiddenIssue
@@ -116,6 +117,10 @@ export const DEFAULT_ERROR_FORMATTER: TErrorFormatter = (issues) =>
     (_, value) => {
       if (typeof value === 'bigint') {
         return `${String(value)}n`
+      }
+
+      if (typeof value === 'symbol') {
+        return value.toString()
       }
 
       // eslint-disable-next-line @typescript-eslint/no-unsafe-return

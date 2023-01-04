@@ -20,23 +20,12 @@ describe('TDate', () => {
     expect(() => t.date().parse(testDate.getTime())).toThrow()
   })
 
-  test('manifest', () => {
-    expect(t.date().manifest).toStrictEqual({
-      type: 'Date',
-      required: true,
-      nullable: false,
-      readonly: false,
-      promise: false,
-    })
-  })
-
   test('is', () => {
     expect(t.date().isOptional()).toStrictEqual(false)
     expect(t.date().isNullable()).toStrictEqual(false)
     expect(t.date().isNullish()).toStrictEqual(false)
     expect(t.date().isRequired()).toStrictEqual(true)
     expect(t.date().isReadonly()).toStrictEqual(false)
-    expect(t.date().isDeprecated()).toStrictEqual(false)
   })
 
   test('inference', () => {

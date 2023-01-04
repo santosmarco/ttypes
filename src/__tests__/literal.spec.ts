@@ -5,7 +5,6 @@ const testSymbol = Symbol('foo')
 
 const literalString = t.literal('foo')
 const literalNumber = t.literal(1)
-// @ts-expect-error BigInt literals are not available when targeting lower than ES2020.
 const literalBigInt = t.literal(1n)
 const literalTrue = t.literal(true)
 const literalFalse = t.literal(false)
@@ -66,80 +65,12 @@ describe('TLiteral', () => {
     expect(literalUndefined.value).toStrictEqual(undefined)
   })
 
-  test('manifest', () => {
-    expect(literalString.manifest).toStrictEqual({
-      type: 'string',
-      required: true,
-      nullable: false,
-      readonly: false,
-      promise: false,
-      literal: 'foo',
-    })
-    expect(literalNumber.manifest).toStrictEqual({
-      type: 'number',
-      required: true,
-      nullable: false,
-      readonly: false,
-      promise: false,
-      literal: 1,
-    })
-    expect(literalBigInt.manifest).toStrictEqual({
-      type: 'bigint',
-      required: true,
-      nullable: false,
-      readonly: false,
-      promise: false,
-      literal: BigInt(1),
-    })
-    expect(literalTrue.manifest).toStrictEqual({
-      type: 'boolean',
-      required: true,
-      nullable: false,
-      readonly: false,
-      promise: false,
-      literal: true,
-    })
-    expect(literalFalse.manifest).toStrictEqual({
-      type: 'boolean',
-      required: true,
-      nullable: false,
-      readonly: false,
-      promise: false,
-      literal: false,
-    })
-    expect(literalSymbol.manifest).toStrictEqual({
-      type: 'symbol',
-      required: true,
-      nullable: false,
-      readonly: false,
-      promise: false,
-      literal: testSymbol,
-    })
-    expect(literalNull.manifest).toStrictEqual({
-      type: 'null',
-      required: true,
-      nullable: false,
-      readonly: false,
-      promise: false,
-      literal: null,
-    })
-    expect(literalUndefined.manifest).toStrictEqual({
-      type: 'undefined',
-      required: true,
-      nullable: false,
-      readonly: false,
-      promise: false,
-      literal: undefined,
-    })
-  })
-
   test('is', () => {
     expect(literalString.isOptional()).toStrictEqual(false)
     expect(literalString.isNullable()).toStrictEqual(false)
     expect(literalString.isNullish()).toStrictEqual(false)
     expect(literalString.isRequired()).toStrictEqual(true)
     expect(literalString.isReadonly()).toStrictEqual(false)
-    expect(literalString.isDeprecated()).toStrictEqual(false)
     expect(literalNull.isOptional()).toStrictEqual(false)
     expect(literalNull.isNullable()).toStrictEqual(true)
     expect(literalNull.isNullish()).toStrictEqual(false)
@@ -160,15 +91,5 @@ describe('TLiteral', () => {
     // eslint-disable-next-line @typescript-eslint/ban-types
     assertEqual<t.infer<typeof literalNull>, null>(true)
     assertEqual<t.infer<typeof literalUndefined>, undefined>(true)
-
-    assertEqual<typeof literalString.manifest.literal, 'foo'>(true)
-    assertEqual<typeof literalNumber.manifest.literal, 1>(true)
-    assertEqual<typeof literalBigInt.manifest.literal, 1n>(true)
-    assertEqual<typeof literalTrue.manifest.literal, true>(true)
-    assertEqual<typeof literalFalse.manifest.literal, false>(true)
-    assertEqual<typeof literalSymbol.manifest.literal, typeof testSymbol>(true)
-    // eslint-disable-next-line @typescript-eslint/ban-types
-    assertEqual<typeof literalNull.manifest.literal, null>(true)
-    assertEqual<typeof literalUndefined.manifest.literal, undefined>(true)
   })
 })

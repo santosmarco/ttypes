@@ -1,8 +1,7 @@
-import cloneDeep from 'clone-deep'
 import { TError, TIssueKind, resolveErrorMaps, type TErrorMap, type TIssue } from './error'
 import { getGlobal } from './global'
 import type { AnyTType, InputOf, OutputOf } from './types'
-import { isArray, isAsync, type StripKey } from './utils'
+import { cloneDeep, isArray, isAsync, type StripKey } from './utils'
 
 /* --------------------------------------------------- TParsedType -------------------------------------------------- */
 
@@ -25,6 +24,7 @@ export enum TParsedType {
   RegExp = 'RegExp',
   Set = 'Set',
   String = 'string',
+  StringOrNumber = 'string | number',
   Symbol = 'symbol',
   True = 'true',
   Tuple = 'Tuple',
@@ -157,14 +157,6 @@ export type ParseContextOf<T extends AnyTType> = ParseContext<OutputOf<T>, Input
 
 export type AnyParseContext = ParseContextOf<AnyTType>
 
-export const cloneContextData = <T>(data: T): T => {
-  if (typeof data === 'symbol') {
-    return data
-  }
-
-  return cloneDeep(data)
-}
-
 // eslint-disable-next-line @typescript-eslint/no-redeclare
 export const ParseContext = <T extends AnyTType>({
   schema,
@@ -175,7 +167,7 @@ export const ParseContext = <T extends AnyTType>({
 }: ParseContextDef<T>): ParseContextOf<T> => {
   const _internals: ParseContextInternals = {
     status: ParseStatus.Valid,
-    data: cloneContextData(data),
+    data: cloneDeep(data),
     ownChildren: [],
     ownIssues: [],
   }
@@ -278,7 +270,7 @@ export const ParseContext = <T extends AnyTType>({
         message ??
         resolveErrorMaps([
           this.common.errorMap,
-          this.schema.options.errorMap,
+          this.schema._def.options.errorMap,
           getGlobal().getErrorMap(),
           TError.defaultIssueMap,
         ])(issueWithPath)
@@ -290,12 +282,12 @@ export const ParseContext = <T extends AnyTType>({
 
     invalidType(payload) {
       if (this.data === undefined) {
-        return this.addIssue({ kind: TIssueKind.Required }, this.schema.options.messages?.required)
+        return this.addIssue({ kind: TIssueKind.Required }, this.schema._def.options.messages?.required)
       }
 
       return this.addIssue(
         { kind: TIssueKind.InvalidType, payload: { expected: payload.expected, received: this.parsedType } },
-        this.schema.options.messages?.invalidType
+        this.schema._def.options.messages?.invalidType
       )
     },
 

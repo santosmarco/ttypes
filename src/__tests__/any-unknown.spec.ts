@@ -33,23 +33,12 @@ describe('TAny', () => {
     expect(String(await t.any().parseAsync(() => 'foo'))).toStrictEqual(String(() => 'foo'))
   })
 
-  test('manifest', () => {
-    expect(t.any().manifest).toStrictEqual({
-      type: 'any',
-      required: false,
-      nullable: true,
-      readonly: false,
-      promise: false,
-    })
-  })
-
   test('is', () => {
     expect(t.any().isOptional()).toStrictEqual(true)
     expect(t.any().isNullable()).toStrictEqual(true)
     expect(t.any().isNullish()).toStrictEqual(true)
     expect(t.any().isRequired()).toStrictEqual(false)
     expect(t.any().isReadonly()).toStrictEqual(false)
-    expect(t.any().isDeprecated()).toStrictEqual(false)
   })
 
   test('inference', () => {
@@ -89,23 +78,12 @@ describe('TUnknown', () => {
     expect(String(await t.unknown().parseAsync(() => 'foo'))).toStrictEqual(String(() => 'foo'))
   })
 
-  test('manifest', () => {
-    expect(t.unknown().manifest).toStrictEqual({
-      type: 'unknown',
-      required: false,
-      nullable: true,
-      readonly: false,
-      promise: false,
-    })
-  })
-
   test('is', () => {
     expect(t.unknown().isOptional()).toStrictEqual(true)
     expect(t.unknown().isNullable()).toStrictEqual(true)
     expect(t.unknown().isNullish()).toStrictEqual(true)
     expect(t.unknown().isRequired()).toStrictEqual(false)
     expect(t.unknown().isReadonly()).toStrictEqual(false)
-    expect(t.unknown().isDeprecated()).toStrictEqual(false)
   })
 
   test('inference', () => {

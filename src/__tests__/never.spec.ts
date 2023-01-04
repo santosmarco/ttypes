@@ -17,23 +17,12 @@ describe('TNever', () => {
     expect(() => t.never().parse(undefined)).toThrow()
   })
 
-  test('manifest', () => {
-    expect(t.never().manifest).toStrictEqual({
-      type: 'never',
-      required: true,
-      nullable: false,
-      readonly: false,
-      promise: false,
-    })
-  })
-
   test('is', () => {
     expect(t.never().isOptional()).toStrictEqual(false)
     expect(t.never().isNullable()).toStrictEqual(false)
     expect(t.never().isNullish()).toStrictEqual(false)
     expect(t.never().isRequired()).toStrictEqual(true)
     expect(t.never().isReadonly()).toStrictEqual(false)
-    expect(t.never().isDeprecated()).toStrictEqual(false)
   })
 
   test('options', () => {

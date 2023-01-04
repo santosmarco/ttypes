@@ -20,23 +20,12 @@ describe('TNumber', () => {
     expect(() => t.number().parse(Number.NaN)).toThrow()
   })
 
-  test('manifest', () => {
-    expect(t.number().manifest).toStrictEqual({
-      type: 'number',
-      required: true,
-      nullable: false,
-      readonly: false,
-      promise: false,
-    })
-  })
-
   test('is', () => {
     expect(t.number().isOptional()).toStrictEqual(false)
     expect(t.number().isNullable()).toStrictEqual(false)
     expect(t.number().isNullish()).toStrictEqual(false)
     expect(t.number().isRequired()).toStrictEqual(true)
     expect(t.number().isReadonly()).toStrictEqual(false)
-    expect(t.number().isDeprecated()).toStrictEqual(false)
   })
 
   test('inference', () => {
@@ -64,23 +53,12 @@ describe('TBigInt', () => {
     expect(() => t.bigint().parse(Number.NaN)).toThrow()
   })
 
-  test('manifest', () => {
-    expect(t.bigint().manifest).toStrictEqual({
-      type: 'bigint',
-      required: true,
-      nullable: false,
-      readonly: false,
-      promise: false,
-    })
-  })
-
   test('is', () => {
     expect(t.bigint().isOptional()).toStrictEqual(false)
     expect(t.bigint().isNullable()).toStrictEqual(false)
     expect(t.bigint().isNullish()).toStrictEqual(false)
     expect(t.bigint().isRequired()).toStrictEqual(true)
     expect(t.bigint().isReadonly()).toStrictEqual(false)
-    expect(t.bigint().isDeprecated()).toStrictEqual(false)
   })
 
   test('inference', () => {

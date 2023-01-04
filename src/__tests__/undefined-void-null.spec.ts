@@ -28,23 +28,12 @@ describe('TUndefined', () => {
     }).toThrow()
   })
 
-  test('manifest', () => {
-    expect(t.undefined().manifest).toStrictEqual({
-      type: 'undefined',
-      required: false,
-      nullable: false,
-      readonly: false,
-      promise: false,
-    })
-  })
-
   test('is', () => {
     expect(t.undefined().isOptional()).toStrictEqual(true)
     expect(t.undefined().isNullable()).toStrictEqual(false)
     expect(t.undefined().isNullish()).toStrictEqual(false)
     expect(t.undefined().isRequired()).toStrictEqual(false)
     expect(t.undefined().isReadonly()).toStrictEqual(false)
-    expect(t.undefined().isDeprecated()).toStrictEqual(false)
   })
 
   test('inference', () => {
@@ -81,23 +70,12 @@ describe('TVoid', () => {
     }).toThrow()
   })
 
-  test('manifest', () => {
-    expect(t.void().manifest).toStrictEqual({
-      type: 'void',
-      required: false,
-      nullable: false,
-      readonly: false,
-      promise: false,
-    })
-  })
-
   test('is', () => {
     expect(t.void().isOptional()).toStrictEqual(true)
     expect(t.void().isNullable()).toStrictEqual(false)
     expect(t.void().isNullish()).toStrictEqual(false)
     expect(t.void().isRequired()).toStrictEqual(false)
     expect(t.void().isReadonly()).toStrictEqual(false)
-    expect(t.void().isDeprecated()).toStrictEqual(false)
   })
 
   test('inference', () => {
@@ -126,23 +104,12 @@ describe('TNull', () => {
     expect(() => t.null().parse(undefined)).toThrow()
   })
 
-  test('manifest', () => {
-    expect(t.null().manifest).toStrictEqual({
-      type: 'null',
-      required: true,
-      nullable: true,
-      readonly: false,
-      promise: false,
-    })
-  })
-
   test('is', () => {
     expect(t.null().isOptional()).toStrictEqual(false)
     expect(t.null().isNullable()).toStrictEqual(true)
     expect(t.null().isNullish()).toStrictEqual(false)
     expect(t.null().isRequired()).toStrictEqual(true)
     expect(t.null().isReadonly()).toStrictEqual(false)
-    expect(t.null().isDeprecated()).toStrictEqual(false)
   })
 
   test('inference', () => {

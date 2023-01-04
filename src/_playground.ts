@@ -1,18 +1,57 @@
-import { t } from '.'
+import { t } from './index'
 
-console.log(t.global())
+const tintersection = t.intersection([
+  t.object({
+    a: t.string(),
+  }),
+  t.object({
+    b: t.string(),
+  }),
+])
 
-console.log(t.any().optional().optional().optional().unwrapDeep().color('red').nullable().array())
+type Inter = t.infer<typeof tintersection>
 
-const s = t.object({
-  a: t.string(),
-  b: t.number(),
-  c: t.boolean().optional(),
-  d: t.array(t.string()),
-})
+console.log(
+  tintersection.safeParse({
+    a: 'a',
+    b: 2,
+  })
+)
+const a = t
+  .object({
+    a: t.string(),
+    b: t.number(),
+    c: t.bigint(),
+    d: t.boolean(),
+    e: t.null(),
+    f: t.undefined(),
+    g: t.buffer().nullish(),
+    h: t.unknown(),
+    i: t.any(),
+    j: t.record(t.string(), t.number()),
+    k: t.array(t.number()).nonempty(),
+    l: t.tuple([t.string(), t.number()]).rest(t.string().optional()).readonly(),
+    m: t.promise(t.number()),
+    n: t.set(t.date()),
+    s: t.object({
+      a: t.string(),
+      b: t.number(),
+      c: t.bigint(),
+      d: t.boolean(),
+      e: t.null(),
+      f: t.undefined(),
+      g: t.buffer().nullish(),
+      h: t.unknown(),
+      i: t.any(),
+      j: t.record(t.string(), t.number()),
+      k: t.array(t.number()).nonempty(),
+      l: t.tuple([t.string(), t.number()]).rest(t.string()),
+      m: t.promise(t.number()),
+      n: t.set(t.date()),
+    }),
+  })
+  .readonly()
+type a = t.infer<typeof a>
 
-// Console.log(s.safeParse(['s', 'a', 2, 3]).error._issues)
-
-type as = t.infer<typeof s>
-
-const _t = console.log(s.parse('2'))
+console.log(a.hint)
+console.log(t.undefined().required().hint)

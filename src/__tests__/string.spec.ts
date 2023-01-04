@@ -20,23 +20,12 @@ describe('TString', () => {
     expect(() => t.string().parse(Buffer.from('foo'))).toThrow()
   })
 
-  test('manifest', () => {
-    expect(t.string().manifest).toStrictEqual({
-      type: 'string',
-      required: true,
-      nullable: false,
-      readonly: false,
-      promise: false,
-    })
-  })
-
   test('is', () => {
     expect(t.string().isOptional()).toStrictEqual(false)
     expect(t.string().isNullable()).toStrictEqual(false)
     expect(t.string().isNullish()).toStrictEqual(false)
     expect(t.string().isRequired()).toStrictEqual(true)
     expect(t.string().isReadonly()).toStrictEqual(false)
-    expect(t.string().isDeprecated()).toStrictEqual(false)
   })
 
   test('inference', () => {

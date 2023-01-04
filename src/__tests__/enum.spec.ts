@@ -34,24 +34,12 @@ describe('TEnum', () => {
     })
   })
 
-  test('manifest', () => {
-    expect(schema.manifest).toStrictEqual({
-      type: 'string',
-      required: true,
-      nullable: false,
-      readonly: false,
-      promise: false,
-      enum: ['foo', 'bar'],
-    })
-  })
-
   test('is', () => {
     expect(schema.isOptional()).toStrictEqual(false)
     expect(schema.isNullable()).toStrictEqual(false)
     expect(schema.isNullish()).toStrictEqual(false)
     expect(schema.isRequired()).toStrictEqual(true)
     expect(schema.isReadonly()).toStrictEqual(false)
-    expect(schema.isDeprecated()).toStrictEqual(false)
   })
 
   test('inference', () => {
@@ -105,30 +93,17 @@ describe('TNativeEnum', () => {
     })
   })
 
-  test('manifest', () => {
-    expect(schema.manifest).toStrictEqual({
-      type: 'string',
-      required: true,
-      nullable: false,
-      readonly: false,
-      promise: false,
-      enum: ['foo', 1],
-    })
-  })
-
   test('is', () => {
     expect(schema.isOptional()).toStrictEqual(false)
     expect(schema.isNullable()).toStrictEqual(false)
     expect(schema.isNullish()).toStrictEqual(false)
     expect(schema.isRequired()).toStrictEqual(true)
     expect(schema.isReadonly()).toStrictEqual(false)
-    expect(schema.isDeprecated()).toStrictEqual(false)
   })
 
   test('inference', () => {
     assertEqual<`${t.infer<typeof schema>}`, `${TestEnum}`>(true)
     assertEqual<typeof schema.values, readonly [TestEnum.Foo, TestEnum.Bar]>(true)
     assertEqual<typeof schema.enum, typeof TestEnum>(true)
-    assertEqual<typeof schema.manifest.enum, readonly [TestEnum.Foo, TestEnum.Bar]>(true)
   })
 })

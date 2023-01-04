@@ -33,5 +33,5 @@
     "target": "es2016",
     "useUnknownInCatchVariables": true
   },
-  "exclude": ["node_modules", "src/_playground.ts"]
+  "exclude": ["node_modules", "src/__tests__", "src/_playground.ts"]
 }
