@@ -114,10 +114,6 @@ export interface TIterableManifest<T extends AnyTType, O> extends TManifest<O> {
   readonly maxItems?: number
 }
 
-export interface TPromiseManifest<T> extends TManifest<T> {
-  readonly promise: true
-}
-
 export interface TBrandManifest<T, B extends PropertyKey> extends TManifest<T> {
   readonly brand: B
 }
