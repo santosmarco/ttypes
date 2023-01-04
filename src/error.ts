@@ -1,3 +1,4 @@
+import safeJsonStringify from 'safe-json-stringify'
 import { getGlobal } from './global'
 import type { AnyParseContext, ParsePath, TParsedType } from './parse'
 import type { AnyTType, TLiteralValue } from './types'
@@ -109,7 +110,19 @@ export type TIssue =
 
 export type TErrorFormatter = (issues: readonly TIssue[]) => string
 
-export const DEFAULT_ERROR_FORMATTER: TErrorFormatter = (issues) => JSON.stringify(issues, null, 2)
+export const DEFAULT_ERROR_FORMATTER: TErrorFormatter = (issues) =>
+  safeJsonStringify(
+    issues,
+    (_, value) => {
+      if (typeof value === 'bigint') {
+        return `${String(value)}n`
+      }
+
+      // eslint-disable-next-line @typescript-eslint/no-unsafe-return
+      return value
+    },
+    2
+  )
 
 export type TErrorMapInput = StripKey<TIssue, 'message'>
 export type TErrorMapFn = (issue: TErrorMapInput) => string

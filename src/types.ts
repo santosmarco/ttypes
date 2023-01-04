@@ -779,7 +779,12 @@ const getLiteralParsedType = (value: TLiteralValue): TParsedType => {
 
 export class TLiteral<T extends TLiteralValue> extends TType<T, TLiteralDef<T>> {
   get _manifest(): TLiteralManifest<T> {
-    return { ...getDefaultManifest({ type: getLiteralParsedType(this.value) }), literal: this.value }
+    return {
+      ...getDefaultManifest({ type: getLiteralParsedType(this.value) }),
+      literal: this.value,
+      required: this.value !== undefined,
+      nullable: this.value === null,
+    }
   }
 
   _parse(ctx: ParseContextOf<this>): ParseResultOf<this> {

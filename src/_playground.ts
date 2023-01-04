@@ -10,4 +10,4 @@ const s = t.tuple([t.string().optional(), t.string().optional().unwrapNullishDee
 
 type as = t.infer<typeof s>
 
-const _t = console.log(s.manifest)
+const _t = console.log(s.parse('2'))

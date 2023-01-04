@@ -14,13 +14,15 @@
     "fast-equals": "^4.0.3",
     "merge-deep": "^3.0.3",
     "micro-memoize": "^4.0.14",
-    "nanoid": "3.3.4"
+    "nanoid": "3.3.4",
+    "safe-json-stringify": "^1.2.0"
   },
   "devDependencies": {
     "@types/clone-deep": "^4.0.1",
     "@types/jest": "^29.2.5",
     "@types/merge-deep": "^3.0.0",
     "@types/node": "^18.11.18",
+    "@types/safe-json-stringify": "^1.1.2",
     "@typescript-eslint/eslint-plugin": ">=5.47.1",
     "@typescript-eslint/parser": ">=5.47.1",
     "eslint": "^8.30.0",

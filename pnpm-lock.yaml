@@ -5,6 +5,7 @@ specifiers:
   '@types/jest': ^29.2.5
   '@types/merge-deep': ^3.0.0
   '@types/node': ^18.11.18
+  '@types/safe-json-stringify': ^1.1.2
   '@typescript-eslint/eslint-plugin': '>=5.47.1'
   '@typescript-eslint/parser': '>=5.47.1'
   clone-deep: ^4.0.1
@@ -19,6 +20,7 @@ specifiers:
   micro-memoize: ^4.0.14
   nanoid: 3.3.4
   prettier: ^2.8.1
+  safe-json-stringify: ^1.2.0
   ts-jest: ^29.0.3
   ts-toolbelt: ^9.6.0
   type-fest: ^3.5.0
@@ -30,12 +32,14 @@ dependencies:
   merge-deep: 3.0.3
   micro-memoize: 4.0.14
   nanoid: 3.3.4
+  safe-json-stringify: 1.2.0
 
 devDependencies:
   '@types/clone-deep': 4.0.1
   '@types/jest': 29.2.5
   '@types/merge-deep': 3.0.0
   '@types/node': 18.11.18
+  '@types/safe-json-stringify': 1.1.2
   '@typescript-eslint/eslint-plugin': 5.47.1_txmweb6yn7coi7nfrp22gpyqmy
   '@typescript-eslint/parser': 5.47.1_lzzuuodtsqwxnvqeq4g4likcqa
   eslint: 8.30.0
@@ -809,6 +813,10 @@ packages:
 
   /@types/prettier/2.7.2:
     resolution: {integrity: sha512-KufADq8uQqo1pYKVIYzfKbJfBAc0sOeXqGbFaSpv8MRmC/zXgowNZmFcbngndGk922QDmOASEXUZCaY48gs4cg==}
+    dev: true
+
+  /@types/safe-json-stringify/1.1.2:
+    resolution: {integrity: sha512-Hj/LZMBXFH3Qj9sNmNu6syBpkZqBaM00HgP7naf9CnZhB3kdxmrenWUD2cY6vvTWjuBM3NPOLknPKDUOQuTWXA==}
     dev: true
 
   /@types/semver/7.3.13:
@@ -2839,6 +2847,10 @@ packages:
     dependencies:
       queue-microtask: 1.2.3
     dev: true
+
+  /safe-json-stringify/1.2.0:
+    resolution: {integrity: sha512-gH8eh2nZudPQO6TytOvbxnuhYBOvDBBLW52tz5q6X58lJcd/tkmqFR+5Z9adS8aJtURSXWThWy/xJtJwixErvg==}
+    dev: false
 
   /semver/6.3.0:
     resolution: {integrity: sha512-b39TBaTSfV6yBrapU89p5fKekE2m/NwnDocOVruQFS1/veMgdzuPcnOM34M6CwxW8jH/lxEa5rBoDeUwu5HHTw==}
