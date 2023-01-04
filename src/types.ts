@@ -1,16 +1,16 @@
 import cloneDeep from 'clone-deep'
 import memoize from 'micro-memoize'
 import { nanoid } from 'nanoid'
-import type { CamelCase, NonNegativeInteger } from 'type-fest'
-import { TIssueKind } from './error'
+import type { CamelCase, NonNegativeInteger, UnionToIntersection } from 'type-fest'
+import { TIssueKind, type TErrorMap } from './error'
 import { getGlobal } from './global'
 import {
+  AsyncParseContext,
   OK,
-  ParseContextAsync,
-  ParseContextSync,
+  SyncParseContext,
   TParsedType,
   type AsyncParseResultOf,
-  type ParseContext,
+  type ParseContextOf,
   type ParseOptions,
   type ParseResultOf,
   type SyncParseResultOf,
@@ -25,6 +25,7 @@ export enum TTypeName {
   BigInt = 'TBigInt',
   Boolean = 'TBoolean',
   Brand = 'TBrand',
+  Buffer = 'TBuffer',
   Catch = 'TCatch',
   Date = 'TDate',
   Default = 'TDefault',
@@ -67,6 +68,7 @@ export interface PublicManifest<T> {
 }
 
 export interface PrivateManifest<T> {
+  readonly type: TParsedType
   readonly required: boolean
   readonly nullable: boolean
   readonly readonly: boolean
@@ -76,7 +78,8 @@ export interface PrivateManifest<T> {
 
 export interface TManifest<T = unknown> extends PublicManifest<T>, PrivateManifest<T> {}
 
-export const getDefaultManifest = <T>(): TManifest<T> => ({
+export const getDefaultManifest = <T>({ type }: { readonly type: TParsedType }): TManifest<T> => ({
+  type,
   required: true,
   nullable: false,
   readonly: false,
@@ -109,7 +112,6 @@ export interface TLiteralManifest<T extends TLiteralValue> extends TManifest<T> 
 }
 
 export interface TIterableManifest<T extends AnyTType, O> extends TManifest<O> {
-  readonly type: TParsedType.Array | TParsedType.Set
   readonly items: T['manifest']
   readonly minItems?: number
   readonly maxItems?: number
@@ -127,6 +129,7 @@ export interface TOptionsOpts {
 
 export interface TOptions<Opts extends TOptionsOpts | undefined = undefined> extends ParseOptions {
   readonly color?: string
+  readonly errorMap?: TErrorMap
   readonly messages?: {
     readonly [K in
       | TIssueKind.Required
@@ -148,12 +151,12 @@ export interface TDef {
 /*                                                        TType                                                       */
 /* ------------------------------------------------------------------------------------------------------------------ */
 
-abstract class TType<O, D extends TDef, I = O> {
+export abstract class TType<O, D extends TDef, I = O> {
   declare readonly $O: O
   declare readonly $I: I
 
   abstract readonly _manifest: TManifest
-  abstract _parse(ctx: ParseContext<this>): ParseResultOf<this>
+  abstract _parse(ctx: ParseContextOf<this>): ParseResultOf<this>
 
   readonly _def: D & { readonly manifest?: TManifest }
 
@@ -174,6 +177,7 @@ abstract class TType<O, D extends TDef, I = O> {
     this.array = this.array.bind(this)
     this.promise = this.promise.bind(this)
     this.or = this.or.bind(this)
+    this.and = this.and.bind(this)
     this.brand = this.brand.bind(this)
     this.default = this.default.bind(this)
     this.catch = this.catch.bind(this)
@@ -217,7 +221,7 @@ abstract class TType<O, D extends TDef, I = O> {
     return this._def.options
   }
 
-  _parseSync(ctx: ParseContext<this>): SyncParseResultOf<this> {
+  _parseSync(ctx: ParseContextOf<this>): SyncParseResultOf<this> {
     const result = this._parse(ctx)
     if (isAsync(result)) {
       throw new Error('Synchronous parse encountered Promise. Use `.parseAsync()`/`.safeParseAsync()` instead.')
@@ -226,7 +230,7 @@ abstract class TType<O, D extends TDef, I = O> {
     return result
   }
 
-  async _parseAsync(ctx: ParseContext<this>): AsyncParseResultOf<this> {
+  async _parseAsync(ctx: ParseContextOf<this>): AsyncParseResultOf<this> {
     const result = this._parse(ctx)
     return Promise.resolve(result)
   }
@@ -241,7 +245,7 @@ abstract class TType<O, D extends TDef, I = O> {
   }
 
   safeParse(data: unknown, options?: SimplifyFlat<ParseOptions>): SyncParseResultOf<this> {
-    const ctx = ParseContextSync.of(this, data, options)
+    const ctx = SyncParseContext.of(this, data, options)
     const result = this._parseSync(ctx)
     return result
   }
@@ -256,7 +260,7 @@ abstract class TType<O, D extends TDef, I = O> {
   }
 
   async safeParseAsync(data: unknown, options?: SimplifyFlat<ParseOptions>): AsyncParseResultOf<this> {
-    const ctx = ParseContextAsync.of(this, data, options)
+    const ctx = AsyncParseContext.of(this, data, options)
     const result = this._parseAsync(ctx)
     return result
   }
@@ -289,13 +293,21 @@ abstract class TType<O, D extends TDef, I = O> {
     return new TUnion({ typeName: TTypeName.Union, members: [this, ...alternatives], options: this.options })
   }
 
+  and<T extends readonly [AnyTType, ...AnyTType[]]>(...intersectees: T): TIntersection<[this, ...T]> {
+    return new TIntersection({
+      typeName: TTypeName.Intersection,
+      members: [this, ...intersectees],
+      options: this.options,
+    })
+  }
+
   brand<B extends PropertyKey>(brand: B): TBrand<this, B> {
     return TBrand.create(this, brand, this.options)
   }
 
-  default<D_ extends Defined<O>>(defaultValue: D_): TDefault<this, D_>
-  default<D_ extends Defined<O>>(getDefault: () => D_): TDefault<this, D_>
-  default<D_ extends Defined<O>>(defaultValueOrGetter: D_ | (() => D_)): TDefault<this, D_> {
+  default<T extends Defined<O>>(defaultValue: T): TDefault<this, T>
+  default<T extends Defined<O>>(getDefault: () => T): TDefault<this, T>
+  default<T extends Defined<O>>(defaultValueOrGetter: T | (() => T)): TDefault<this, T> {
     return TDefault.create(this, defaultValueOrGetter, this.options)
   }
 
@@ -421,10 +433,10 @@ export interface TAnyDef extends TDef {
 export class TAny extends TType<any, TAnyDef> {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   get _manifest(): TNullishManifest<any> {
-    return { ...getDefaultManifest(), required: false, nullable: true }
+    return { ...getDefaultManifest({ type: TParsedType.Any }), required: false, nullable: true }
   }
 
-  _parse(ctx: ParseContext): ParseResultOf<this> {
+  _parse(ctx: ParseContextOf<this>): ParseResultOf<this> {
     return OK(ctx.data)
   }
 
@@ -443,10 +455,10 @@ export interface TUnknownDef extends TDef {
 
 export class TUnknown extends TType<unknown, TUnknownDef> {
   get _manifest(): TNullishManifest<unknown> {
-    return { ...getDefaultManifest(), required: false, nullable: true }
+    return { ...getDefaultManifest({ type: TParsedType.Unknown }), required: false, nullable: true }
   }
 
-  _parse(ctx: ParseContext): ParseResultOf<this> {
+  _parse(ctx: ParseContextOf<this>): ParseResultOf<this> {
     return OK(ctx.data)
   }
 
@@ -465,10 +477,10 @@ export interface TStringDef extends TDef {
 
 export class TString extends TType<string, TStringDef> {
   get _manifest(): TManifest<string> {
-    return { ...getDefaultManifest() }
+    return { ...getDefaultManifest({ type: TParsedType.String }) }
   }
 
-  _parse(ctx: ParseContext<this>): ParseResultOf<this> {
+  _parse(ctx: ParseContextOf<this>): ParseResultOf<this> {
     if (typeof ctx.data !== 'string') {
       return ctx.invalidType({ expected: TParsedType.String }).abort()
     }
@@ -491,10 +503,10 @@ export interface TNumberDef extends TDef {
 
 export class TNumber extends TType<number, TNumberDef> {
   get _manifest(): TManifest<number> {
-    return { ...getDefaultManifest() }
+    return { ...getDefaultManifest({ type: TParsedType.Number }) }
   }
 
-  _parse(ctx: ParseContext<this>): ParseResultOf<this> {
+  _parse(ctx: ParseContextOf<this>): ParseResultOf<this> {
     if (typeof ctx.data !== 'number' || Number.isNaN(ctx.data)) {
       return ctx.invalidType({ expected: TParsedType.Number }).abort()
     }
@@ -517,10 +529,10 @@ export interface TNaNDef extends TDef {
 
 export class TNaN extends TType<number, TNaNDef> {
   get _manifest(): TManifest<number> {
-    return { ...getDefaultManifest() }
+    return { ...getDefaultManifest({ type: TParsedType.NaN }) }
   }
 
-  _parse(ctx: ParseContext<this>): ParseResultOf<this> {
+  _parse(ctx: ParseContextOf<this>): ParseResultOf<this> {
     return typeof ctx.data !== 'number' || !Number.isNaN(ctx.data)
       ? ctx.invalidType({ expected: TParsedType.NaN }).abort()
       : OK(ctx.data)
@@ -541,10 +553,10 @@ export interface TBigIntDef extends TDef {
 
 export class TBigInt extends TType<bigint, TBigIntDef> {
   get _manifest(): TManifest<bigint> {
-    return { ...getDefaultManifest() }
+    return { ...getDefaultManifest({ type: TParsedType.BigInt }) }
   }
 
-  _parse(ctx: ParseContext<this>): ParseResultOf<this> {
+  _parse(ctx: ParseContextOf<this>): ParseResultOf<this> {
     if (typeof ctx.data !== 'bigint') {
       return ctx.invalidType({ expected: TParsedType.BigInt }).abort()
     }
@@ -567,10 +579,10 @@ export interface TBooleanDef extends TDef {
 
 export class TBoolean extends TType<boolean, TBooleanDef> {
   get _manifest(): TManifest<boolean> {
-    return { ...getDefaultManifest() }
+    return { ...getDefaultManifest({ type: TParsedType.Boolean }) }
   }
 
-  _parse(ctx: ParseContext<this>): ParseResultOf<this> {
+  _parse(ctx: ParseContextOf<this>): ParseResultOf<this> {
     return typeof ctx.data === 'boolean' ? OK(ctx.data) : ctx.invalidType({ expected: TParsedType.Boolean }).abort()
   }
 
@@ -587,10 +599,10 @@ export interface TTrueDef extends TDef {
 
 export class TTrue extends TType<true, TTrueDef> {
   get _manifest(): TLiteralManifest<true> {
-    return { ...getDefaultManifest(), literal: true }
+    return { ...getDefaultManifest({ type: TParsedType.True }), literal: true }
   }
 
-  _parse(ctx: ParseContext<this>): ParseResultOf<this> {
+  _parse(ctx: ParseContextOf<this>): ParseResultOf<this> {
     return ctx.data === true ? OK(ctx.data) : ctx.invalidType({ expected: TParsedType.True }).abort()
   }
 
@@ -607,10 +619,10 @@ export interface TFalseDef extends TDef {
 
 export class TFalse extends TType<false, TFalseDef> {
   get _manifest(): TLiteralManifest<false> {
-    return { ...getDefaultManifest(), literal: false }
+    return { ...getDefaultManifest({ type: TParsedType.False }), literal: false }
   }
 
-  _parse(ctx: ParseContext<this>): ParseResultOf<this> {
+  _parse(ctx: ParseContextOf<this>): ParseResultOf<this> {
     return ctx.data === false ? OK(ctx.data) : ctx.invalidType({ expected: TParsedType.False }).abort()
   }
 
@@ -629,10 +641,10 @@ export interface TDateDef extends TDef {
 
 export class TDate extends TType<Date, TDateDef> {
   get _manifest(): TManifest<Date> {
-    return { ...getDefaultManifest() }
+    return { ...getDefaultManifest({ type: TParsedType.Date }) }
   }
 
-  _parse(ctx: ParseContext<this>): ParseResultOf<this> {
+  _parse(ctx: ParseContextOf<this>): ParseResultOf<this> {
     if (!(ctx.data instanceof Date)) {
       return ctx.invalidType({ expected: TParsedType.Date }).abort()
     }
@@ -655,15 +667,37 @@ export interface TSymbolDef extends TDef {
 
 export class TSymbol extends TType<symbol, TSymbolDef> {
   get _manifest(): TManifest<symbol> {
-    return { ...getDefaultManifest() }
+    return { ...getDefaultManifest({ type: TParsedType.Symbol }) }
   }
 
-  _parse(ctx: ParseContext<this>): ParseResultOf<this> {
+  _parse(ctx: ParseContextOf<this>): ParseResultOf<this> {
     return typeof ctx.data === 'symbol' ? OK(ctx.data) : ctx.invalidType({ expected: TParsedType.Symbol }).abort()
   }
 
   static create(options?: SimplifyFlat<TOptions>): TSymbol {
     return new TSymbol({ typeName: TTypeName.Symbol, options: { ...options } })
+  }
+}
+
+/* ------------------------------------------------------------------------------------------------------------------ */
+/*                                                       TBuffer                                                      */
+/* ------------------------------------------------------------------------------------------------------------------ */
+
+export interface TBufferDef extends TDef {
+  readonly typeName: TTypeName.Buffer
+}
+
+export class TBuffer extends TType<Buffer, TBufferDef> {
+  get _manifest(): TManifest<Buffer> {
+    return { ...getDefaultManifest({ type: TParsedType.Buffer }) }
+  }
+
+  _parse(ctx: ParseContextOf<this>): ParseResultOf<this> {
+    return Buffer.isBuffer(ctx.data) ? OK(ctx.data) : ctx.invalidType({ expected: TParsedType.Buffer }).abort()
+  }
+
+  static create(options?: SimplifyFlat<TOptions>): TBuffer {
+    return new TBuffer({ typeName: TTypeName.Buffer, options: { ...options } })
   }
 }
 
@@ -684,43 +718,39 @@ export interface TLiteralDef<T extends TLiteralValue> extends TDef {
   readonly value: T
 }
 
-export class TLiteral<T extends TLiteralValue> extends TType<T, TLiteralDef<T>> {
-  get _manifest(): TLiteralManifest<T> {
-    return { ...getDefaultManifest(), literal: this.value }
+const getLiteralParsedType = (value: TLiteralValue): TParsedType => {
+  if (value === null) {
+    return TParsedType.Null
   }
 
-  _parse(ctx: ParseContext<this>): ParseResultOf<this> {
+  switch (typeof value) {
+    case 'string':
+      return TParsedType.String
+    case 'number':
+      return TParsedType.Number
+    case 'bigint':
+      return TParsedType.BigInt
+    case 'boolean':
+      return TParsedType.Boolean
+    case 'symbol':
+      return TParsedType.Symbol
+    case 'undefined':
+      return TParsedType.Undefined
+
+    default:
+      return TParsedType.Unknown
+  }
+}
+
+export class TLiteral<T extends TLiteralValue> extends TType<T, TLiteralDef<T>> {
+  get _manifest(): TLiteralManifest<T> {
+    return { ...getDefaultManifest({ type: getLiteralParsedType(this.value) }), literal: this.value }
+  }
+
+  _parse(ctx: ParseContextOf<this>): ParseResultOf<this> {
     const { value } = this._def
 
-    let expectedParsedType: TParsedType
-
-    if (value === null) {
-      expectedParsedType = TParsedType.Null
-    } else {
-      switch (typeof value) {
-        case 'string':
-          expectedParsedType = TParsedType.String
-          break
-        case 'number':
-          expectedParsedType = TParsedType.Number
-          break
-        case 'bigint':
-          expectedParsedType = TParsedType.BigInt
-          break
-        case 'boolean':
-          expectedParsedType = TParsedType.Boolean
-          break
-        case 'symbol':
-          expectedParsedType = TParsedType.Symbol
-          break
-        case 'undefined':
-          expectedParsedType = TParsedType.Undefined
-          break
-
-        default:
-          expectedParsedType = TParsedType.Unknown
-      }
-    }
+    const expectedParsedType = getLiteralParsedType(value)
 
     if (ctx.parsedType !== expectedParsedType) {
       return ctx.invalidType({ expected: expectedParsedType }).abort()
@@ -793,11 +823,6 @@ export type TArrayIO<T extends AnyTType, C extends TArrayCardinality, IO extends
   atleastone: [T[IO], ...Array<T[IO]>]
 }[C]
 
-export interface TArrayManifest<T extends AnyTType, C extends TArrayCardinality = 'many'>
-  extends TIterableManifest<T, TArrayIO<T, C>> {
-  readonly type: TParsedType.Array
-}
-
 export type FlattenTArray<T extends AnyTArray> = T['element'] extends TArray<infer U, infer C> ? TArray<U, C> : T
 
 export type FlattenTArrayDeep<T extends AnyTArray> = T['element'] extends TArray<infer U, infer C>
@@ -814,17 +839,16 @@ export class TArray<T extends AnyTType, C extends TArrayCardinality = 'many'>
   extends TType<TArrayIO<T, C>, TArrayDef<T>, TArrayIO<T, C, '$I'>>
   implements TIterable<T>
 {
-  get _manifest(): TArrayManifest<T, C> {
+  get _manifest(): TIterableManifest<T, TArrayIO<T, C>> {
     return {
-      ...getDefaultManifest(),
-      type: TParsedType.Array,
+      ...getDefaultManifest({ type: TParsedType.Array }),
       items: this.element.manifest,
       minItems: this._def.minItems?.value,
       maxItems: this._def.maxItems?.value,
     }
   }
 
-  _parse(ctx: ParseContext<this>): ParseResultOf<this> {
+  _parse(ctx: ParseContextOf<this>): ParseResultOf<this> {
     if (!isArray(ctx.data)) {
       return ctx.invalidType({ expected: TParsedType.Array }).abort()
     }
@@ -855,7 +879,7 @@ export class TArray<T extends AnyTType, C extends TArrayCardinality = 'many'>
 
       if (maxItems && (maxItems.inclusive ? data.length > maxItems.value : data.length >= maxItems.value)) {
         ctx.addIssue(
-          { kind: TIssueKind.InvalidArray, payload: { check: 'min', expected: maxItems, received: data.length } },
+          { kind: TIssueKind.InvalidArray, payload: { check: 'max', expected: maxItems, received: data.length } },
           maxItems.message
         )
         if (ctx.common.abortEarly) {
@@ -892,8 +916,7 @@ export class TArray<T extends AnyTType, C extends TArrayCardinality = 'many'>
     }
 
     for (const [i, value] of data.entries()) {
-      const childCtx = ctx.child(element, value, [i])
-      const childResult = element._parseSync(childCtx)
+      const childResult = element._parseSync(ctx.child(element, value, [i]))
       if (!childResult.ok) {
         if (ctx.common.abortEarly) {
           return ctx.abort()
@@ -1007,17 +1030,16 @@ export class TSet<T extends AnyTType>
   extends TType<Set<OutputOf<T>>, TSetDef<T>, Set<InputOf<T>>>
   implements TIterable<T>
 {
-  get _manifest(): TSetManifest<T> {
+  get _manifest(): TIterableManifest<T, Set<OutputOf<T>>> {
     return {
-      ...getDefaultManifest(),
-      type: TParsedType.Set,
+      ...getDefaultManifest({ type: TParsedType.Set }),
       items: this.element.manifest,
       minItems: this._def.minItems?.value,
       maxItems: this._def.maxItems?.value,
     }
   }
 
-  _parse(ctx: ParseContext<this>): ParseResultOf<this> {
+  _parse(ctx: ParseContextOf<this>): ParseResultOf<this> {
     if (!(ctx.data instanceof Set)) {
       return ctx.invalidType({ expected: TParsedType.Set }).abort()
     }
@@ -1048,7 +1070,7 @@ export class TSet<T extends AnyTType>
 
       if (maxItems && (maxItems.inclusive ? data.size > maxItems.value : data.size >= maxItems.value)) {
         ctx.addIssue(
-          { kind: TIssueKind.InvalidSet, payload: { check: 'min', expected: maxItems, received: data.size } },
+          { kind: TIssueKind.InvalidSet, payload: { check: 'max', expected: maxItems, received: data.size } },
           maxItems.message
         )
         if (ctx.common.abortEarly) {
@@ -1078,8 +1100,7 @@ export class TSet<T extends AnyTType>
     }
 
     for (const [i, value] of data.entries()) {
-      const childCtx = ctx.child(element, value, [i])
-      const childResult = element._parseSync(childCtx)
+      const childResult = element._parseSync(ctx.child(element, value, [i]))
       if (!childResult.ok) {
         if (ctx.common.abortEarly) {
           return ctx.abort()
@@ -1160,10 +1181,10 @@ export interface TUndefinedDef extends TDef {
 
 export class TUndefined extends TType<undefined, TUndefinedDef> {
   get _manifest(): TOptionalManifest<undefined> {
-    return { ...getDefaultManifest(), required: false }
+    return { ...getDefaultManifest({ type: TParsedType.Undefined }), required: false }
   }
 
-  _parse(ctx: ParseContext<this>): ParseResultOf<this> {
+  _parse(ctx: ParseContextOf<this>): ParseResultOf<this> {
     return ctx.data === undefined ? OK(undefined) : ctx.invalidType({ expected: TParsedType.Undefined }).abort()
   }
 
@@ -1182,10 +1203,10 @@ export interface TVoidDef extends TDef {
 
 export class TVoid extends TType<void, TVoidDef> {
   get _manifest(): TOptionalManifest<void> {
-    return { ...getDefaultManifest(), required: false }
+    return { ...getDefaultManifest({ type: TParsedType.Void }), required: false }
   }
 
-  _parse(ctx: ParseContext<this>): ParseResultOf<this> {
+  _parse(ctx: ParseContextOf<this>): ParseResultOf<this> {
     return ctx.data === undefined ? OK(undefined) : ctx.invalidType({ expected: TParsedType.Void }).abort()
   }
 
@@ -1206,10 +1227,10 @@ export interface TNullDef extends TDef {
 export class TNull extends TType<null, TNullDef> {
   // eslint-disable-next-line @typescript-eslint/ban-types
   get _manifest(): TNullableManifest<null> {
-    return { ...getDefaultManifest(), nullable: true }
+    return { ...getDefaultManifest({ type: TParsedType.Null }), nullable: true }
   }
 
-  _parse(ctx: ParseContext<this>): ParseResultOf<this> {
+  _parse(ctx: ParseContextOf<this>): ParseResultOf<this> {
     return ctx.data === null ? OK(null) : ctx.invalidType({ expected: TParsedType.Null }).abort()
   }
 
@@ -1233,10 +1254,10 @@ export interface TNeverDef extends TDef {
 
 export class TNever extends TType<never, TNeverDef> {
   get _manifest(): TManifest<never> {
-    return { ...getDefaultManifest() }
+    return { ...getDefaultManifest({ type: TParsedType.Never }) }
   }
 
-  _parse(ctx: ParseContext<this>): ParseResultOf<this> {
+  _parse(ctx: ParseContextOf<this>): ParseResultOf<this> {
     return ctx.addIssue({ kind: TIssueKind.Forbidden }, this.options.messages?.forbidden).abort()
   }
 
@@ -1277,10 +1298,10 @@ export class TOptional<T extends AnyTType>
     return { ...this.underlying.manifest, required: false }
   }
 
-  _parse(ctx: ParseContext): ParseResultOf<this> {
+  _parse(ctx: ParseContextOf<this>): ParseResultOf<this> {
     return ctx.data === undefined
       ? OK(undefined)
-      : this._def.underlying._parse(ctx.clone(this._def.underlying, ctx.data))
+      : this._def.underlying._parse(ctx.child(this._def.underlying, ctx.data))
   }
 
   get underlying(): T {
@@ -1330,8 +1351,8 @@ export class TNullable<T extends AnyTType>
     return { ...this.underlying.manifest, nullable: true }
   }
 
-  _parse(ctx: ParseContext): ParseResultOf<this> {
-    return ctx.data === null ? OK(null) : this._def.underlying._parse(ctx.clone(this._def.underlying, ctx.data))
+  _parse(ctx: ParseContextOf<this>): ParseResultOf<this> {
+    return ctx.data === null ? OK(null) : this._def.underlying._parse(ctx.child(this._def.underlying, ctx.data))
   }
 
   get underlying(): T {
@@ -1380,10 +1401,10 @@ export class TRequired<T extends AnyTType>
     return { ...this.underlying.manifest, required: true } as TRequiredManifest<Defined<OutputOf<T>>>
   }
 
-  _parse(ctx: ParseContext<this>): ParseResultOf<this> {
+  _parse(ctx: ParseContextOf<this>): ParseResultOf<this> {
     return ctx.data === undefined
       ? ctx.addIssue({ kind: TIssueKind.Required }, this.options.messages?.required).abort()
-      : (this._def.underlying._parse(ctx.clone(this._def.underlying, ctx.data)) as ParseResultOf<this>)
+      : (this._def.underlying._parse(ctx.child(this._def.underlying, ctx.data)) as ParseResultOf<this>)
   }
 
   get underlying(): T {
@@ -1420,7 +1441,7 @@ export class TPromise<T extends AnyTType> extends TType<Promise<OutputOf<T>>, TP
     return { ...this.underlying.manifest, promise: true }
   }
 
-  _parse(ctx: ParseContext<this>): ParseResultOf<this> {
+  _parse(ctx: ParseContextOf<this>): ParseResultOf<this> {
     if (!isAsync(ctx.data) && !ctx.isAsync()) {
       return ctx.invalidType({ expected: TParsedType.Promise }).abort()
     }
@@ -1475,8 +1496,8 @@ export class TBrand<T extends AnyTType, B extends PropertyKey>
     return { ...this.underlying.manifest, brand: this.getBrand() }
   }
 
-  _parse(ctx: ParseContext<this>): ParseResultOf<this> {
-    return this.underlying._parse(ctx.clone(this.underlying, ctx.data)) as ParseResultOf<this>
+  _parse(ctx: ParseContextOf<this>): ParseResultOf<this> {
+    return this.underlying._parse(ctx.child(this.underlying, ctx.data)) as ParseResultOf<this>
   }
 
   get underlying(): T {
@@ -1529,9 +1550,9 @@ export class TDefault<T extends AnyTType, D extends Defined<OutputOf<T>>>
     return { ...this.underlying.manifest, default: this.getDefault() }
   }
 
-  _parse(ctx: ParseContext<this>): ParseResultOf<this> {
+  _parse(ctx: ParseContextOf<this>): ParseResultOf<this> {
     return this.underlying._parse(
-      ctx.clone(this.underlying, ctx.data === undefined ? this.getDefault() : ctx.data)
+      ctx.child(this.underlying, ctx.data === undefined ? this.getDefault() : ctx.data)
     ) as ParseResultOf<this>
   }
 
@@ -1606,8 +1627,8 @@ export class TCatch<T extends AnyTType, C extends OutputOf<T>>
     return { ...this.underlying.manifest }
   }
 
-  _parse(ctx: ParseContext<this>): ParseResultOf<this> {
-    const result = this.underlying._parse(ctx.clone(this.underlying, ctx.data))
+  _parse(ctx: ParseContextOf<this>): ParseResultOf<this> {
+    const result = this.underlying._parse(ctx.child(this.underlying, ctx.data))
     return isAsync(result)
       ? result.then((res) => OK(res.ok ? res.data : this.getCatch()))
       : OK(result.ok ? result.data : this.getCatch())
@@ -1679,9 +1700,9 @@ export class TLazy<T extends AnyTType> extends TType<OutputOf<T>, TLazyDef<T>, I
     return { ...this.underlying.manifest }
   }
 
-  _parse(ctx: ParseContext<this>): ParseResultOf<this> {
+  _parse(ctx: ParseContextOf<this>): ParseResultOf<this> {
     const type = this.underlying
-    return type._parse(ctx.clone(type, ctx.data))
+    return type._parse(ctx.child(type, ctx.data))
   }
 
   get underlying(): T {
@@ -1727,7 +1748,7 @@ export class TUnion<T extends readonly AnyTType[]> extends TType<
     return this.members.reduce<any>((acc, type) => ({ ...acc, ...type.manifest }), {})
   }
 
-  _parse(ctx: ParseContext<this>): ParseResultOf<this> {
+  _parse(ctx: ParseContextOf<this>): ParseResultOf<this> {
     const { members } = this._def
 
     const handleResults = (results: Array<SyncParseResultOf<T[number]>>): ParseResultOf<this> => {
@@ -1770,6 +1791,49 @@ export class TUnion<T extends readonly AnyTType[]> extends TType<
 }
 
 /* ------------------------------------------------------------------------------------------------------------------ */
+/*                                                    TIntersection                                                   */
+/* ------------------------------------------------------------------------------------------------------------------ */
+
+export type TIntersectionOptions = TOptions<{
+  additionalIssueKind: TIssueKind.InvalidIntersection
+}>
+
+export interface TIntersectionDef<T extends readonly AnyTType[]> extends TDef {
+  readonly typeName: TTypeName.Intersection
+  readonly options: TIntersectionOptions
+  readonly members: T
+}
+
+export class TIntersection<T extends readonly AnyTType[]> extends TType<
+  UnionToIntersection<OutputOf<T[number]>>,
+  TIntersectionDef<T>,
+  UnionToIntersection<InputOf<T[number]>>
+> {
+  get _manifest(): TManifest {
+    return this.members.reduce<any>((acc, type) => ({ ...acc, ...type.manifest }), {})
+  }
+
+  _parse(ctx: ParseContextOf<this>): ParseResultOf<this> {
+    const { members } = this._def
+  }
+
+  get members(): T {
+    return this._def.members
+  }
+
+  get intersectees(): T {
+    return this.members
+  }
+
+  static create<T extends readonly [AnyTType, AnyTType, ...AnyTType[]]>(
+    intersectees: T,
+    options?: SimplifyFlat<TOptions>
+  ): TIntersection<T> {
+    return new TIntersection({ typeName: TTypeName.Intersection, members: intersectees, options: { ...options } })
+  }
+}
+
+/* ------------------------------------------------------------------------------------------------------------------ */
 /*                                                      TPipeline                                                     */
 /* ------------------------------------------------------------------------------------------------------------------ */
 
@@ -1788,26 +1852,26 @@ export class TPipeline<A extends AnyTType, B extends AnyTType> extends TType<
     return { ...this.from.manifest, ...this.to.manifest }
   }
 
-  _parse(ctx: ParseContext<this>): ParseResultOf<this> {
+  _parse(ctx: ParseContextOf<this>): ParseResultOf<this> {
     const { from, to } = this._def
 
     if (ctx.common.async) {
       return Promise.resolve().then(async () => {
-        const fromResult = await from._parseAsync(ctx.clone(from, ctx.data))
+        const fromResult = await from._parseAsync(ctx.child(from, ctx.data))
         if (!fromResult.ok) {
           return fromResult
         }
 
-        return to._parseAsync(ctx.clone(to, fromResult.data))
+        return to._parseAsync(ctx.child(to, fromResult.data))
       })
     }
 
-    const fromResult = from._parseSync(ctx.clone(from, ctx.data))
+    const fromResult = from._parseSync(ctx.child(from, ctx.data))
     if (!fromResult.ok) {
       return fromResult
     }
 
-    return to._parseSync(ctx.clone(to, fromResult.data))
+    return to._parseSync(ctx.child(to, fromResult.data))
   }
 
   get from(): A {
@@ -1834,10 +1898,12 @@ export const arrayType = TArray.create
 export const bigintType = TBigInt.create
 export const booleanType = TBoolean.create
 export const brandType = TBrand.create
+export const bufferType = TBuffer.create
 export const catchType = TCatch.create
 export const dateType = TDate.create
 export const defaultType = TDefault.create
 export const falseType = TFalse.create
+export const intersectionType = TIntersection.create
 export const lazyType = TLazy.create
 export const literalType = TLiteral.create
 export const nanType = TNaN.create
@@ -1867,9 +1933,11 @@ export {
   booleanType as bool,
   booleanType as boolean,
   brandType as brand,
+  bufferType as buffer,
   catchType as catch,
   dateType as date,
   falseType as false,
+  intersectionType as intersection,
   lazyType as lazy,
   literalType as literal,
   nanType as nan,

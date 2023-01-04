@@ -1,11 +1,13 @@
 import cloneDeep from 'clone-deep'
-import { TError, TIssueKind, type TIssue } from './error'
+import { TError, TIssueKind, resolveErrorMaps, type TErrorMap, type TIssue } from './error'
+import { getGlobal } from './global'
 import type { AnyTType, InputOf, OutputOf } from './types'
-import { isArray, isAsync, type StrictOmit, type StripKey } from './utils'
+import { isArray, isAsync, type StripKey } from './utils'
 
 /* --------------------------------------------------- TParsedType -------------------------------------------------- */
 
 export enum TParsedType {
+  Any = 'any',
   Array = 'Array',
   BigInt = 'bigint',
   Boolean = 'boolean',
@@ -15,6 +17,7 @@ export enum TParsedType {
   Function = 'function',
   Map = 'Map',
   NaN = 'NaN',
+  Never = 'never',
   Null = 'null',
   Number = 'number',
   Object = 'object',
@@ -64,16 +67,16 @@ export const getParsedType = (x: unknown): TParsedType => {
 
 /* --------------------------------------------------- ParseResult -------------------------------------------------- */
 
-export interface SuccessfulParseResult<T> {
+export interface SuccessfulParseResult<O> {
   readonly ok: true
-  readonly data: T
+  readonly data: O
   readonly error?: never
 }
 
-export interface FailedParseResult<T> {
+export interface FailedParseResult<I> {
   readonly ok: false
   readonly data?: never
-  readonly error: TError<T>
+  readonly error: TError<I>
 }
 
 export type SyncParseResult<O, I> = SuccessfulParseResult<O> | FailedParseResult<I>
@@ -86,8 +89,8 @@ export type SyncParseResultOf<T extends AnyTType> = SyncParseResult<OutputOf<T>,
 export type AsyncParseResultOf<T extends AnyTType> = AsyncParseResult<OutputOf<T>, InputOf<T>>
 export type ParseResultOf<T extends AnyTType> = ParseResult<OutputOf<T>, InputOf<T>>
 
-export const OK = <T>(data: T): SuccessfulParseResult<T> => ({ ok: true, data })
-export const FAIL = <T>(error: TError<T>): FailedParseResult<T> => ({ ok: false, error })
+export const OK = <O>(data: O): SuccessfulParseResult<O> => ({ ok: true, data })
+export const FAIL = <I>(error: TError<I>): FailedParseResult<I> => ({ ok: false, error })
 
 /* ------------------------------------------------------------------------------------------------------------------ */
 /*                                                    ParseContext                                                    */
@@ -100,60 +103,75 @@ export enum ParseStatus {
 
 export type ParsePath = ReadonlyArray<string | number>
 
-export interface ParseCommon {
-  readonly async: boolean
+export interface ParseOptions {
   readonly abortEarly?: boolean
   readonly debug?: boolean
+  readonly errorMap?: TErrorMap
 }
 
-export type ParseOptions = StrictOmit<ParseCommon, 'async'>
+export interface ParseContextCommon extends ParseOptions {
+  readonly async: boolean
+}
 
-export type ParseIssueInput<T extends TIssue = TIssue> = StripKey<T, 'path' | 'message'>
+export interface ParseContextDef<T extends AnyTType> {
+  readonly schema: T
+  readonly data: unknown
+  readonly path: ParsePath
+  readonly parent: AnyParseContext | undefined
+  readonly common: ParseContextCommon
+}
 
-export interface ParseContext<T extends AnyTType = AnyTType> {
+export interface ParseContextInternals {
+  status: ParseStatus
+  data: unknown
+  readonly ownChildren: AnyParseContext[]
+  readonly ownIssues: TIssue[]
+}
+
+export interface ParseContext<O, I = O> {
   readonly status: ParseStatus
   readonly data: unknown
   readonly parsedType: TParsedType
-  readonly schema: AnyTType
+  readonly schema: AnyTType<O, I>
   readonly path: ParsePath
-  readonly parent: ParseContext | undefined
-  readonly common: ParseCommon
-  readonly ownChildren: readonly ParseContext[]
-  readonly allChildren: readonly ParseContext[]
+  readonly parent: AnyParseContext | undefined
+  readonly root: AnyParseContext
+  readonly common: ParseContextCommon
+  readonly ownChildren: readonly AnyParseContext[]
+  readonly allChildren: readonly AnyParseContext[]
   readonly ownIssues: readonly TIssue[]
   readonly allIssues: readonly TIssue[]
   isValid(): boolean
   isInvalid(): boolean
   setInvalid(): this
   isAsync(): boolean
-  child<T extends AnyTType>(schema: T, data: unknown, path: ParsePath): ParseContext<T>
-  clone<T extends AnyTType>(schema: T, data: unknown): ParseContext<T>
-  addIssue(issue: ParseIssueInput, message: string | undefined): this
+  child<O_, I_>(schema: AnyTType<O_, I_>, data: unknown, path?: ParsePath): ParseContext<O_, I_>
+  clone<O_, I_>(schema: AnyTType<O_, I_>, data: unknown): ParseContext<O_, I_>
+  addIssue(issue: StripKey<TIssue, 'path' | 'message'>, message: string | undefined): this
   invalidType(payload: { readonly expected: TParsedType }): this
-  abort(): FailedParseResultOf<T>
+  abort(): FailedParseResult<I>
 }
 
+export type ParseContextOf<T extends AnyTType> = ParseContext<OutputOf<T>, InputOf<T>>
+
+export type AnyParseContext = ParseContextOf<AnyTType>
+
 // eslint-disable-next-line @typescript-eslint/no-redeclare
-export const ParseContext = <T extends AnyTType>(
-  schema: T,
-  data: unknown,
-  path: ParsePath,
-  parent: ParseContext | undefined,
-  common: ParseCommon
-): ParseContext<T> => {
-  const _internals: {
-    status: ParseStatus
-    data: unknown
-    ownChildren: ParseContext[]
-    ownIssues: TIssue[]
-  } = {
+export const ParseContext = <T extends AnyTType>({
+  schema,
+  data,
+  path,
+  parent,
+  common,
+}: ParseContextDef<T>): ParseContextOf<T> => {
+  const _internals: ParseContextInternals = {
     status: ParseStatus.Valid,
     data: cloneDeep(data),
     ownChildren: [],
     ownIssues: [],
   }
 
-  const ctx: ParseContext<T> = {
+  const ctx: ParseContextOf<T> = {
     get status() {
       return _internals.status
     },
@@ -176,6 +194,10 @@ export const ParseContext = <T extends AnyTType>(
 
     get parent() {
       return parent
+    },
+
+    get root() {
+      return parent ? parent.root : this
     },
 
     get common() {
@@ -209,7 +231,7 @@ export const ParseContext = <T extends AnyTType>(
     setInvalid() {
       _internals.status = ParseStatus.Invalid
       this.parent?.setInvalid()
-      return ctx
+      return this
     },
 
     isAsync() {
@@ -217,15 +239,19 @@ export const ParseContext = <T extends AnyTType>(
     },
 
     child(schema, data, path) {
-      const child = ParseContext(schema, data, this.path.concat(path), ctx, this.common)
+      const child = ParseContext({
+        schema,
+        data,
+        path: this.path.concat(path ?? []),
+        parent: this,
+        common: this.common,
+      })
       _internals.ownChildren.push(child)
       return child
     },
 
     clone(schema, data) {
-      const clone = ParseContext(schema, data, this.path, this.parent, this.common)
-      _internals.ownChildren.push(clone)
-      return clone
+      return ParseContext.of(schema, data, this.common)
     },
 
     addIssue(issue, message) {
@@ -237,7 +263,18 @@ export const ParseContext = <T extends AnyTType>(
         this.setInvalid()
       }
 
-      _internals.ownIssues.push({ ...issue, path: this.path, message: message ?? '' })
+      const issueWithPath = { ...issue, path: this.path }
+
+      const issueMsg =
+        message ??
+        resolveErrorMaps([
+          this.common.errorMap,
+          this.schema.options.errorMap,
+          getGlobal().getErrorMap(),
+          TError.defaultIssueMap,
+        ])(issueWithPath)
+
+      _internals.ownIssues.push({ ...issueWithPath, message: issueMsg })
 
       return this
     },
@@ -249,7 +286,6 @@ export const ParseContext = <T extends AnyTType>(
 
       return this.addIssue(
         { kind: TIssueKind.InvalidType, payload: { expected: payload.expected, received: this.parsedType } },
-
         this.schema.options.messages?.invalidType
       )
     },
@@ -262,12 +298,15 @@ export const ParseContext = <T extends AnyTType>(
   return ctx
 }
 
-export const ParseContextSync = {
-  of: <T extends AnyTType>(type: T, data: unknown, options: ParseOptions | undefined): ParseContext<T> =>
-    ParseContext(type, data, [], undefined, { ...type.options, ...options, async: false }),
+ParseContext.of = <T extends AnyTType>(schema: T, data: unknown, common: ParseContextCommon): ParseContextOf<T> =>
+  ParseContext({ schema, data, path: [], parent: undefined, common })
+
+export const SyncParseContext = {
+  of: <T extends AnyTType>(schema: T, data: unknown, options: ParseOptions | undefined): ParseContextOf<T> =>
+    ParseContext.of(schema, data, { ...schema.options, ...options, async: false }),
 }
 
-export const ParseContextAsync = {
-  of: <T extends AnyTType>(type: T, data: unknown, options: ParseOptions | undefined): ParseContext<T> =>
-    ParseContext(type, data, [], undefined, { ...type.options, ...options, async: true }),
+export const AsyncParseContext = {
+  of: <T extends AnyTType>(schema: T, data: unknown, options: ParseOptions | undefined): ParseContextOf<T> =>
+    ParseContext.of(schema, data, { ...schema.options, ...options, async: true }),
 }

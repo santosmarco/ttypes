@@ -1,7 +1,7 @@
 import { getGlobal } from './global'
-import type { ParseContext, ParsePath, TParsedType } from './parse'
+import type { AnyParseContext, ParsePath, TParsedType } from './parse'
 import type { AnyTType, TLiteralValue } from './types'
-import type { SimplifyFlat } from './utils'
+import type { SimplifyFlat, StripKey } from './utils'
 
 /* ------------------------------------------------------------------------------------------------------------------ */
 /*                                                       TIssue                                                       */
@@ -14,6 +14,7 @@ export enum TIssueKind {
   InvalidArray = 'invalid_array',
   InvalidSet = 'invalid_set',
   InvalidUnion = 'invalid_union',
+  InvalidIntersection = 'invalid_intersection',
   Forbidden = 'forbidden',
 }
 
@@ -51,7 +52,7 @@ export type TInvalidArrayIssue = TIssueBase<
     }
   | { readonly check: 'length'; readonly expected: number; readonly received: number }
   | { readonly check: 'unique' }
-  | { readonly check: 'ordered'; readonly expected: boolean; readonly received: boolean }
+  | { readonly check: 'ordered' }
 >
 
 export type TInvalidSetIssue = TIssueBase<
@@ -69,7 +70,12 @@ export type TInvalidSetIssue = TIssueBase<
   | { readonly check: 'size'; readonly expected: number; readonly received: number }
 >
 
-export type TUnionIssue = TIssueBase<TIssueKind.InvalidUnion, { readonly issues: readonly TIssue[] }>
+export type TInvalidUnionIssue = TIssueBase<TIssueKind.InvalidUnion, { readonly issues: readonly TIssue[] }>
+
+export type TInvalidIntersectionIssue = TIssueBase<
+  TIssueKind.InvalidIntersection,
+  { readonly issues: readonly TIssue[] }
+>
 
 export type TForbiddenIssue = TIssueBase<TIssueKind.Forbidden, undefined>
 
@@ -79,36 +85,143 @@ export type TIssue =
   | TInvalidLiteralIssue
   | TInvalidArrayIssue
   | TInvalidSetIssue
-  | TUnionIssue
+  | TInvalidUnionIssue
+  | TInvalidIntersectionIssue
   | TForbiddenIssue
 
 /* ------------------------------------------------------------------------------------------------------------------ */
 /*                                                       TError                                                       */
 /* ------------------------------------------------------------------------------------------------------------------ */
 
+export type TErrorFormatter = (issues: readonly TIssue[]) => string
+
+export const DEFAULT_ERROR_FORMATTER: TErrorFormatter = (issues) => JSON.stringify(issues, null, 2)
+
+export type TErrorMapInput = StripKey<TIssue, 'message'>
+export type TErrorMapFn = (issue: TErrorMapInput) => string
+export type TErrorMapDict = { readonly [K in TIssueKind]?: (issue: Extract<TErrorMapInput, { kind: K }>) => string }
+export type TErrorMap = TErrorMapFn | TErrorMapDict
+
+export const DEFAULT_ERROR_MAP: TErrorMapFn = (issue) => {
+  switch (issue.kind) {
+    case TIssueKind.Required:
+      return 'Required'
+    case TIssueKind.InvalidType:
+      return `Expected ${issue.payload.expected}, got ${issue.payload.received}`
+    case TIssueKind.InvalidLiteral:
+      return `Expected ${String(issue.payload.expected)}, got ${String(issue.payload.received)}`
+    case TIssueKind.InvalidArray:
+      if (issue.payload.check === 'min') {
+        return `Array must contain ${issue.payload.expected.inclusive ? 'at least' : 'over'} ${
+          issue.payload.expected.value
+        } item(s)`
+      }
+
+      if (issue.payload.check === 'max') {
+        return `Array must contain ${issue.payload.expected.inclusive ? 'at most' : 'under'} ${
+          issue.payload.expected.value
+        } item(s)`
+      }
+
+      if (issue.payload.check === 'length') {
+        return `Array must contain exactly ${issue.payload.expected} item(s)`
+      }
+
+      if (issue.payload.check === 'unique') {
+        return 'Array must contain unique items'
+      }
+
+      if (issue.payload.check === 'ordered') {
+        return 'Array must be ordered'
+      }
+
+      break
+    case TIssueKind.InvalidSet:
+      if (issue.payload.check === 'min') {
+        return `Set must contain ${issue.payload.expected.inclusive ? 'at least' : 'over'} ${
+          issue.payload.expected.value
+        } item(s)`
+      }
+
+      if (issue.payload.check === 'max') {
+        return `Set must contain ${issue.payload.expected.inclusive ? 'at most' : 'under'} ${
+          issue.payload.expected.value
+        } item(s)`
+      }
+
+      if (issue.payload.check === 'size') {
+        return `Set must contain exactly ${issue.payload.expected} item(s)`
+      }
+
+      break
+    case TIssueKind.InvalidUnion:
+      return 'Invalid union'
+    case TIssueKind.InvalidIntersection:
+      return 'Invalid intersection'
+    case TIssueKind.Forbidden:
+      return 'Forbidden'
+
+    default:
+      return 'Unknown issue'
+  }
+
+  return 'Unknown issue'
+}
+
+export const resolveErrorMaps = (maps: ReadonlyArray<TErrorMap | undefined>): TErrorMapFn => {
+  return (issue) => {
+    const msgs = [...maps]
+      .reverse()
+      .map((map) =>
+        (typeof map === 'function'
+          ? map
+          : (issue: TErrorMapInput): string | undefined => (map?.[issue.kind] as TErrorMapFn | undefined)?.(issue))(
+          issue
+        )
+      )
+      .filter((msg): msg is NonNullable<typeof msg> => Boolean(msg))
+
+    return msgs[0] ?? DEFAULT_ERROR_MAP(issue)
+  }
+}
+
 export class TError<I> extends Error {
-  private readonly _type: AnyTType<unknown, I>
+  private readonly _schema: AnyTType<unknown, I>
   private readonly _issues: readonly TIssue[]
 
-  constructor(type: AnyTType<unknown, I>, issues: readonly TIssue[]) {
-    super(getGlobal().getErrorFormatter()(issues))
-    this._type = type
+  constructor(schema: AnyTType<unknown, I>, issues: readonly TIssue[]) {
+    super()
+    this._schema = schema
     this._issues = issues
   }
 
+  override get name(): 'TError' {
+    return 'TError'
+  }
+
+  override get message(): string {
+    return getGlobal().getErrorFormatter()(this.issues)
+  }
+
+  get schema(): AnyTType<unknown, I> {
+    return this._schema
+  }
+
   get origin(): AnyTType<unknown, I> {
-    return this._type
+    return this.schema
   }
 
   get issues(): readonly TIssue[] {
     return this._issues
   }
 
-  static readonly defaultFormatter: TErrorFormatter = (issues) => JSON.stringify(issues, null, 2)
+  static readonly defaultFormatter: TErrorFormatter = DEFAULT_ERROR_FORMATTER
 
-  static fromContext<I>(ctx: ParseContext<AnyTType<unknown, I>>): TError<I> {
-    return new TError(ctx.schema as AnyTType<unknown, I>, ctx.allIssues)
+  static readonly defaultIssueMap: TErrorMap = DEFAULT_ERROR_MAP
+
+  static fromContext(ctx: AnyParseContext): AnyTError {
+    return new TError(ctx.root.schema, ctx.allIssues)
   }
 }
 
-export type TErrorFormatter = (issues: readonly TIssue[]) => string
+export type AnyTError = TError<unknown>

@@ -6,6 +6,8 @@ console.log(t.any().optional().optional().optional().unwrapDeep().color('red').n
 
 const s = t
   .array(t.string().optional())
+  .array()
+  .array()
   .title('a')
   .description('b')
   .summary('c')
@@ -17,6 +19,7 @@ const s = t
   .unique({
     message: 'a',
   })
+  .flattenDeep()
   .sparse(false)
 
 // Console.log(s.safeParse(['s', 'a', 2, 3]).error._issues)
@@ -32,12 +35,14 @@ const _t = console.log(
     .tags('a', 'b')
     .optional()
     .title('a')
-    .nullable()
+    .nullish()
     .unwrapNullishDeep()
     .unique({
       message: 'a',
     })
     .sparse()
     .abortEarly()
-    .parse(['s', 'a', 2, 3])
+    .nullish()
+    .or(t.array(t.string().or(t.number())).max(3))
+    .safeParse(['s', 'a', 2, 3]).error?.issues[0]?.payload
 )
