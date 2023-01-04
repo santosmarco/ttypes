@@ -1,4 +1,5 @@
 import { t } from '../index'
+import { assertEqual } from './_utils'
 
 describe('TNever', () => {
   test('typeName', () => {
@@ -33,5 +34,24 @@ describe('TNever', () => {
     expect(t.never().isRequired()).toStrictEqual(true)
     expect(t.never().isReadonly()).toStrictEqual(false)
     expect(t.never().isDeprecated()).toStrictEqual(false)
+  })
+
+  test('options', () => {
+    expect(
+      t.never({
+        messages: {
+          forbidden: 'foo',
+        },
+      }).options
+    ).toStrictEqual({
+      messages: {
+        forbidden: 'foo',
+      },
+    })
+  })
+
+  test('inference', () => {
+    const schema = t.never()
+    assertEqual<t.infer<typeof schema>, never>(true)
   })
 })

@@ -1,4 +1,5 @@
 import { t } from '../index'
+import { assertEqual } from './_utils'
 
 describe('TUndefined', () => {
   test('typeName', () => {
@@ -44,6 +45,12 @@ describe('TUndefined', () => {
     expect(t.undefined().isRequired()).toStrictEqual(false)
     expect(t.undefined().isReadonly()).toStrictEqual(false)
     expect(t.undefined().isDeprecated()).toStrictEqual(false)
+  })
+
+  test('inference', () => {
+    const schema = t.undefined()
+    assertEqual<t.infer<typeof schema>, undefined>(true)
+    assertEqual<t.infer<typeof schema>, void>(false)
   })
 })
 
@@ -92,6 +99,12 @@ describe('TVoid', () => {
     expect(t.void().isReadonly()).toStrictEqual(false)
     expect(t.void().isDeprecated()).toStrictEqual(false)
   })
+
+  test('inference', () => {
+    const schema = t.void()
+    assertEqual<t.infer<typeof schema>, void>(true)
+    assertEqual<t.infer<typeof schema>, undefined>(false)
+  })
 })
 
 describe('TNull', () => {
@@ -130,5 +143,11 @@ describe('TNull', () => {
     expect(t.null().isRequired()).toStrictEqual(true)
     expect(t.null().isReadonly()).toStrictEqual(false)
     expect(t.null().isDeprecated()).toStrictEqual(false)
+  })
+
+  test('inference', () => {
+    const schema = t.null()
+    // eslint-disable-next-line @typescript-eslint/ban-types
+    assertEqual<t.infer<typeof schema>, null>(true)
   })
 })

@@ -1,4 +1,5 @@
 import { t } from '../index'
+import { assertEqual } from './_utils'
 
 describe('TAny', () => {
   test('typeName', () => {
@@ -46,6 +47,12 @@ describe('TAny', () => {
     expect(t.any().isRequired()).toStrictEqual(false)
     expect(t.any().isReadonly()).toStrictEqual(false)
     expect(t.any().isDeprecated()).toStrictEqual(false)
+  })
+
+  test('inference', () => {
+    const schema = t.any()
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    assertEqual<t.infer<typeof schema>, any>(true)
   })
 })
 
@@ -95,5 +102,10 @@ describe('TUnknown', () => {
     expect(t.unknown().isRequired()).toStrictEqual(false)
     expect(t.unknown().isReadonly()).toStrictEqual(false)
     expect(t.unknown().isDeprecated()).toStrictEqual(false)
+  })
+
+  test('inference', () => {
+    const schema = t.unknown()
+    assertEqual<t.infer<typeof schema>, unknown>(true)
   })
 })

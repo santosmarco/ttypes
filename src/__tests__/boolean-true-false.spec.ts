@@ -1,4 +1,5 @@
 import { t } from '../index'
+import { assertEqual } from './_utils'
 
 describe('TBoolean', () => {
   test('typeName', () => {
@@ -39,6 +40,11 @@ describe('TBoolean', () => {
     expect(t.boolean().isRequired()).toStrictEqual(true)
     expect(t.boolean().isReadonly()).toStrictEqual(false)
     expect(t.boolean().isDeprecated()).toStrictEqual(false)
+  })
+
+  test('inference', () => {
+    const schema = t.boolean()
+    assertEqual<t.infer<typeof schema>, boolean>(true)
   })
 })
 
@@ -82,6 +88,11 @@ describe('TTrue', () => {
     expect(t.true().isReadonly()).toStrictEqual(false)
     expect(t.true().isDeprecated()).toStrictEqual(false)
   })
+
+  test('inference', () => {
+    const schema = t.true()
+    assertEqual<t.infer<typeof schema>, true>(true)
+  })
 })
 
 describe('TFalse', () => {
@@ -123,5 +134,10 @@ describe('TFalse', () => {
     expect(t.false().isRequired()).toStrictEqual(true)
     expect(t.false().isReadonly()).toStrictEqual(false)
     expect(t.false().isDeprecated()).toStrictEqual(false)
+  })
+
+  test('inference', () => {
+    const schema = t.false()
+    assertEqual<t.infer<typeof schema>, false>(true)
   })
 })
