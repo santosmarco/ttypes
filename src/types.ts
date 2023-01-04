@@ -38,15 +38,18 @@ export enum TTypeName {
   Intersection = 'TIntersection',
   Lazy = 'TLazy',
   Literal = 'TLiteral',
+  Map = 'TMap',
   NaN = 'TNaN',
   NativeEnum = 'TNativeEnum',
   Never = 'TNever',
   Null = 'TNull',
   Nullable = 'TNullable',
   Number = 'TNumber',
+  Object = 'TObject',
   Optional = 'TOptional',
   Pipeline = 'TPipeline',
   Promise = 'TPromise',
+  Record = 'TRecord',
   Required = 'TRequired',
   Set = 'TSet',
   String = 'TString',
@@ -838,7 +841,7 @@ type UnionToTuple<T, _Acc extends readonly unknown[] = []> = [T] extends [never]
   ? _Acc
   : UnionToTuple<Exclude<T, GetUnionLast<T>>, [GetUnionLast<T>, ..._Acc]>
 
-type ToEnumValues<T> = T extends TEnumValues ? Readonly<T> : never
+type ToEnumValues<T> = T extends TEnumValues ? T : never
 
 export type UnionToEnumValues<T> = ToEnumValues<UnionToTuple<T>>
 
@@ -887,7 +890,7 @@ export class TEnum<T extends TEnumValues> extends TType<T[number], TEnumDef<T>> 
   static create<T extends string | number, U extends readonly [T, ...T[]]>(
     values: U,
     options?: SimplifyFlat<TEnumOptions>
-  ): TEnum<Readonly<U>> {
+  ): TEnum<U> {
     return new TEnum({ typeName: TTypeName.Enum, values, options: { ...options } })
   }
 }
@@ -919,8 +922,8 @@ export interface TNativeEnumDef<T extends EnumLike> extends TDef {
 }
 
 export class TNativeEnum<T extends EnumLike> extends TType<T[keyof T], TNativeEnumDef<T>> {
-  get _manifest(): TEnumManifest<UnionToEnumValues<T[keyof T]>> {
-    return { ...getDefaultManifest({ type: TParsedType.String }), enum: this.values }
+  get _manifest(): TEnumManifest<readonly [...UnionToEnumValues<T[keyof T]>]> {
+    return { ...getDefaultManifest({ type: TParsedType.String }), enum: this.values as UnionToEnumValues<T[keyof T]> }
   }
 
   _parse(ctx: ParseContextOf<this>): ParseResultOf<this> {}
@@ -929,7 +932,7 @@ export class TNativeEnum<T extends EnumLike> extends TType<T[keyof T], TNativeEn
     return getValidEnum(this._def.enum) as T
   }
 
-  get values(): UnionToEnumValues<T[keyof T]> {
+  get values(): Readonly<UnionToEnumValues<T[keyof T]>> {
     return Object.values(this.enum) as UnionToEnumValues<T[keyof T]>
   }
 
@@ -1079,20 +1082,40 @@ export class TArray<T extends AnyTType, C extends TArrayCardinality = 'many'>
       }
     }
 
+    const result: Array<OutputOf<T>> = []
+
     if (ctx.isAsync()) {
-      return Promise.all(data.map(async (value, i) => element._parseAsync(ctx.child(element, value, [i])))).then(
-        (childResults) =>
-          handleTIterableResults(
-            ctx,
-            childResults.map((res) => () => res)
-          ) as ParseResultOf<this>
-      )
+      return Promise.all(data.map(async (v, i) => element._parseAsync(ctx.child(element, v, [i])))).then((results) => {
+        for (const res of results) {
+          if (!res.ok) {
+            if (ctx.common.abortEarly) {
+              return ctx.abort()
+            }
+
+            continue
+          }
+
+          result.push(res.data)
+        }
+
+        return ctx.isValid() ? OK(result as OutputOf<this>) : ctx.abort()
+      })
     }
 
-    return handleTIterableResults(
-      ctx,
-      data.map((value, i) => () => element._parseSync(ctx.child(element, value, [i])))
-    ) as ParseResultOf<this>
+    for (const [i, v] of data.entries()) {
+      const res = element._parseSync(ctx.child(element, v, [i]))
+      if (!res.ok) {
+        if (ctx.common.abortEarly) {
+          return ctx.abort()
+        }
+
+        continue
+      }
+
+      result.push(res.data)
+    }
+
+    return ctx.isValid() ? OK(result as OutputOf<this>) : ctx.abort()
   }
 
   get element(): T {
@@ -1247,36 +1270,56 @@ export class TTuple<T extends TTupleItems, R extends AnyTType | undefined = unde
       }
     }
 
+    const result: unknown[] = []
+
     if (ctx.isAsync()) {
       return Promise.all(
-        data
-          .map((value, i) => ({ value, schema: items[i] ?? rest }))
-          .filter((data): data is { value: typeof data.value; schema: NonNullable<typeof data.schema> } =>
-            Boolean(data.schema)
-          )
-          .map(async ({ value, schema }, i) => schema._parseAsync(ctx.child(schema, value, [i])))
-      ).then(
-        (childResults) =>
-          handleTIterableResults(
-            ctx,
-            childResults.map((res) => () => res)
-          ) as ParseResultOf<this>
-      )
+        data.map(async (v, i) => {
+          const schema = items[i] ?? rest
+          if (!schema) {
+            return null
+          }
+
+          return schema._parseAsync(ctx.child(schema, v, [i]))
+        })
+      ).then((results) => {
+        const validResults = results.filter((res): res is NonNullable<typeof res> => Boolean(res))
+
+        for (const res of validResults) {
+          if (!res.ok) {
+            if (ctx.common.abortEarly) {
+              return ctx.abort()
+            }
+
+            continue
+          }
+
+          result.push(res.data)
+        }
+
+        return ctx.isValid() ? OK(result as OutputOf<this>) : ctx.abort()
+      })
     }
 
-    return handleTIterableResults(
-      ctx,
-      data
-        .map((value, i) => ({ value, schema: items[i] ?? rest }))
-        .filter((data): data is { value: typeof data.value; schema: NonNullable<typeof data.schema> } =>
-          Boolean(data.schema)
-        )
-        .map(
-          ({ value, schema }, i) =>
-            () =>
-              schema._parseSync(ctx.child(schema, value, [i]))
-        )
-    ) as ParseResultOf<this>
+    for (const [i, v] of data.entries()) {
+      const schema = items[i] ?? rest
+      if (!schema) {
+        continue
+      }
+
+      const res = schema._parseSync(ctx.child(schema, v, [i]))
+      if (!res.ok) {
+        if (ctx.common.abortEarly) {
+          return ctx.abort()
+        }
+
+        continue
+      }
+
+      result.push(res.data)
+    }
+
+    return ctx.isValid() ? OK(result as OutputOf<this>) : ctx.abort()
   }
 
   get items(): T {
@@ -1289,6 +1332,10 @@ export class TTuple<T extends TTupleItems, R extends AnyTType | undefined = unde
 
   rest<R_ extends AnyTType>(rest: R_): TTuple<T, R_> {
     return new TTuple({ ...this._def, rest })
+  }
+
+  removeRest(): TTuple<T> {
+    return new TTuple({ ...this._def, rest: undefined })
   }
 
   static create<T extends TTupleItems>(items: T, options?: SimplifyFlat<TTupleOptions>): TTuple<T>
@@ -1369,24 +1416,42 @@ export class TSet<T extends AnyTType>
       }
     }
 
+    const result = new Set<OutputOf<T>>()
+
     if (ctx.isAsync()) {
-      return Promise.all([...data].map(async (value, i) => element._parseAsync(ctx.child(element, value, [i])))).then(
-        (childResults) => {
-          const result = handleTIterableResults(
-            ctx,
-            childResults.map((res) => () => res)
-          )
-          return result.ok ? OK(new Set(result.data)) : result
+      return Promise.all([...data].map(async (v, i) => element._parseAsync(ctx.child(element, v, [i])))).then(
+        (results) => {
+          for (const res of results) {
+            if (!res.ok) {
+              if (ctx.common.abortEarly) {
+                return ctx.abort()
+              }
+
+              continue
+            }
+
+            result.add(res.data)
+          }
+
+          return ctx.isValid() ? OK(result) : ctx.abort()
         }
       )
     }
 
-    const result = handleTIterableResults(
-      ctx,
-      [...data].map((value, i) => () => element._parseSync(ctx.child(element, value, [i])))
-    )
+    for (const [i, v] of [...data].entries()) {
+      const res = element._parseSync(ctx.child(element, v, [i]))
+      if (!res.ok) {
+        if (ctx.common.abortEarly) {
+          return ctx.abort()
+        }
 
-    return result.ok ? OK(new Set(result.data)) : result
+        continue
+      }
+
+      result.add(res.data)
+    }
+
+    return ctx.isValid() ? OK(result) : ctx.abort()
   }
 
   get element(): T {
@@ -1444,6 +1509,350 @@ export class TSet<T extends AnyTType>
 }
 
 export type AnyTSet = TSet<AnyTType>
+
+/* --------------------------------------------------- TDictionary -------------------------------------------------- */
+
+export const handleTDictionaryResults = <T extends AnyTType, K extends AnyTType, V extends AnyTType>(
+  ctx: ParseContextOf<T>,
+  resultGetters: Array<() => { key: SyncParseResultOf<K>; value: SyncParseResultOf<V> }>
+): FailedParseResult<InputOf<T>> | SuccessfulParseResult<Map<OutputOf<K>, OutputOf<V>>> => {
+  const result = new Map<OutputOf<K>, OutputOf<V>>()
+
+  for (const getResult of resultGetters) {
+    const { key: keyRes, value: valueRes } = getResult()
+
+    if (!keyRes.ok || !valueRes.ok) {
+      if (ctx.common.abortEarly) {
+        return ctx.abort()
+      }
+
+      continue
+    }
+
+    result.set(keyRes.data, valueRes.data)
+  }
+
+  return ctx.isValid() ? OK(result) : ctx.abort()
+}
+
+/* ------------------------------------------------------------------------------------------------------------------ */
+/*                                                       TRecord                                                      */
+/* ------------------------------------------------------------------------------------------------------------------ */
+
+export interface TRecordDef<K extends AnyTType<PropertyKey, PropertyKey>, V extends AnyTType> extends TDef {
+  readonly typeName: TTypeName.Record
+  readonly keys: K
+  readonly values: V
+}
+
+export class TRecord<K extends AnyTType<PropertyKey, PropertyKey>, V extends AnyTType> extends TType<
+  Record<OutputOf<K>, OutputOf<V>>,
+  TRecordDef<K, V>,
+  Record<InputOf<K>, InputOf<V>>
+> {
+  get _manifest(): TManifest {
+    return {
+      ...getDefaultManifest({ type: TParsedType.Object }),
+    }
+  }
+
+  _parse(ctx: ParseContextOf<this>): ParseResultOf<this> {
+    if (typeof ctx.data !== 'object' || ctx.data === null) {
+      return ctx.invalidType({ expected: TParsedType.Object }).abort()
+    }
+
+    const { keys, values } = this._def
+    const { data } = ctx
+
+    // eslint-disable-next-line @typescript-eslint/consistent-type-assertions
+    const result = {} as Record<OutputOf<K>, OutputOf<V>>
+
+    if (ctx.isAsync()) {
+      return Promise.all(
+        Object.entries(data).map(async ([k, v]) =>
+          Promise.all([
+            keys._parseAsync(ctx.child(keys, k, [k, 'key'])),
+            values._parseAsync(ctx.child(values, v, [k, 'value'])),
+          ])
+        )
+      ).then((results) => {
+        for (const [keyRes, valueRes] of results) {
+          if (!keyRes.ok || !valueRes.ok) {
+            if (ctx.common.abortEarly) {
+              return ctx.abort()
+            }
+
+            continue
+          }
+
+          result[keyRes.data] = valueRes.data
+        }
+
+        return ctx.isValid() ? OK(result) : ctx.abort()
+      })
+    }
+
+    for (const [k, v] of Object.entries(data)) {
+      const keyRes = keys._parseSync(ctx.child(keys, k, [k, 'key']))
+      const valueRes = values._parseSync(ctx.child(values, v, [k, 'value']))
+
+      if (!keyRes.ok || !valueRes.ok) {
+        if (ctx.common.abortEarly) {
+          return ctx.abort()
+        }
+
+        continue
+      }
+
+      result[keyRes.data] = valueRes.data
+    }
+
+    return ctx.isValid() ? OK(result) : ctx.abort()
+  }
+
+  get keys(): K {
+    return this._def.keys
+  }
+
+  get values(): V {
+    return this._def.values
+  }
+
+  get entries(): readonly [keys: K, values: V] {
+    return [this.keys, this.values]
+  }
+
+  static create<V extends AnyTType>(values: V, options?: SimplifyFlat<TOptions>): TRecord<TString, V>
+  static create<K extends AnyTType<PropertyKey, PropertyKey>, V extends AnyTType>(
+    keys: K,
+    values: V,
+    options?: SimplifyFlat<TOptions>
+  ): TRecord<K, V>
+  static create(
+    valuesOrKeys: AnyTType<PropertyKey, PropertyKey>,
+    valuesOrOptions?: AnyTType | SimplifyFlat<TOptions>,
+    maybeOptions?: SimplifyFlat<TOptions>
+  ): TRecord<AnyTType<PropertyKey, PropertyKey>, AnyTType> {
+    if (valuesOrOptions instanceof TType) {
+      return new TRecord({
+        typeName: TTypeName.Record,
+        keys: valuesOrKeys,
+        values: valuesOrOptions,
+        options: { ...maybeOptions },
+      })
+    }
+
+    return new TRecord({
+      typeName: TTypeName.Record,
+      keys: TString.create(),
+      values: valuesOrKeys,
+      options: { ...valuesOrOptions },
+    })
+  }
+}
+
+export type AnyTRecord = TRecord<AnyTType<PropertyKey, PropertyKey>, AnyTType>
+
+/* ------------------------------------------------------------------------------------------------------------------ */
+/*                                                        TMap                                                        */
+/* ------------------------------------------------------------------------------------------------------------------ */
+
+export interface TMapDef<K extends AnyTType, V extends AnyTType> extends TDef {
+  readonly typeName: TTypeName.Map
+  readonly keys: K
+  readonly values: V
+}
+
+export class TMap<K extends AnyTType, V extends AnyTType> extends TType<
+  Map<OutputOf<K>, OutputOf<V>>,
+  TMapDef<K, V>,
+  Map<InputOf<K>, InputOf<V>>
+> {
+  get _manifest(): TManifest {
+    return {
+      ...getDefaultManifest({ type: TParsedType.Map }),
+    }
+  }
+
+  _parse(ctx: ParseContextOf<this>): ParseResultOf<this> {
+    if (!(ctx.data instanceof Map)) {
+      return ctx.invalidType({ expected: TParsedType.Map }).abort()
+    }
+
+    const { keys, values } = this._def
+    const { data } = ctx
+
+    const result = new Map<OutputOf<K>, OutputOf<V>>()
+
+    if (ctx.isAsync()) {
+      return Promise.all(
+        [...data.entries()].map(async ([k, v]) =>
+          Promise.all([
+            keys._parseAsync(ctx.child(keys, k, [k, 'key'])),
+            values._parseAsync(ctx.child(values, v, [k, 'value'])),
+          ])
+        )
+      ).then((results) => {
+        for (const [keyRes, valueRes] of results) {
+          if (!keyRes.ok || !valueRes.ok) {
+            if (ctx.common.abortEarly) {
+              return ctx.abort()
+            }
+
+            continue
+          }
+
+          result.set(keyRes.data, valueRes.data)
+        }
+
+        return ctx.isValid() ? OK(result) : ctx.abort()
+      })
+    }
+
+    for (const [k, v] of data.entries()) {
+      const keyRes = keys._parseSync(ctx.child(keys, k, [k, 'key']))
+      const valueRes = values._parseSync(ctx.child(values, v, [k, 'value']))
+
+      if (!keyRes.ok || !valueRes.ok) {
+        if (ctx.common.abortEarly) {
+          return ctx.abort()
+        }
+
+        continue
+      }
+
+      result.set(keyRes.data, valueRes.data)
+    }
+
+    return ctx.isValid() ? OK(result) : ctx.abort()
+  }
+
+  get keys(): K {
+    return this._def.keys
+  }
+
+  get values(): V {
+    return this._def.values
+  }
+
+  get entries(): readonly [keys: K, values: V] {
+    return [this.keys, this.values]
+  }
+
+  static create<K extends AnyTType, V extends AnyTType>(
+    keys: K,
+    values: V,
+    options?: SimplifyFlat<TOptions>
+  ): TMap<K, V> {
+    return new TMap({ typeName: TTypeName.Map, keys, values, options: { ...options } })
+  }
+}
+
+export type AnyTMap = TMap<AnyTType, AnyTType>
+
+/* ------------------------------------------------------------------------------------------------------------------ */
+/*                                                       TObject                                                      */
+/* ------------------------------------------------------------------------------------------------------------------ */
+
+export type TObjectShape = Record<string, AnyTType>
+export type TObjectUnknownKeys = 'passthrough' | 'strict' | 'strip'
+export type TObjectCatchall = AnyTType
+
+export type OptionalKeys<T extends Record<string, unknown>> = {
+  [K in keyof T]: undefined extends T[K] ? K : never
+}[keyof T]
+export type RequiredKeys<T extends Record<string, unknown>> = {
+  [K in keyof T]: undefined extends T[K] ? never : K
+}[keyof T]
+
+export type EnforceOptional<T extends Record<string, unknown>> = Pick<T, RequiredKeys<T>> &
+  Partial<Pick<T, OptionalKeys<T>>>
+
+export type TObjectIO<
+  S extends TObjectShape,
+  UK extends TObjectUnknownKeys | undefined,
+  C extends TObjectCatchall | undefined,
+  IO extends '$I' | '$O' = '$O'
+> = SimplifyFlat<
+  EnforceOptional<{ [K in keyof S]: S[K][IO] }> &
+    (C extends AnyTType
+      ? Record<string, C[IO]>
+      : UK extends 'passthrough'
+      ? Record<string, unknown>
+      : UK extends 'strict'
+      ? Record<string, never>
+      : unknown)
+>
+
+export interface TObjectDef<
+  S extends TObjectShape,
+  UK extends TObjectUnknownKeys | undefined,
+  C extends TObjectCatchall | undefined
+> extends TDef {
+  readonly typeName: TTypeName.Object
+  readonly shape: S
+  readonly unknownKeys: UK
+  readonly catchall: C
+}
+
+export class TObject<
+  S extends TObjectShape,
+  UK extends TObjectUnknownKeys | undefined,
+  C extends TObjectCatchall | undefined
+> extends TType<TObjectIO<S, UK, C>, TObjectDef<S, UK, C>, TObjectIO<S, UK, C, '$I'>> {
+  get _manifest(): TManifest {
+    return {
+      ...getDefaultManifest({ type: TParsedType.Object }),
+    }
+  }
+
+  _parse(ctx: ParseContextOf<this>): ParseResultOf<this> {
+    if (typeof ctx.data !== 'object' || ctx.data === null) {
+      return ctx.invalidType({ expected: TParsedType.Object }).abort()
+    }
+
+    const { shape, unknownKeys, catchall } = this._def
+    const { data } = ctx
+  }
+
+  get shape(): S {
+    return this._def.shape
+  }
+
+  passthrough(): TObject<S, 'passthrough', undefined> {
+    return this._setUnknownKeys('passthrough')
+  }
+
+  strict(): TObject<S, 'strict', undefined> {
+    return this._setUnknownKeys('strict')
+  }
+
+  strip(): TObject<S, 'strip', undefined> {
+    return this._setUnknownKeys('strip')
+  }
+
+  catchall<T extends TObjectCatchall>(catchall: T): TObject<S, undefined, T> {
+    return new TObject({ ...this._def, unknownKeys: undefined, catchall })
+  }
+
+  keyof(): TEnum<UnionToEnumValues<keyof S>> {
+    return TEnum.create(Object.keys(this._def.shape) as UnionToEnumValues<keyof S>)
+  }
+
+  private _setUnknownKeys<T extends TObjectUnknownKeys>(unknownKeys: T): TObject<S, T, undefined> {
+    return new TObject({ ...this._def, unknownKeys, catchall: undefined })
+  }
+
+  static create<S extends TObjectShape>(shape: S, options?: SimplifyFlat<TOptions>): TObject<S, 'strip', undefined> {
+    return new TObject({
+      typeName: TTypeName.Object,
+      shape,
+      unknownKeys: 'strip',
+      catchall: undefined,
+      options: { ...options },
+    })
+  }
+}
 
 /* ------------------------------------------------------------------------------------------------------------------ */
 /*                                                     TUndefined                                                     */
@@ -2203,15 +2612,18 @@ export const falseType = TFalse.create
 export const intersectionType = TIntersection.create
 export const lazyType = TLazy.create
 export const literalType = TLiteral.create
+export const mapType = TMap.create
 export const nanType = TNaN.create
 export const nativeEnumType = TNativeEnum.create
 export const neverType = TNever.create
 export const nullableType = TNullable.create
 export const nullType = TNull.create
 export const numberType = TNumber.create
+export const objectType = TObject.create
 export const optionalType = TOptional.create
 export const pipelineType = TPipeline.create
 export const promiseType = TPromise.create
+export const recordType = TRecord.create
 export const requiredType = TRequired.create
 export const setType = TSet.create
 export const stringType = TString.create
@@ -2240,16 +2652,19 @@ export {
   intersectionType as intersection,
   lazyType as lazy,
   literalType as literal,
+  mapType as map,
   nanType as nan,
   nativeEnumType as nativeEnum,
   neverType as never,
   nullableType as nullable,
   nullType as null,
   numberType as number,
+  objectType as object,
   optionalType as optional,
   pipelineType as pipe,
   pipelineType as pipeline,
   promiseType as promise,
+  recordType as record,
   requiredType as required,
   setType as set,
   stringType as string,
