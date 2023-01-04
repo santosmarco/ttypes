@@ -25,6 +25,7 @@ export enum TTypeName {
   BigInt = 'TBigInt',
   Boolean = 'TBoolean',
   Brand = 'TBrand',
+  Catch = 'TCatch',
   Date = 'TDate',
   Default = 'TDefault',
   False = 'TFalse',
@@ -172,7 +173,10 @@ abstract class TType<O, D extends TDef, I = O> {
     this.required = this.required.bind(this)
     this.array = this.array.bind(this)
     this.promise = this.promise.bind(this)
+    this.or = this.or.bind(this)
     this.brand = this.brand.bind(this)
+    this.default = this.default.bind(this)
+    this.catch = this.catch.bind(this)
     this.lazy = this.lazy.bind(this)
     this.pipe = this.pipe.bind(this)
     this.title = this.title.bind(this)
@@ -281,22 +285,32 @@ abstract class TType<O, D extends TDef, I = O> {
     return TPromise.create(this, this.options)
   }
 
+  or<T extends readonly [AnyTType, ...AnyTType[]]>(...alternatives: T): TUnion<[this, ...T]> {
+    return new TUnion({ typeName: TTypeName.Union, members: [this, ...alternatives], options: this.options })
+  }
+
   brand<B extends PropertyKey>(brand: B): TBrand<this, B> {
     return TBrand.create(this, brand, this.options)
   }
 
-  default<D extends Defined<O>>(defaultValue: D): TDefault<this, D>
-  default<D extends Defined<O>>(getDefault: () => D): TDefault<this, D>
-  default<D extends Defined<O>>(defaultValueOrGetter: D | (() => D)): TDefault<this, D> {
+  default<D_ extends Defined<O>>(defaultValue: D_): TDefault<this, D_>
+  default<D_ extends Defined<O>>(getDefault: () => D_): TDefault<this, D_>
+  default<D_ extends Defined<O>>(defaultValueOrGetter: D_ | (() => D_)): TDefault<this, D_> {
     return TDefault.create(this, defaultValueOrGetter, this.options)
+  }
+
+  catch<C extends O>(catchValue: C): TCatch<this, C>
+  catch<C extends O>(getCatch: () => C): TCatch<this, C>
+  catch<C extends O>(catchValueOrGetter: C | (() => C)): TCatch<this, C> {
+    return TCatch.create(this, catchValueOrGetter, this.options)
   }
 
   lazy(): TLazy<this> {
     return TLazy.create(() => this, this.options)
   }
 
-  pipe<U extends AnyTType<unknown, I>>(toType: U): TPipeline<this, U> {
-    return TPipeline.create(this, toType, this.options)
+  pipe<T extends AnyTType<unknown, I>>(type: T): TPipeline<this, T> {
+    return TPipeline.create(this, type, this.options)
   }
 
   title(title: string): this {
@@ -1556,6 +1570,84 @@ export class TDefault<T extends AnyTType, D extends Defined<OutputOf<T>>>
 }
 
 /* ------------------------------------------------------------------------------------------------------------------ */
+/*                                                       TCatch                                                       */
+/* ------------------------------------------------------------------------------------------------------------------ */
+
+export interface TCatchDef<T extends AnyTType, C extends OutputOf<T>> extends TDef {
+  readonly typeName: TTypeName.Catch
+  readonly underlying: T
+  readonly getCatch: () => C
+}
+
+export class TCatch<T extends AnyTType, C extends OutputOf<T>>
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  extends TType<OutputOf<T> | C, TCatchDef<T, C>, any>
+  implements TUnwrappable<T>
+{
+  get _manifest(): T['manifest'] {
+    return { ...this.underlying.manifest }
+  }
+
+  _parse(ctx: ParseContext<this>): ParseResultOf<this> {
+    const result = this.underlying._parse(ctx.clone(this.underlying, ctx.data))
+    return isAsync(result)
+      ? result.then((res) => OK(res.ok ? res.data : this.getCatch()))
+      : OK(result.ok ? result.data : this.getCatch())
+  }
+
+  get underlying(): T {
+    return this._def.underlying
+  }
+
+  unwrap(): T {
+    return this.underlying
+  }
+
+  unwrapDeep(): UnwrapDeep<T, TTypeName.Catch> {
+    return (this.underlying instanceof TCatch ? this.underlying.unwrapDeep() : this.underlying) as UnwrapDeep<
+      T,
+      TTypeName.Catch
+    >
+  }
+
+  getCatch(): C {
+    return this._def.getCatch()
+  }
+
+  removeCatch(): T {
+    return this.underlying
+  }
+
+  static create<T extends AnyTType, C extends OutputOf<T>>(
+    underlying: T,
+    catchValue: C,
+    options?: SimplifyFlat<TOptions>
+  ): TCatch<T, C>
+  static create<T extends AnyTType, C extends OutputOf<T>>(
+    underlying: T,
+    getCatch: () => C,
+    options?: SimplifyFlat<TOptions>
+  ): TCatch<T, C>
+  static create<T extends AnyTType, C extends OutputOf<T>>(
+    underlying: T,
+    catchValueOrGetter: C | (() => C),
+    options?: SimplifyFlat<TOptions>
+  ): TCatch<T, C>
+  static create<T extends AnyTType, C extends OutputOf<T>>(
+    underlying: T,
+    catchValueOrGetter: C | (() => C),
+    options?: SimplifyFlat<TOptions>
+  ): TCatch<T, C> {
+    return new TCatch({
+      typeName: TTypeName.Catch,
+      underlying,
+      getCatch: isFunction(catchValueOrGetter) ? catchValueOrGetter : (): C => catchValueOrGetter,
+      options: { ...options },
+    })
+  }
+}
+
+/* ------------------------------------------------------------------------------------------------------------------ */
 /*                                                        TLazy                                                       */
 /* ------------------------------------------------------------------------------------------------------------------ */
 
@@ -1591,6 +1683,71 @@ export class TLazy<T extends AnyTType> extends TType<OutputOf<T>, TLazyDef<T>, I
 
   static create<T extends AnyTType>(factory: () => T, options?: SimplifyFlat<TOptions>): TLazy<T> {
     return new TLazy({ typeName: TTypeName.Lazy, getType: factory, options: { ...options } })
+  }
+}
+
+/* ------------------------------------------------------------------------------------------------------------------ */
+/*                                                       TUnion                                                       */
+/* ------------------------------------------------------------------------------------------------------------------ */
+
+export type TUnionOptions = TOptions<{
+  additionalIssueKind: TIssueKind.InvalidUnion
+}>
+
+export interface TUnionDef<T extends readonly AnyTType[]> extends TDef {
+  readonly typeName: TTypeName.Union
+  readonly options: TUnionOptions
+  readonly members: T
+}
+
+export class TUnion<T extends readonly AnyTType[]> extends TType<
+  OutputOf<T[number]>,
+  TUnionDef<T>,
+  InputOf<T[number]>
+> {
+  get _manifest(): TManifest {
+    return this.members.reduce<any>((acc, type) => ({ ...acc, ...type.manifest }), {})
+  }
+
+  _parse(ctx: ParseContext<this>): ParseResultOf<this> {
+    const { members } = this._def
+
+    const handleResults = (results: Array<SyncParseResultOf<T[number]>>): ParseResultOf<this> => {
+      const issues = []
+
+      for (const result of results) {
+        if (result.ok) {
+          return result
+        }
+
+        issues.push(...result.error.issues)
+      }
+
+      return ctx
+        .addIssue({ kind: TIssueKind.InvalidUnion, payload: { issues } }, this.options.messages?.invalidUnion)
+        .abort()
+    }
+
+    if (ctx.isAsync()) {
+      return Promise.all(members.map(async (type) => type._parseAsync(ctx.clone(type, ctx.data)))).then(handleResults)
+    }
+
+    return handleResults(members.map((type) => type._parseSync(ctx.clone(type, ctx.data))))
+  }
+
+  get members(): T {
+    return this._def.members
+  }
+
+  get alternatives(): T {
+    return this.members
+  }
+
+  static create<T extends readonly [AnyTType, AnyTType, ...AnyTType[]]>(
+    alternatives: T,
+    options?: SimplifyFlat<TOptions>
+  ): TUnion<T> {
+    return new TUnion({ typeName: TTypeName.Union, members: alternatives, options: { ...options } })
   }
 }
 
@@ -1659,6 +1816,7 @@ export const arrayType = TArray.create
 export const bigintType = TBigInt.create
 export const booleanType = TBoolean.create
 export const brandType = TBrand.create
+export const catchType = TCatch.create
 export const dateType = TDate.create
 export const defaultType = TDefault.create
 export const falseType = TFalse.create
@@ -1670,6 +1828,7 @@ export const nullableType = TNullable.create
 export const nullType = TNull.create
 export const numberType = TNumber.create
 export const optionalType = TOptional.create
+export const pipelineType = TPipeline.create
 export const promiseType = TPromise.create
 export const requiredType = TRequired.create
 export const setType = TSet.create
@@ -1677,6 +1836,7 @@ export const stringType = TString.create
 export const symbolType = TSymbol.create
 export const trueType = TTrue.create
 export const undefinedType = TUndefined.create
+export const unionType = TUnion.create
 export const unknownType = TUnknown.create
 export const voidType = TVoid.create
 
@@ -1689,6 +1849,7 @@ export {
   booleanType as bool,
   booleanType as boolean,
   brandType as brand,
+  catchType as catch,
   dateType as date,
   falseType as false,
   lazyType as lazy,
@@ -1699,6 +1860,8 @@ export {
   nullType as null,
   numberType as number,
   optionalType as optional,
+  pipelineType as pipe,
+  pipelineType as pipeline,
   promiseType as promise,
   requiredType as required,
   setType as set,
@@ -1706,6 +1869,7 @@ export {
   symbolType as symbol,
   trueType as true,
   undefinedType as undefined,
+  unionType as union,
   unknownType as unknown,
   voidType as void,
 }
