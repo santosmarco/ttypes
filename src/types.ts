@@ -825,17 +825,34 @@ export type AnyTLiteral = TLiteral<TLiteralValue>
 
 export type TEnumValues = readonly [string | number, ...Array<string | number>]
 
+type UnionToIntersectionFn<T> = (T extends unknown ? (x: () => T) => void : never) extends (
+  i: infer Intersection
+) => void
+  ? Intersection
+  : never
+
+type GetUnionLast<T> = UnionToIntersectionFn<T> extends () => infer Last ? Last : never
+
+// eslint-disable-next-line @typescript-eslint/ban-types
+type UnionToTuple<T, _Acc extends readonly unknown[] = []> = [T] extends [never]
+  ? _Acc
+  : UnionToTuple<Exclude<T, GetUnionLast<T>>, [GetUnionLast<T>, ..._Acc]>
+
+type ToEnumValues<T> = T extends TEnumValues ? Readonly<T> : never
+
+export type UnionToEnumValues<T> = ToEnumValues<UnionToTuple<T>>
+
 export type TEnumOptions = TOptions<{
   additionalIssueKind: TIssueKind.InvalidEnumValue
 }>
 
-export interface TEnumDef<T extends readonly [string, ...string[]]> extends TDef {
+export interface TEnumDef<T extends TEnumValues> extends TDef {
   readonly typeName: TTypeName.Enum
   readonly options: TEnumOptions
   readonly values: T
 }
 
-export class TEnum<T extends readonly [string, ...string[]]> extends TType<T[number], TEnumDef<T>> {
+export class TEnum<T extends TEnumValues> extends TType<T[number], TEnumDef<T>> {
   get _manifest(): TEnumManifest<T> {
     return { ...getDefaultManifest({ type: TParsedType.String }), enum: this.values }
   }
@@ -859,7 +876,7 @@ export class TEnum<T extends readonly [string, ...string[]]> extends TType<T[num
     return OK(ctx.data)
   }
 
-  get values(): T {
+  get values(): Readonly<T> {
     return this._def.values
   }
 
@@ -867,15 +884,15 @@ export class TEnum<T extends readonly [string, ...string[]]> extends TType<T[num
     return this.values.reduce((acc, value) => ({ ...acc, [value]: value }), {} as { readonly [K in T[number]]: K })
   }
 
-  static create<T extends string, U extends readonly [T, ...T[]]>(
+  static create<T extends string | number, U extends readonly [T, ...T[]]>(
     values: U,
     options?: SimplifyFlat<TEnumOptions>
-  ): TEnum<U> {
+  ): TEnum<Readonly<U>> {
     return new TEnum({ typeName: TTypeName.Enum, values, options: { ...options } })
   }
 }
 
-export type AnyTEnum = TEnum<readonly [string, ...string[]]>
+export type AnyTEnum = TEnum<readonly [string | number, ...Array<string | number>]>
 
 /* ------------------------------------------------------------------------------------------------------------------ */
 /*                                                     TNativeEnum                                                    */
@@ -886,6 +903,15 @@ export interface EnumLike {
   readonly [x: number]: string
 }
 
+export const getValidEnum = (enum_: EnumLike): Readonly<Record<string, string | number>> =>
+  Object.fromEntries(
+    Object.keys(enum_)
+      // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
+      .filter((k) => typeof enum_[enum_[k]!] !== 'number')
+      // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
+      .map((k) => [k, enum_[k]!])
+  )
+
 export interface TNativeEnumDef<T extends EnumLike> extends TDef {
   readonly typeName: TTypeName.NativeEnum
   readonly options: TEnumOptions
@@ -893,18 +919,18 @@ export interface TNativeEnumDef<T extends EnumLike> extends TDef {
 }
 
 export class TNativeEnum<T extends EnumLike> extends TType<T[keyof T], TNativeEnumDef<T>> {
-  get _manifest(): TEnumManifest<ReadonlyArray<T[keyof T]>> {
+  get _manifest(): TEnumManifest<UnionToEnumValues<T[keyof T]>> {
     return { ...getDefaultManifest({ type: TParsedType.String }), enum: this.values }
   }
 
   _parse(ctx: ParseContextOf<this>): ParseResultOf<this> {}
 
   get enum(): T {
-    return this._def.enum
+    return getValidEnum(this._def.enum) as T
   }
 
-  get values(): ReadonlyArray<T[keyof T]> {
-    return Object.values(this.enum) as Array<T[keyof T]>
+  get values(): UnionToEnumValues<T[keyof T]> {
+    return Object.values(this.enum) as UnionToEnumValues<T[keyof T]>
   }
 
   static create<T extends EnumLike>(enum_: T, options?: SimplifyFlat<TEnumOptions>): TNativeEnum<T> {
@@ -949,7 +975,7 @@ export interface TIterable<T extends AnyTType> extends AnyTType {
   partial(): TIterable<TOptional<T>>
 }
 
-export const handleArrayResults = <T extends AnyTType, U extends AnyTType>(
+export const handleTIterableResults = <T extends AnyTType, U extends AnyTType>(
   ctx: ParseContextOf<T>,
   resultGetters: Array<() => SyncParseResultOf<U>>
 ): SuccessfulParseResult<Array<OutputOf<U>>> | FailedParseResult<InputOf<T>> => {
@@ -1056,14 +1082,14 @@ export class TArray<T extends AnyTType, C extends TArrayCardinality = 'many'>
     if (ctx.isAsync()) {
       return Promise.all(data.map(async (value, i) => element._parseAsync(ctx.child(element, value, [i])))).then(
         (childResults) =>
-          handleArrayResults(
+          handleTIterableResults(
             ctx,
             childResults.map((res) => () => res)
           ) as ParseResultOf<this>
       )
     }
 
-    return handleArrayResults(
+    return handleTIterableResults(
       ctx,
       data.map((value, i) => () => element._parseSync(ctx.child(element, value, [i])))
     ) as ParseResultOf<this>
@@ -1231,14 +1257,14 @@ export class TTuple<T extends TTupleItems, R extends AnyTType | undefined = unde
           .map(async ({ value, schema }, i) => schema._parseAsync(ctx.child(schema, value, [i])))
       ).then(
         (childResults) =>
-          handleArrayResults(
+          handleTIterableResults(
             ctx,
             childResults.map((res) => () => res)
           ) as ParseResultOf<this>
       )
     }
 
-    return handleArrayResults(
+    return handleTIterableResults(
       ctx,
       data
         .map((value, i) => ({ value, schema: items[i] ?? rest }))
@@ -1346,7 +1372,7 @@ export class TSet<T extends AnyTType>
     if (ctx.isAsync()) {
       return Promise.all([...data].map(async (value, i) => element._parseAsync(ctx.child(element, value, [i])))).then(
         (childResults) => {
-          const result = handleArrayResults(
+          const result = handleTIterableResults(
             ctx,
             childResults.map((res) => () => res)
           )
@@ -1355,7 +1381,7 @@ export class TSet<T extends AnyTType>
       )
     }
 
-    const result = handleArrayResults(
+    const result = handleTIterableResults(
       ctx,
       [...data].map((value, i) => () => element._parseSync(ctx.child(element, value, [i])))
     )

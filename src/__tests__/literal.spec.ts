@@ -15,14 +15,13 @@ const literalUndefined = t.literal(undefined)
 
 describe('TLiteral', () => {
   test('typeName', () => {
-    expect(t.literal('foo').typeName).toStrictEqual('TLiteral')
+    expect(literalString.typeName).toStrictEqual('TLiteral')
   })
 
   test('parses', () => {
     expect(literalString.parse('foo')).toStrictEqual('foo')
     expect(literalNumber.parse(1)).toStrictEqual(1)
-    // @ts-expect-error BigInt literals are not available when targeting lower than ES2020.
-    expect(literalBigInt.parse(1n)).toStrictEqual(1n)
+    expect(literalBigInt.parse(BigInt(1))).toStrictEqual(BigInt(1))
     expect(literalTrue.parse(true)).toStrictEqual(true)
     expect(literalFalse.parse(false)).toStrictEqual(false)
     expect(literalSymbol.parse(testSymbol)).toStrictEqual(testSymbol)
@@ -34,8 +33,7 @@ describe('TLiteral', () => {
   test('parses async', async () => {
     expect(await literalString.parseAsync('foo')).toStrictEqual('foo')
     expect(await literalNumber.parseAsync(1)).toStrictEqual(1)
-    // @ts-expect-error BigInt literals are not available when targeting lower than ES2020.
-    expect(await literalBigInt.parseAsync(1n)).toStrictEqual(1n)
+    expect(await literalBigInt.parseAsync(BigInt(1))).toStrictEqual(BigInt(1))
     expect(await literalTrue.parseAsync(true)).toStrictEqual(true)
     expect(await literalFalse.parseAsync(false)).toStrictEqual(false)
     expect(await literalSymbol.parseAsync(testSymbol)).toStrictEqual(testSymbol)
@@ -47,8 +45,7 @@ describe('TLiteral', () => {
   test('fails', () => {
     expect(() => literalString.parse('bar')).toThrow()
     expect(() => literalNumber.parse(2)).toThrow()
-    // @ts-expect-error BigInt literals are not available when targeting lower than ES2020.
-    expect(() => literalBigInt.parse(2n)).toThrow()
+    expect(() => literalBigInt.parse(BigInt(2))).toThrow()
     expect(() => literalTrue.parse(false)).toThrow()
     expect(() => literalFalse.parse(true)).toThrow()
     expect(() => literalSymbol.parse(Symbol('bar'))).toThrow()
@@ -56,6 +53,17 @@ describe('TLiteral', () => {
     expect(() => {
       literalUndefined.parse(null)
     }).toThrow()
+  })
+
+  test('value', () => {
+    expect(literalString.value).toStrictEqual('foo')
+    expect(literalNumber.value).toStrictEqual(1)
+    expect(literalBigInt.value).toStrictEqual(BigInt(1))
+    expect(literalTrue.value).toStrictEqual(true)
+    expect(literalFalse.value).toStrictEqual(false)
+    expect(literalSymbol.value).toStrictEqual(testSymbol)
+    expect(literalNull.value).toStrictEqual(null)
+    expect(literalUndefined.value).toStrictEqual(undefined)
   })
 
   test('manifest', () => {
@@ -81,8 +89,7 @@ describe('TLiteral', () => {
       nullable: false,
       readonly: false,
       promise: false,
-      // @ts-expect-error BigInt literals are not available when targeting lower than ES2020.
-      literal: 1n,
+      literal: BigInt(1),
     })
     expect(literalTrue.manifest).toStrictEqual({
       type: 'boolean',
@@ -153,5 +160,15 @@ describe('TLiteral', () => {
     // eslint-disable-next-line @typescript-eslint/ban-types
     assertEqual<t.infer<typeof literalNull>, null>(true)
     assertEqual<t.infer<typeof literalUndefined>, undefined>(true)
+
+    assertEqual<typeof literalString.manifest.literal, 'foo'>(true)
+    assertEqual<typeof literalNumber.manifest.literal, 1>(true)
+    assertEqual<typeof literalBigInt.manifest.literal, 1n>(true)
+    assertEqual<typeof literalTrue.manifest.literal, true>(true)
+    assertEqual<typeof literalFalse.manifest.literal, false>(true)
+    assertEqual<typeof literalSymbol.manifest.literal, typeof testSymbol>(true)
+    // eslint-disable-next-line @typescript-eslint/ban-types
+    assertEqual<typeof literalNull.manifest.literal, null>(true)
+    assertEqual<typeof literalUndefined.manifest.literal, undefined>(true)
   })
 })
