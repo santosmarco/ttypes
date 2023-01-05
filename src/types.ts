@@ -1358,7 +1358,7 @@ export class TSet<T extends AnyTType>
   }
 
   toArray(): TArray<T> {
-    return new TArray({ ...this._def, typeName: TTypeName.Array, length: this._def.size })
+    return new TArray({ ...this._def, typeName: TTypeName.Array, cardinality: 'many', length: this._def.size })
   }
 
   static create<T extends AnyTType>(element: T, options?: Simplify<TOptions>): TSet<T> {
