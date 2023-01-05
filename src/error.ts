@@ -105,9 +105,11 @@ export type TInvalidNumberIssue = TIssueBase<
     }
   | { readonly check: 'integer' }
   | { readonly check: 'positive' }
+  | { readonly check: 'nonpositive' }
   | { readonly check: 'negative' }
+  | { readonly check: 'nonnegative' }
   | { readonly check: 'finite' }
-  | { readonly check: 'safeInteger' }
+  | { readonly check: 'unsafe' }
   | { readonly check: 'multipleOf'; readonly expected: number; readonly received: number }
 >
 
