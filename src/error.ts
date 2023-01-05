@@ -2,10 +2,10 @@ import safeJsonStringify from 'safe-json-stringify'
 import {
   getGlobal,
   type AnyParseContext,
-  type AnyTType,
+  type AnyTTypeBase,
   type ParsePath,
   type Primitive,
-  type Simplify,
+  type SimplifyDeep,
   type StripKey,
   type TEnumValues,
   type TParsedType,
@@ -22,16 +22,19 @@ export enum TIssueKind {
   InvalidEnumValue = 'invalid_enum_value',
   InvalidString = 'invalid_string',
   InvalidNumber = 'invalid_number',
+  InvalidBuffer = 'invalid_buffer',
+  InvalidDate = 'invalid_date',
   InvalidArray = 'invalid_array',
   InvalidTuple = 'invalid_tuple',
   InvalidSet = 'invalid_set',
+  InvalidInstance = 'invalid_instance',
   UnrecognizedKeys = 'unrecognized_keys',
   InvalidUnion = 'invalid_union',
   InvalidIntersection = 'invalid_intersection',
   Forbidden = 'forbidden',
 }
 
-export type TIssueBase<K extends TIssueKind, P extends Record<string, unknown> | undefined> = Simplify<
+export type TIssueBase<K extends TIssueKind, P extends Record<string, unknown> | undefined> = SimplifyDeep<
   {
     readonly kind: K
     readonly path: ParsePath
@@ -79,18 +82,20 @@ export type TInvalidStringIssue = TIssueBase<
       readonly expected: { readonly pattern: RegExp; readonly name: string; readonly replacement: string }
       readonly received: string
     }
+  | { readonly check: 'alphanum'; readonly received: string }
   | { readonly check: 'email'; readonly received: string }
   | { readonly check: 'url'; readonly received: string }
   | { readonly check: 'cuid'; readonly received: string }
   | { readonly check: 'uuid'; readonly received: string }
-  | { readonly check: 'isoDuration'; readonly received: string }
+  | { readonly check: 'iso_date'; readonly received: string }
+  | { readonly check: 'iso_duration'; readonly received: string }
   | {
       readonly check: 'base64'
       readonly expected: { readonly paddingRequired: boolean; readonly urlSafe: boolean }
       readonly received: string
     }
-  | { readonly check: 'startsWith'; readonly expected: string; readonly received: string }
-  | { readonly check: 'endsWith'; readonly expected: string; readonly received: string }
+  | { readonly check: 'starts_with'; readonly expected: string; readonly received: string }
+  | { readonly check: 'ends_with'; readonly expected: string; readonly received: string }
   | {
       readonly check: 'contains'
       readonly expected: string
@@ -110,14 +115,59 @@ export type TInvalidNumberIssue = TIssueBase<
       readonly expected: { readonly value: number; readonly inclusive: boolean }
       readonly received: number
     }
-  | { readonly check: 'integer' }
-  | { readonly check: 'positive' }
-  | { readonly check: 'nonpositive' }
-  | { readonly check: 'negative' }
-  | { readonly check: 'nonnegative' }
-  | { readonly check: 'finite' }
-  | { readonly check: 'unsafe' }
-  | { readonly check: 'multipleOf'; readonly expected: number; readonly received: number }
+  | {
+      readonly check: 'range'
+      readonly expected: {
+        readonly min: { readonly value: number; readonly inclusive: boolean }
+        readonly max: { readonly value: number; readonly inclusive: boolean }
+      }
+      readonly received: number
+    }
+  | { readonly check: 'integer'; readonly received: number }
+  | { readonly check: 'positive'; readonly received: number }
+  | { readonly check: 'nonpositive'; readonly received: number }
+  | { readonly check: 'negative'; readonly received: number }
+  | { readonly check: 'nonnegative'; readonly received: number }
+  | { readonly check: 'finite'; readonly received: number }
+  | { readonly check: 'port'; readonly received: number }
+  | { readonly check: 'multiple'; readonly expected: number; readonly received: number }
+>
+
+export type TInvalidBufferIssue = TIssueBase<
+  TIssueKind.InvalidBuffer,
+  | {
+      readonly check: 'min'
+      readonly expected: { readonly value: number; readonly inclusive: boolean }
+      readonly received: number
+    }
+  | {
+      readonly check: 'max'
+      readonly expected: { readonly value: number; readonly inclusive: boolean }
+      readonly received: number
+    }
+  | { readonly check: 'length'; readonly expected: number; readonly received: number }
+>
+
+export type TInvalidDateIssue = TIssueBase<
+  TIssueKind.InvalidDate,
+  | {
+      readonly check: 'min'
+      readonly expected: { readonly value: Date | 'now'; readonly inclusive: boolean }
+      readonly received: Date
+    }
+  | {
+      readonly check: 'max'
+      readonly expected: { readonly value: Date | 'now'; readonly inclusive: boolean }
+      readonly received: Date
+    }
+  | {
+      readonly check: 'range'
+      readonly expected: {
+        readonly min: { readonly value: Date | 'now'; readonly inclusive: boolean }
+        readonly max: { readonly value: Date | 'now'; readonly inclusive: boolean }
+      }
+      readonly received: Date
+    }
 >
 
 export type TInvalidArrayIssue = TIssueBase<
@@ -157,6 +207,8 @@ export type TInvalidSetIssue = TIssueBase<
   | { readonly check: 'size'; readonly expected: number; readonly received: number }
 >
 
+export type TInvalidInstanceIssue = TIssueBase<TIssueKind.InvalidInstance, { readonly expected: string }>
+
 export type TUrecognizedKeysIssue = TIssueBase<TIssueKind.UnrecognizedKeys, { readonly keys: readonly string[] }>
 
 export type TInvalidUnionIssue = TIssueBase<TIssueKind.InvalidUnion, { readonly issues: readonly TIssue[] }>
@@ -172,9 +224,12 @@ export type TIssue =
   | TInvalidEnumValueIssue
   | TInvalidStringIssue
   | TInvalidNumberIssue
+  | TInvalidBufferIssue
+  | TInvalidDateIssue
   | TInvalidArrayIssue
   | TInvalidTupleIssue
   | TInvalidSetIssue
+  | TInvalidInstanceIssue
   | TUrecognizedKeysIssue
   | TInvalidUnionIssue
   | TInvalidIntersectionIssue
@@ -293,10 +348,10 @@ export const resolveErrorMaps = (maps: ReadonlyArray<TErrorMap | undefined>): TE
 }
 
 export class TError<I> extends Error {
-  private readonly _schema: AnyTType<unknown, I>
+  private readonly _schema: AnyTTypeBase<unknown, I>
   private readonly _issues: readonly TIssue[]
 
-  constructor(schema: AnyTType<unknown, I>, issues: readonly TIssue[]) {
+  constructor(schema: AnyTTypeBase<unknown, I>, issues: readonly TIssue[]) {
     super()
     this._schema = schema
     this._issues = issues
@@ -310,11 +365,11 @@ export class TError<I> extends Error {
     return getGlobal().getErrorFormatter()(this.issues)
   }
 
-  get schema(): AnyTType<unknown, I> {
+  get schema(): AnyTTypeBase<unknown, I> {
     return this._schema
   }
 
-  get origin(): AnyTType<unknown, I> {
+  get origin(): AnyTTypeBase<unknown, I> {
     return this.schema
   }
 

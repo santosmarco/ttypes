@@ -1,4 +1,4 @@
-import { t, type ShapePaths, type ReachSchema } from './index'
+import { t, type ObjectShapePaths, type ReachSchema } from './index'
 
 const a = t
   .object({
@@ -41,7 +41,11 @@ const a = t
 
 console.log(a.shape)
 
-type c = ShapePaths<typeof a.shape>
+const bool = console.log(t.coerce.bigint().parse(false))
+type b = t.output<typeof bool>
+type bb = t.input<typeof bool>
+
+type c = ObjectShapePaths<typeof a.shape>
 
 type cc = ReachSchema<'d.j.3[0]', typeof a.shape>
 

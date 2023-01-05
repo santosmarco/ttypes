@@ -24,7 +24,11 @@ export type BuiltIn =
 export type Defined<T> = T extends undefined ? never : T
 export type Equals<A, B> = (<X>() => X extends A ? 1 : 0) extends <Y>() => Y extends B ? 1 : 0 ? 1 : 0
 export type Merge<A, B> = Omit<A, keyof B> & B
-export type Simplify<T> = { 0: T extends BuiltIn ? T : { [K in keyof T]: Simplify<T[K]> }; 1: T }[Equals<T, unknown>]
+export type SimplifyFlat<T> = { 0: T extends BuiltIn ? T : { [K in keyof T]: T[K] }; 1: T }[Equals<T, unknown>]
+export type SimplifyDeep<T> = { 0: T extends BuiltIn ? T : { [K in keyof T]: SimplifyDeep<T[K]> }; 1: T }[Equals<
+  T,
+  unknown
+>]
 export type StrictOmit<T, K extends keyof T> = Omit<T, K>
 export type StripKey<T, K extends keyof T> = T extends unknown ? StrictOmit<T, K> : never
 export type LooseStripKey<T, K extends PropertyKey> = T extends unknown ? Omit<T, K> : never
@@ -33,6 +37,7 @@ export type ValueOf<T> = T[keyof T]
 export type OmitIndexSignature<T> = { [K in keyof T as {} extends Record<K, unknown> ? never : K]: T[K] }
 export type ConditionalKeys<T, Condition> = NonNullable<{ [K in keyof T]: T[K] extends Condition ? K : never }[keyof T]>
 export type ConditionalOmit<T, Condition> = StrictOmit<T, ConditionalKeys<T, Condition>>
+export type LiteralUnion<T, U extends Primitive> = T | (U & Record<never, never>)
 export type UnionToIntersection<T> = (T extends unknown ? (x: T) => void : never) extends (
   i: infer Intersection
 ) => void
@@ -69,6 +74,11 @@ export type Literalize<T extends Primitive> = T extends string
   : T extends number | boolean | null | undefined
   ? `${T}`
   : never
+type _NarrowRaw<T> =
+  | (T extends [] ? [] : never)
+  | (T extends string | number | bigint | boolean ? T : never)
+  | { [K in keyof T]: T[K] extends Function ? T[K] : _NarrowRaw<T[K]> }
+export type Narrow<T> = Try<T, [], _NarrowRaw<T>>
 
 export const literalize = <T extends Primitive>(value: T): Literalize<T> =>
   ((): string => {

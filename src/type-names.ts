@@ -6,6 +6,7 @@ import type {
   AnyTDefined,
   AnyTEnum,
   AnyTFunction,
+  AnyTInstanceOf,
   AnyTIntersection,
   AnyTLazy,
   AnyTLiteral,
@@ -28,10 +29,13 @@ import type {
   TBuffer,
   TDate,
   TFalse,
+  TFalsy,
   TNaN,
   TNever,
   TNull,
   TNumber,
+  TPrimitive,
+  TPropertyKey,
   TString,
   TSymbol,
   TTrue,
@@ -57,7 +61,9 @@ export enum TTypeName {
   Defined = 'TDefined',
   Enum = 'TEnum',
   False = 'TFalse',
+  Falsy = 'TFalsy',
   Function = 'TFunction',
+  InstanceOf = 'TInstanceOf',
   Intersection = 'TIntersection',
   Lazy = 'TLazy',
   Literal = 'TLiteral',
@@ -71,7 +77,9 @@ export enum TTypeName {
   Object = 'TObject',
   Optional = 'TOptional',
   Pipeline = 'TPipeline',
+  Primitive = 'TPrimitive',
   Promise = 'TPromise',
+  PropertyKey = 'TPropertyKey',
   Readonly = 'TReadonly',
   Record = 'TRecord',
   Ref = 'TRef',
@@ -96,9 +104,12 @@ export type TTypeNameMap<T extends TTypeName> = {
   [TTypeName.Catch]: AnyTCatch
   [TTypeName.Date]: TDate
   [TTypeName.Default]: AnyTDefault
+  [TTypeName.Defined]: AnyTDefined
   [TTypeName.Enum]: AnyTEnum
   [TTypeName.False]: TFalse
+  [TTypeName.Falsy]: TFalsy
   [TTypeName.Function]: AnyTFunction
+  [TTypeName.InstanceOf]: AnyTInstanceOf
   [TTypeName.Intersection]: AnyTIntersection
   [TTypeName.Lazy]: AnyTLazy
   [TTypeName.Literal]: AnyTLiteral
@@ -112,10 +123,11 @@ export type TTypeNameMap<T extends TTypeName> = {
   [TTypeName.Object]: SomeTObject
   [TTypeName.Optional]: AnyTOptional
   [TTypeName.Pipeline]: AnyTPipeline
+  [TTypeName.Primitive]: TPrimitive
   [TTypeName.Promise]: AnyTPromise
+  [TTypeName.PropertyKey]: TPropertyKey
   [TTypeName.Readonly]: AnyTReadonly
   [TTypeName.Record]: AnyTRecord
-  [TTypeName.Defined]: AnyTDefined
   [TTypeName.Ref]: AnyTRef
   [TTypeName.Set]: AnyTSet
   [TTypeName.String]: TString
