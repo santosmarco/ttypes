@@ -14,6 +14,7 @@ export enum TIssueKind {
   InvalidLiteral = 'invalid_literal',
   InvalidEnumValue = 'invalid_enum_value',
   InvalidString = 'invalid_string',
+  InvalidNumber = 'invalid_number',
   InvalidArray = 'invalid_array',
   InvalidTuple = 'invalid_tuple',
   InvalidSet = 'invalid_set',
@@ -90,6 +91,26 @@ export type TInvalidStringIssue = TIssueBase<
     }
 >
 
+export type TInvalidNumberIssue = TIssueBase<
+  TIssueKind.InvalidNumber,
+  | {
+      readonly check: 'min'
+      readonly expected: { readonly value: number; readonly inclusive: boolean }
+      readonly received: number
+    }
+  | {
+      readonly check: 'max'
+      readonly expected: { readonly value: number; readonly inclusive: boolean }
+      readonly received: number
+    }
+  | { readonly check: 'integer' }
+  | { readonly check: 'positive' }
+  | { readonly check: 'negative' }
+  | { readonly check: 'finite' }
+  | { readonly check: 'safeInteger' }
+  | { readonly check: 'multipleOf'; readonly expected: number; readonly received: number }
+>
+
 export type TInvalidArrayIssue = TIssueBase<
   TIssueKind.InvalidArray,
   | {
@@ -141,6 +162,7 @@ export type TIssue =
   | TInvalidLiteralIssue
   | TInvalidEnumValueIssue
   | TInvalidStringIssue
+  | TInvalidNumberIssue
   | TInvalidArrayIssue
   | TInvalidTupleIssue
   | TInvalidSetIssue

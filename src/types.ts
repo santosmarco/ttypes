@@ -2,7 +2,7 @@ import { deepEqual } from 'fast-equals'
 import memoize from 'micro-memoize'
 import { nanoid } from 'nanoid'
 import type { CamelCase, NonNegativeInteger, UnionToIntersection } from 'type-fest'
-import { TError, TIssueKind, type TErrorMap, type TInvalidStringIssue } from './error'
+import { TError, TIssueKind, type TErrorMap, type TInvalidStringIssue, type TInvalidNumberIssue } from './error'
 import { getGlobal, type GlobalOptions } from './global'
 import {
   AsyncParseContext,
@@ -378,7 +378,7 @@ export abstract class TType<O, D extends TDef, I = O> {
     return types.includes(this.typeName)
   }
 
-  private _construct(def?: D): this {
+  _construct(def?: D): this {
     return Reflect.construct<[def: D], this>(this.constructor as new (def: D) => this, [{ ...this._def, ...def }])
   }
 }
@@ -390,23 +390,38 @@ export type InputOf<T extends AnyTType> = T['$I']
 
 /* ------------------------------------------------------------------------------------------------------------------ */
 
+export const initChecksAssistantFor = <
+  T extends TType<
+    unknown,
+    TDef & { readonly checks: ReadonlyArray<{ readonly check: string; readonly [x: string]: unknown }> }
+  >
+>(
+  type: T
+): {
+  add(check: T['_def']['checks'][number]): T
+  remove(kind: T['_def']['checks'][number]['check']): T
+  checkExists(kind: T['_def']['checks'][number]['check']): boolean
+} => ({
+  add(check): T {
+    return type._construct({
+      ...type._def,
+      checks: [...type._def.checks, check].filter((c, i, arr) => arr.findIndex((c2) => c2.check === c.check) === i),
+    })
+  },
+  remove(kind): T {
+    return type._construct({ ...type._def, checks: type._def.checks.filter((check) => check.check !== kind) })
+  },
+  checkExists(kind): boolean {
+    return type._def.checks.some((check) => check.check === kind)
+  },
+})
+
 /* ------------------------------------------------------------------------------------------------------------------ */
 /*                                                        TAny                                                        */
 /* ------------------------------------------------------------------------------------------------------------------ */
 
 export interface TAnyDef extends TDef {
   readonly typeName: TTypeName.Any
-}
-
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-export class TAny extends TType<any, TAnyDef> {
-  _parse(ctx: ParseContextOf<this>): ParseResultOf<this> {
-    return OK(ctx.data)
-  }
-
-  static create(options?: Simplify<TOptions>): TAny {
-    return new TAny({ typeName: TTypeName.Any, options: { ...options }, isOptional: true, isNullable: true })
-  }
 }
 
 /* ------------------------------------------------------------------------------------------------------------------ */
@@ -659,103 +674,104 @@ export class TString<
   min<V extends number>(
     value: NonNegativeInteger<V>,
     options?: { readonly inclusive?: boolean; readonly message?: string }
-  ): TString<T, C> {
-    return this._addCheck({
-      check: 'min',
-      expected: { value, inclusive: options?.inclusive ?? true },
-      message: options?.message,
-    })._removeCheck('length')
+  ): this {
+    return this._checks
+      .add({
+        check: 'min',
+        expected: { value, inclusive: options?.inclusive ?? true },
+        message: options?.message,
+      })
+      ._checks.remove('length')
   }
 
   max<V extends number>(
     value: NonNegativeInteger<V>,
     options?: { readonly inclusive?: boolean; readonly message?: string }
-  ): TString<T, C> {
-    return this._addCheck({
-      check: 'max',
-      expected: { value, inclusive: options?.inclusive ?? true },
-      message: options?.message,
-    })._removeCheck('length')
+  ): this {
+    return this._checks
+      .add({
+        check: 'max',
+        expected: { value, inclusive: options?.inclusive ?? true },
+        message: options?.message,
+      })
+      ._checks.remove('length')
   }
 
-  length<L extends number>(length: NonNegativeInteger<L>, options?: { readonly message?: string }): TString<T, C> {
-    return this._addCheck({ check: 'length', expected: length, message: options?.message })
-      ._removeCheck('min')
-      ._removeCheck('max')
+  length<L extends number>(length: NonNegativeInteger<L>, options?: { readonly message?: string }): this {
+    return this._checks
+      .add({ check: 'length', expected: length, message: options?.message })
+      ._checks.remove('min')
+      ._checks.remove('max')
   }
 
   /* ------------------------------------------------ Pattern checks ------------------------------------------------ */
 
-  pattern(pattern: RegExp, options?: { readonly name?: string; readonly message?: string }): TString<T, C> {
-    return this._addCheck({
+  pattern(pattern: RegExp, options?: { readonly name?: string; readonly message?: string }): this {
+    return this._checks.add({
       check: 'pattern',
       expected: { pattern, name: options?.name ?? pattern.source },
       message: options?.message,
     })
   }
 
-  regex(pattern: RegExp, options?: { readonly name?: string; readonly message?: string }): TString<T, C> {
+  regex(pattern: RegExp, options?: { readonly name?: string; readonly message?: string }): this {
     return this.pattern(pattern, options)
   }
 
-  replace(
-    pattern: RegExp,
-    replacement: string,
-    options?: { readonly name?: string; readonly message?: string }
-  ): TString<T, C> {
-    return this._addCheck({
+  replace(pattern: RegExp, replacement: string, options?: { readonly name?: string; readonly message?: string }): this {
+    return this._checks.add({
       check: 'replace',
       expected: { pattern, replacement, name: options?.name ?? pattern.source },
       message: options?.message,
     })
   }
 
-  email(options?: { readonly message?: string }): TString<T, C> {
-    return this._addCheck({ check: 'email', message: options?.message })
+  email(options?: { readonly message?: string }): this {
+    return this._checks.add({ check: 'email', message: options?.message })
   }
 
   get isEmail(): boolean {
-    return this._checkExists('email')
+    return this._checks.checkExists('email')
   }
 
-  url(options?: { readonly message?: string }): TString<T, C> {
-    return this._addCheck({ check: 'url', message: options?.message })
+  url(options?: { readonly message?: string }): this {
+    return this._checks.add({ check: 'url', message: options?.message })
   }
 
   get isUrl(): boolean {
-    return this._checkExists('url')
+    return this._checks.checkExists('url')
   }
 
-  cuid(options?: { readonly message?: string }): TString<T, C> {
-    return this._addCheck({ check: 'cuid', message: options?.message })
+  cuid(options?: { readonly message?: string }): this {
+    return this._checks.add({ check: 'cuid', message: options?.message })
   }
 
   get isCuid(): boolean {
-    return this._checkExists('cuid')
+    return this._checks.checkExists('cuid')
   }
 
-  uuid(options?: { readonly message?: string }): TString<T, C> {
-    return this._addCheck({ check: 'uuid', message: options?.message })
+  uuid(options?: { readonly message?: string }): this {
+    return this._checks.add({ check: 'uuid', message: options?.message })
   }
 
   get isUuid(): boolean {
-    return this._checkExists('uuid')
+    return this._checks.checkExists('uuid')
   }
 
-  isoDuration(options?: { readonly message?: string }): TString<T, C> {
-    return this._addCheck({ check: 'isoDuration', message: options?.message })
+  isoDuration(options?: { readonly message?: string }): this {
+    return this._checks.add({ check: 'isoDuration', message: options?.message })
   }
 
   get isIsoDuration(): boolean {
-    return this._checkExists('isoDuration')
+    return this._checks.checkExists('isoDuration')
   }
 
   base64(options?: {
     readonly paddingRequired?: boolean
     readonly urlSafe?: boolean
     readonly message?: string
-  }): TString<T, C> {
-    return this._addCheck({
+  }): this {
+    return this._checks.add({
       check: 'base64',
       expected: { paddingRequired: options?.paddingRequired ?? true, urlSafe: options?.urlSafe ?? true },
       message: options?.message,
@@ -763,19 +779,19 @@ export class TString<
   }
 
   get isBase64(): boolean {
-    return this._checkExists('base64')
+    return this._checks.checkExists('base64')
   }
 
-  startsWith(prefix: string, options?: { readonly message?: string }): TString<T, C> {
-    return this._addCheck({ check: 'startsWith', expected: prefix, message: options?.message })
+  startsWith(prefix: string, options?: { readonly message?: string }): this {
+    return this._checks.add({ check: 'startsWith', expected: prefix, message: options?.message })
   }
 
-  endsWith(suffix: string, options?: { readonly message?: string }): TString<T, C> {
-    return this._addCheck({ check: 'endsWith', expected: suffix, message: options?.message })
+  endsWith(suffix: string, options?: { readonly message?: string }): this {
+    return this._checks.add({ check: 'endsWith', expected: suffix, message: options?.message })
   }
 
-  constains(substring: string, options?: { readonly message?: string }): TString<T, C> {
-    return this._addCheck({ check: 'contains', expected: substring, message: options?.message })
+  constains(substring: string, options?: { readonly message?: string }): this {
+    return this._checks.add({ check: 'contains', expected: substring, message: options?.message })
   }
 
   /* -------------------------------------------------- Transforms -------------------------------------------------- */
@@ -802,20 +818,7 @@ export class TString<
 
   /* ---------------------------------------------------------------------------------------------------------------- */
 
-  private _addCheck(check: TStringDef['checks'][number]): TString<T, C> {
-    return new TString({
-      ...this._def,
-      checks: [...this._def.checks, check].filter((c, i, arr) => arr.findIndex((c2) => c2.check === c.check) === i),
-    })
-  }
-
-  private _removeCheck(kind: TStringDef['checks'][number]['check']): TString<T, C> {
-    return new TString({ ...this._def, checks: this._def.checks.filter((check) => check.check !== kind) })
-  }
-
-  private _checkExists(kind: TStringDef['checks'][number]['check']): boolean {
-    return this._def.checks.some((check) => check.check === kind)
-  }
+  private readonly _checks = initChecksAssistantFor(this)
 
   private _addTransform<T_ extends TStringTransform>(transform: T_): TString<[...T, T_], C> {
     return new TString({
@@ -823,6 +826,8 @@ export class TString<
       transforms: [...new Set([...this._def.transforms, transform])],
     })
   }
+
+  /* ---------------------------------------------------------------------------------------------------------------- */
 
   static create(options?: Simplify<TOptions>): TString<[], false> {
     return new TString({
@@ -869,6 +874,10 @@ export class TString<
 
 export interface TNumberDef extends TDef {
   readonly typeName: TTypeName.Number
+  readonly checks: ReadonlyArray<
+    LooseStripKey<TInvalidNumberIssue['payload'], 'received'> & { readonly message: string | undefined }
+  >
+  readonly coerce: boolean
 }
 
 export class TNumber extends TType<number, TNumberDef> {
@@ -881,7 +890,7 @@ export class TNumber extends TType<number, TNumberDef> {
   }
 
   static create(options?: Simplify<TOptions>): TNumber {
-    return new TNumber({ typeName: TTypeName.Number, options: { ...options } })
+    return new TNumber({ typeName: TTypeName.Number, checks: [], coerce: false, options: { ...options } })
   }
 }
 
