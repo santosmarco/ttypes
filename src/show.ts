@@ -6,8 +6,8 @@ import {
   type AnyTType,
   type TEnumValues,
   type TLiteralValue,
-  type TObject,
   type TObjectShape,
+  type TArrayCardinality,
 } from './types'
 
 export const TShow = (type: AnyTType, options?: { readonly parens?: boolean }): string => {
@@ -79,7 +79,7 @@ export const TShow = (type: AnyTType, options?: { readonly parens?: boolean }): 
     return {
       [TTypeName.Array]: TShow.Array,
       [TTypeName.Set]: TShow.Set,
-    }[type.typeName](type.element)
+    }[type.typeName](type.element, 'cardinality' in type._def ? type._def.cardinality : undefined)
   }
 
   if (type.isT(TTypeName.Map, TTypeName.Record)) {
@@ -106,7 +106,7 @@ export const TShow = (type: AnyTType, options?: { readonly parens?: boolean }): 
   }
 
   if (type.isT(TTypeName.Object)) {
-    return TShow.Object(type)
+    return TShow.Object(type.shape)
   }
 
   if (type.isT(TTypeName.Pipeline)) {
@@ -153,13 +153,16 @@ TShow.Readonly = (underlying: AnyTType): string => {
   }
 
   if (underlying.isT(TTypeName.Object)) {
-    return TShow(underlying).replace(/(\w*\??:)/g, 'readonly $1')
+    return TShow(underlying).replace(/^ {2}(\w*\??:)/gm, '  readonly $1')
   }
 
   return `Readonly<${TShow(underlying)}>`
 }
 
-TShow.Array = (element: AnyTType): string => `${TShow(element)}[]`
+TShow.Array = (element: AnyTType, cardinality: TArrayCardinality | undefined): string =>
+  cardinality === 'atleastone'
+    ? `[${TShow(element)}, ...${TShow(element, { parens: true })}[]]`
+    : `${TShow(element, { parens: true })}[]`
 TShow.Set = (element: AnyTType): string => `Set<${TShow(element)}>`
 TShow.Tuple = (items: readonly AnyTType[], rest: AnyTType | undefined): string =>
   `[${items.map((i) => TShow(i)).join(', ')}${rest ? `, ...${TShow(rest, { parens: true })}[]` : ''}]`
@@ -173,10 +176,15 @@ TShow.Enum = (values: TEnumValues): string => TShow._unionize(values.map(literal
 TShow.Brand = (underlying: AnyTType, brand: PropertyKey): string =>
   `Branded<${TShow(underlying)}, ${literalize(brand)}>`
 
-TShow.Object = (type: TObject<TObjectShape>): string =>
-  `{ ${Object.entries(type.shape)
-    .map(([k, v]) => `${k}${v.isOptional() ? '?' : ''}: ${TShow(v)}`)
-    .join('; ')} }`
+TShow.Object = (shape: TObjectShape, options = { padding: 2 }): string =>
+  `{\n${Object.entries(shape)
+    .map(
+      ([k, v]) =>
+        `${' '.repeat(options.padding)}${k}${v.isOptional() ? '?' : ''}: ${
+          v.isT(TTypeName.Object) ? TShow.Object(v.shape, { padding: options.padding + 2 }) : TShow(v)
+        }`
+    )
+    .join(';\n')}\n${' '.repeat(options.padding - 2)}}`
 
 TShow.Pipeline = (a: AnyTType, b: AnyTType): string => `Pipeline<${TShow(a)}, ${TShow(b)}>`
 

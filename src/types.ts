@@ -911,14 +911,15 @@ export const flattenTArray = <T extends AnyTArray>(array: T): FlattenTArray<T> =
 export const flattenTArrayDeep = <T extends AnyTArray>(array: T): FlattenTArrayDeep<T> =>
   (array.element instanceof TArray ? flattenTArrayDeep(array.element) : array) as FlattenTArrayDeep<T>
 
-export interface TArrayDef<T extends AnyTType> extends TIterableDef<T> {
+export interface TArrayDef<T extends AnyTType, C extends TArrayCardinality> extends TIterableDef<T> {
   readonly typeName: TTypeName.Array
+  readonly cardinality: C
   readonly length?: { readonly value: number; readonly message: string | undefined }
   readonly unique?: { readonly message: string | undefined }
 }
 
 export class TArray<T extends AnyTType, C extends TArrayCardinality = 'many'>
-  extends TType<TArrayIO<T, C>, TArrayDef<T>, TArrayIO<T, C, '$I'>>
+  extends TType<TArrayIO<T, C>, TArrayDef<T, C>, TArrayIO<T, C, '$I'>>
   implements TIterable<T>
 {
   _parse(ctx: ParseContextOf<this>): ParseResultOf<this> {
@@ -1039,21 +1040,12 @@ export class TArray<T extends AnyTType, C extends TArrayCardinality = 'many'>
 
   nonempty(options?: { readonly message?: string }): TArray<T, 'atleastone'> {
     const { minItems } = this._def
-    if (!minItems) {
-      return this.min(1, { inclusive: true, message: options?.message }) as TArray<T, 'atleastone'>
+    const updatedMin = minItems && minItems.value > 1 ? minItems : { value: 1, inclusive: true }
+    const minItemsWithMsg = {
+      ...updatedMin,
+      message: options?.message ?? ('message' in updatedMin ? updatedMin.message : undefined),
     }
-
-    const updatedMin = minItems.value >= 1 ? minItems.value : 1
-
-    return new TArray({
-      ...this._def,
-      length: undefined,
-      minItems: {
-        value: updatedMin,
-        inclusive: updatedMin > 1 ? minItems.inclusive : true,
-        message: options?.message ?? minItems.message,
-      },
-    })
+    return new TArray({ ...this._def, cardinality: 'atleastone', length: undefined, minItems: minItemsWithMsg })
   }
 
   sparse(enabled?: true): TArray<TOptional<T>, C>
@@ -1083,7 +1075,7 @@ export class TArray<T extends AnyTType, C extends TArrayCardinality = 'many'>
   }
 
   static create<T extends AnyTType>(element: T, options?: Simplify<TOptions>): TArray<T> {
-    return new TArray({ typeName: TTypeName.Array, element, options: { ...options } })
+    return new TArray({ typeName: TTypeName.Array, element, cardinality: 'many', options: { ...options } })
   }
 }
 
