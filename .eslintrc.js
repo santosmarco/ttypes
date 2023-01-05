@@ -18,6 +18,7 @@ module.exports = {
   },
   plugins: ['prettier'],
   rules: {
+    '@typescript-eslint/ban-types': 'off',
     '@typescript-eslint/consistent-type-assertions': 'off',
     '@typescript-eslint/consistent-type-definitions': ['warn', 'interface'],
     '@typescript-eslint/consistent-type-imports': 'error',

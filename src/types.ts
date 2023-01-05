@@ -28,9 +28,9 @@ import {
   type BuiltIn,
   type Defined,
   type Equals,
+  type LooseStripKey,
   type Merge,
   type Simplify,
-  type StripKey,
 } from './utils'
 
 /* ---------------------------------------------------- TTypeName --------------------------------------------------- */
@@ -433,7 +433,6 @@ export class TUnknown extends TType<unknown, TUnknownDef> {
 
 export type TStringTransform = 'trim' | 'lowercase' | 'uppercase' | 'capitalize' | 'uncapitalize'
 
-// eslint-disable-next-line @typescript-eslint/ban-types
 export type TStringIO<T extends readonly TStringTransform[]> = T extends readonly []
   ? string
   : T extends readonly [infer H extends TStringTransform, ...infer R extends TStringTransform[]]
@@ -447,21 +446,32 @@ export type TStringIO<T extends readonly TStringTransform[]> = T extends readonl
       }[Exclude<H, 'trim'>]
   : never
 
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+export type TStringInput<C extends boolean> = C extends true ? any : string
+
 export interface TStringDef extends TDef {
   readonly typeName: TTypeName.String
   readonly transforms: readonly TStringTransform[]
   readonly checks: ReadonlyArray<
-    StripKey<TInvalidStringIssue['payload'], 'received'> & { readonly message: string | undefined }
+    LooseStripKey<TInvalidStringIssue['payload'], 'received'> & { readonly message: string | undefined }
   >
+  readonly coerce: boolean
 }
 
-export class TString<T extends readonly TStringTransform[]> extends TType<TStringIO<T>, TStringDef> {
+export class TString<
+  T extends readonly TStringTransform[] = readonly TStringTransform[],
+  C extends boolean = boolean
+> extends TType<TStringIO<T>, TStringDef, TStringInput<C>> {
   _parse(ctx: ParseContextOf<this>): ParseResultOf<this> {
+    const { transforms, checks, coerce } = this._def
+
+    if (coerce) {
+      ctx.setData(String(ctx.data))
+    }
+
     if (typeof ctx.data !== 'string') {
       return ctx.invalidType({ expected: TParsedType.String }).abort()
     }
-
-    const { transforms, checks } = this._def
 
     for (const transform of transforms) {
       switch (transform) {
@@ -638,10 +648,18 @@ export class TString<T extends readonly TStringTransform[]> extends TType<TStrin
     return OK(ctx.data as OutputOf<this>)
   }
 
+  /* ---------------------------------------------------- Coercion ---------------------------------------------------- */
+
+  coerce<V extends boolean = true>(value = true as V): TString<T, V> {
+    return new TString({ ...this._def, coerce: value })
+  }
+
+  /* -------------------------------------------- Character count checks -------------------------------------------- */
+
   min<V extends number>(
     value: NonNegativeInteger<V>,
     options?: { readonly inclusive?: boolean; readonly message?: string }
-  ): TString<T> {
+  ): TString<T, C> {
     return this._addCheck({
       check: 'min',
       expected: { value, inclusive: options?.inclusive ?? true },
@@ -652,7 +670,7 @@ export class TString<T extends readonly TStringTransform[]> extends TType<TStrin
   max<V extends number>(
     value: NonNegativeInteger<V>,
     options?: { readonly inclusive?: boolean; readonly message?: string }
-  ): TString<T> {
+  ): TString<T, C> {
     return this._addCheck({
       check: 'max',
       expected: { value, inclusive: options?.inclusive ?? true },
@@ -660,13 +678,15 @@ export class TString<T extends readonly TStringTransform[]> extends TType<TStrin
     })._removeCheck('length')
   }
 
-  length<L extends number>(length: NonNegativeInteger<L>, options?: { readonly message?: string }): TString<T> {
+  length<L extends number>(length: NonNegativeInteger<L>, options?: { readonly message?: string }): TString<T, C> {
     return this._addCheck({ check: 'length', expected: length, message: options?.message })
       ._removeCheck('min')
       ._removeCheck('max')
   }
 
-  pattern(pattern: RegExp, options?: { readonly name?: string; readonly message?: string }): TString<T> {
+  /* ------------------------------------------------ Pattern checks ------------------------------------------------ */
+
+  pattern(pattern: RegExp, options?: { readonly name?: string; readonly message?: string }): TString<T, C> {
     return this._addCheck({
       check: 'pattern',
       expected: { pattern, name: options?.name ?? pattern.source },
@@ -674,11 +694,15 @@ export class TString<T extends readonly TStringTransform[]> extends TType<TStrin
     })
   }
 
+  regex(pattern: RegExp, options?: { readonly name?: string; readonly message?: string }): TString<T, C> {
+    return this.pattern(pattern, options)
+  }
+
   replace(
     pattern: RegExp,
     replacement: string,
     options?: { readonly name?: string; readonly message?: string }
-  ): TString<T> {
+  ): TString<T, C> {
     return this._addCheck({
       check: 'replace',
       expected: { pattern, replacement, name: options?.name ?? pattern.source },
@@ -686,35 +710,51 @@ export class TString<T extends readonly TStringTransform[]> extends TType<TStrin
     })
   }
 
-  regex(pattern: RegExp, options?: { readonly name?: string; readonly message?: string }): TString<T> {
-    return this.pattern(pattern, options)
-  }
-
-  email(options?: { readonly message?: string }): TString<T> {
+  email(options?: { readonly message?: string }): TString<T, C> {
     return this._addCheck({ check: 'email', message: options?.message })
   }
 
-  url(options?: { readonly message?: string }): TString<T> {
+  get isEmail(): boolean {
+    return this._checkExists('email')
+  }
+
+  url(options?: { readonly message?: string }): TString<T, C> {
     return this._addCheck({ check: 'url', message: options?.message })
   }
 
-  cuid(options?: { readonly message?: string }): TString<T> {
+  get isUrl(): boolean {
+    return this._checkExists('url')
+  }
+
+  cuid(options?: { readonly message?: string }): TString<T, C> {
     return this._addCheck({ check: 'cuid', message: options?.message })
   }
 
-  uuid(options?: { readonly message?: string }): TString<T> {
+  get isCuid(): boolean {
+    return this._checkExists('cuid')
+  }
+
+  uuid(options?: { readonly message?: string }): TString<T, C> {
     return this._addCheck({ check: 'uuid', message: options?.message })
   }
 
-  isoDuration(options?: { readonly message?: string }): TString<T> {
+  get isUuid(): boolean {
+    return this._checkExists('uuid')
+  }
+
+  isoDuration(options?: { readonly message?: string }): TString<T, C> {
     return this._addCheck({ check: 'isoDuration', message: options?.message })
+  }
+
+  get isIsoDuration(): boolean {
+    return this._checkExists('isoDuration')
   }
 
   base64(options?: {
     readonly paddingRequired?: boolean
     readonly urlSafe?: boolean
     readonly message?: string
-  }): TString<T> {
+  }): TString<T, C> {
     return this._addCheck({
       check: 'base64',
       expected: { paddingRequired: options?.paddingRequired ?? true, urlSafe: options?.urlSafe ?? true },
@@ -722,58 +762,76 @@ export class TString<T extends readonly TStringTransform[]> extends TType<TStrin
     })
   }
 
-  startsWith(prefix: string, options?: { readonly message?: string }): TString<T> {
+  get isBase64(): boolean {
+    return this._checkExists('base64')
+  }
+
+  startsWith(prefix: string, options?: { readonly message?: string }): TString<T, C> {
     return this._addCheck({ check: 'startsWith', expected: prefix, message: options?.message })
   }
 
-  endsWith(suffix: string, options?: { readonly message?: string }): TString<T> {
+  endsWith(suffix: string, options?: { readonly message?: string }): TString<T, C> {
     return this._addCheck({ check: 'endsWith', expected: suffix, message: options?.message })
   }
 
-  constains(substring: string, options?: { readonly message?: string }): TString<T> {
-    return this._addCheck({ check: 'constains', expected: substring, message: options?.message })
+  constains(substring: string, options?: { readonly message?: string }): TString<T, C> {
+    return this._addCheck({ check: 'contains', expected: substring, message: options?.message })
   }
 
-  trim(): TString<[...T, 'trim']> {
+  /* -------------------------------------------------- Transforms -------------------------------------------------- */
+
+  trim(): TString<[...T, 'trim'], C> {
     return this._addTransform('trim')
   }
 
-  lowercase(): TString<[...T, 'lowercase']> {
+  lowercase(): TString<[...T, 'lowercase'], C> {
     return this._addTransform('lowercase')
   }
 
-  uppercase(): TString<[...T, 'uppercase']> {
+  uppercase(): TString<[...T, 'uppercase'], C> {
     return this._addTransform('uppercase')
   }
 
-  capitalize(): TString<[...T, 'capitalize']> {
+  capitalize(): TString<[...T, 'capitalize'], C> {
     return this._addTransform('capitalize')
   }
 
-  uncapitalize(): TString<[...T, 'uncapitalize']> {
+  uncapitalize(): TString<[...T, 'uncapitalize'], C> {
     return this._addTransform('uncapitalize')
   }
 
-  private _addCheck(check: TStringDef['checks'][number]): TString<T> {
+  /* ---------------------------------------------------------------------------------------------------------------- */
+
+  private _addCheck(check: TStringDef['checks'][number]): TString<T, C> {
     return new TString({
       ...this._def,
       checks: [...this._def.checks, check].filter((c, i, arr) => arr.findIndex((c2) => c2.check === c.check) === i),
     })
   }
 
-  private _removeCheck(kind: TStringDef['checks'][number]['check']): TString<T> {
+  private _removeCheck(kind: TStringDef['checks'][number]['check']): TString<T, C> {
     return new TString({ ...this._def, checks: this._def.checks.filter((check) => check.check !== kind) })
   }
 
-  private _addTransform<T_ extends TStringTransform>(transform: T_): TString<[...T, T_]> {
+  private _checkExists(kind: TStringDef['checks'][number]['check']): boolean {
+    return this._def.checks.some((check) => check.check === kind)
+  }
+
+  private _addTransform<T_ extends TStringTransform>(transform: T_): TString<[...T, T_], C> {
     return new TString({
       ...this._def,
       transforms: [...new Set([...this._def.transforms, transform])],
     })
   }
 
-  static create(options?: Simplify<TOptions>): TString<[]> {
-    return new TString({ typeName: TTypeName.String, checks: [], transforms: [], options: { ...options } })
+  static create(options?: Simplify<TOptions>): TString<[], false> {
+    return new TString({
+      typeName: TTypeName.String,
+      checks: [],
+      transforms: [],
+      coerce: false,
+      options: { ...options },
+    })
   }
 
   private static readonly _internals: {
@@ -793,12 +851,12 @@ export class TString<T extends readonly TStringTransform[]> extends TType<TStrin
       isoDuration: /^P(?!$)(\d+Y)?(\d+M)?(\d+W)?(\d+D)?(T(?=\d)(\d+H)?(\d+M)?(\d+S)?)?$/,
       base64: {
         paddingRequired: {
-          urlSafe: /^(?:[\w\-]{2}[\w\-]{2})*(?:[\w\-]{2}==|[\w\-]{3}=)?$/,
-          urlUnsafe: /^(?:[A-Za-z0-9+\/]{2}[A-Za-z0-9+\/]{2})*(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+\/]{3}=)?$/,
+          urlSafe: /^(?:[\w-]{2}[\w-]{2})*(?:[\w-]{2}==|[\w-]{3}=)?$/,
+          urlUnsafe: /^(?:[A-Za-z0-9+/]{2}[A-Za-z0-9+/]{2})*(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=)?$/,
         },
         paddingNotRequired: {
-          urlSafe: /^(?:[\w\-]{2}[\w\-]{2})*(?:[\w\-]{2}(==)?|[\w\-]{3}=?)?$/,
-          urlUnsafe: /^(?:[A-Za-z0-9+\/]{2}[A-Za-z0-9+\/]{2})*(?:[A-Za-z0-9+/]{2}(==)?|[A-Za-z0-9+\/]{3}=?)?$/,
+          urlSafe: /^(?:[\w-]{2}[\w-]{2})*(?:[\w-]{2}(==)?|[\w-]{3}=?)?$/,
+          urlUnsafe: /^(?:[A-Za-z0-9+/]{2}[A-Za-z0-9+/]{2})*(?:[A-Za-z0-9+/]{2}(==)?|[A-Za-z0-9+/]{3}=?)?$/,
         },
       },
     },
@@ -981,7 +1039,6 @@ export class TBuffer extends TType<Buffer, TBufferDef> {
 /*                                                      TLiteral                                                      */
 /* ------------------------------------------------------------------------------------------------------------------ */
 
-// eslint-disable-next-line @typescript-eslint/ban-types
 export type TLiteralValue = string | number | bigint | boolean | symbol | null | undefined
 
 export type TLiteralOptions = TOptions<{
@@ -1000,8 +1057,7 @@ export type Literalize<T extends TLiteralValue> = T extends string
   ? `${T}n`
   : T extends symbol
   ? `Symbol(${string})`
-  : // eslint-disable-next-line @typescript-eslint/ban-types
-  T extends number | boolean | null | undefined
+  : T extends number | boolean | null | undefined
   ? `${T}`
   : never
 
@@ -1099,7 +1155,6 @@ type UnionToIntersectionFn<T> = (T extends unknown ? (x: () => T) => void : neve
 
 type GetUnionLast<T> = UnionToIntersectionFn<T> extends () => infer Last ? Last : never
 
-// eslint-disable-next-line @typescript-eslint/ban-types
 type UnionToTuple<T, _Acc extends readonly unknown[] = []> = [T] extends [never]
   ? _Acc
   : UnionToTuple<Exclude<T, GetUnionLast<T>>, [GetUnionLast<T>, ..._Acc]>
@@ -1442,19 +1497,16 @@ export type AnyTArray = TArray<AnyTType, TArrayCardinality>
 /*                                                       TTuple                                                       */
 /* ------------------------------------------------------------------------------------------------------------------ */
 
-// eslint-disable-next-line @typescript-eslint/ban-types
 export type TTupleItems = readonly [AnyTType, ...AnyTType[]] | readonly []
 
 export type TTupleIO<
   T extends TTupleItems,
   R extends AnyTType | undefined,
   IO extends '$I' | '$O' = '$O'
-  // eslint-disable-next-line @typescript-eslint/ban-types
 > = T extends readonly []
   ? R extends AnyTType
     ? [...Array<R[IO]>]
-    : // eslint-disable-next-line @typescript-eslint/ban-types
-      []
+    : []
   : T extends readonly [infer Head extends AnyTType, ...infer Rest extends TTupleItems]
   ? [Head[IO], ...TTupleIO<Rest, R, IO>]
   : never
@@ -1958,8 +2010,7 @@ export type TObjectIO<
       ? Record<string, never>
       : unknown)
 > extends infer X
-  ? // eslint-disable-next-line @typescript-eslint/ban-types
-    { 0: X; 1: Record<string, never> }[Equals<X, {}>]
+  ? { 0: X; 1: Record<string, never> }[Equals<X, {}>]
   : never
 
 export type PartialShape<S extends TObjectShape, K extends ReadonlyArray<keyof S> = ReadonlyArray<keyof S>> = {
@@ -2240,7 +2291,6 @@ export interface TNullDef extends TDef {
   readonly typeName: TTypeName.Null
 }
 
-// eslint-disable-next-line @typescript-eslint/ban-types
 export class TNull extends TType<null, TNullDef> {
   _parse(ctx: ParseContextOf<this>): ParseResultOf<this> {
     return ctx.data === null ? OK(null) : ctx.invalidType({ expected: TParsedType.Null }).abort()
@@ -2349,7 +2399,6 @@ export interface TNullableDef<T extends AnyTType> extends TDef {
 }
 
 export class TNullable<T extends AnyTType>
-  // eslint-disable-next-line @typescript-eslint/ban-types
   extends TType<OutputOf<T> | null, TNullableDef<T>, InputOf<T> | null>
   implements TUnwrappable<T>
 {
