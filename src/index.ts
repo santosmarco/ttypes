@@ -1,4 +1,4 @@
-import * as t from './types'
-export * from './types'
+import * as t from './_internal'
+export * from './_internal'
 export { t }
 export default t

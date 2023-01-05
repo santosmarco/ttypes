@@ -1,26 +1,50 @@
-import { t } from './index'
+import { t, type ShapePaths, type ReachSchema } from './index'
 
-const tintersection = t.intersection([
-  t.object({
-    a: t.string(),
-  }),
-  t.object({
-    b: t.string(),
-  }),
-])
-
-type Inter = t.infer<typeof tintersection>
-
-console.log(
-  tintersection.safeParse({
-    a: 'a',
-    b: 2,
+const a = t
+  .object({
+    a: t.number().coerce(),
+    b: t.string().coerce(),
+    c: t.ref('b'),
+    d: t.object({
+      a: t.bigint(),
+      b: t.boolean(),
+      c: t.date(),
+      d: t.literal('a'),
+      e: t.nan(),
+      f: t.symbol(),
+      g: t.buffer(),
+      h: t.array(t.number()),
+      i: t.set(t.number()),
+      j: t.tuple([
+        t.number(),
+        t.string(),
+        t.object({
+          a: t.number(),
+          b: t.nan().optional(),
+        }),
+        t.tuple([t.boolean()]),
+      ]),
+      k: t.record(t.string(), t.number()),
+      l: t.ref('j.3[0]'),
+      dfbfg: t.object({
+        a: t.number(),
+        b: t.string(),
+        asda: t.object({
+          a: t.number(),
+          b: t.nan(),
+        }),
+      }),
+    }),
   })
-)
-const a = t.string().lowercase().capitalize()
-type a = t.infer<typeof a>
+  .pick(['d'])
+  .shape.d.pick(['l'])
 
-const asdsd: a = 'a'
+console.log(a.shape)
 
-console.log(a.hint)
-console.log(t.undefined().required().hint)
+type c = ShapePaths<typeof a.shape>
+
+type cc = ReachSchema<'d.j.3[0]', typeof a.shape>
+
+type adsad = t.infer<typeof a>
+
+console.log(a.parse({ l: true }))

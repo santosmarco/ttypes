@@ -29,6 +29,7 @@ module.exports = {
     'new-cap': 'off',
     'no-case-declarations': 'off',
     complexity: 'off',
+    '@typescript-eslint/no-redeclare': 'off',
   },
   overrides: [
     {

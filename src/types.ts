@@ -1,168 +1,55 @@
 import { deepEqual } from 'fast-equals'
 import memoize from 'micro-memoize'
 import { nanoid } from 'nanoid'
-import type { CamelCase, NonNegativeInteger, UnionToIntersection } from 'type-fest'
-import { TError, TIssueKind, type TErrorMap, type TInvalidStringIssue, type TInvalidNumberIssue } from './error'
-import { getGlobal, type GlobalOptions } from './global'
 import {
   AsyncParseContext,
   OK,
   SyncParseContext,
+  TError,
+  TIssueKind,
   TParsedType,
-  getParsedType,
-  type AsyncParseResultOf,
-  type FailedParseResult,
-  type ParseContextOf,
-  type ParseOptions,
-  type ParseResultOf,
-  type SuccessfulParseResult,
-  type SyncParseResult,
-  type SyncParseResultOf,
-} from './parse'
-import { TShow } from './show'
-import {
+  TShow,
+  TTypeName,
   cloneDeep,
+  getGlobal,
+  getParsedType,
   isArray,
   isAsync,
   isFunction,
+  type AsyncParseResultOf,
   type BuiltIn,
+  type CastToNumber,
+  type ConditionalOmit,
   type Defined,
   type Equals,
+  type FailedParseResult,
   type LooseStripKey,
   type Merge,
+  type NonNegativeInteger,
+  type OmitIndexSignature,
+  type ParseContextOf,
+  type ParseOptions,
+  type ParseResultOf,
+  type Primitive,
+  type Replace,
   type Simplify,
-} from './utils'
-
-/* ---------------------------------------------------- TTypeName --------------------------------------------------- */
-
-export enum TTypeName {
-  Any = 'TAny',
-  Array = 'TArray',
-  BigInt = 'TBigInt',
-  Boolean = 'TBoolean',
-  Brand = 'TBrand',
-  Buffer = 'TBuffer',
-  Catch = 'TCatch',
-  Date = 'TDate',
-  Default = 'TDefault',
-  Enum = 'TEnum',
-  False = 'TFalse',
-  Intersection = 'TIntersection',
-  Lazy = 'TLazy',
-  Literal = 'TLiteral',
-  Map = 'TMap',
-  NaN = 'TNaN',
-  NativeEnum = 'TNativeEnum',
-  Never = 'TNever',
-  Null = 'TNull',
-  Nullable = 'TNullable',
-  Number = 'TNumber',
-  Object = 'TObject',
-  Optional = 'TOptional',
-  Pipeline = 'TPipeline',
-  Promise = 'TPromise',
-  Readonly = 'TReadonly',
-  Record = 'TRecord',
-  Required = 'TRequired',
-  Set = 'TSet',
-  String = 'TString',
-  Symbol = 'TSymbol',
-  True = 'TTrue',
-  Tuple = 'TTuple',
-  Undefined = 'TUndefined',
-  Union = 'TUnion',
-  Unknown = 'TUnknown',
-  Void = 'TVoid',
-}
-
-export type TTypeNameMap<T extends TTypeName> = {
-  [TTypeName.Any]: TAny
-  [TTypeName.Array]: AnyTArray
-  [TTypeName.BigInt]: TBigInt
-  [TTypeName.Boolean]: TBoolean
-  [TTypeName.Brand]: AnyTBrand
-  [TTypeName.Buffer]: TBuffer
-  [TTypeName.Catch]: AnyTCatch
-  [TTypeName.Date]: TDate
-  [TTypeName.Default]: AnyTDefault
-  [TTypeName.Enum]: AnyTEnum
-  [TTypeName.False]: TFalse
-  [TTypeName.Intersection]: AnyTIntersection
-  [TTypeName.Lazy]: AnyTLazy
-  [TTypeName.Literal]: AnyTLiteral
-  [TTypeName.Map]: AnyTMap
-  [TTypeName.NaN]: TNaN
-  [TTypeName.NativeEnum]: AnyTNativeEnum
-  [TTypeName.Never]: TNever
-  [TTypeName.Null]: TNull
-  [TTypeName.Nullable]: AnyTNullable
-  [TTypeName.Number]: TNumber
-  [TTypeName.Object]: AnyTObject
-  [TTypeName.Optional]: AnyTOptional
-  [TTypeName.Pipeline]: AnyTPipeline
-  [TTypeName.Promise]: AnyTPromise
-  [TTypeName.Readonly]: AnyTReadonly
-  [TTypeName.Record]: AnyTRecord
-  [TTypeName.Required]: AnyTRequired
-  [TTypeName.Set]: AnyTSet
-  [TTypeName.String]: TString
-  [TTypeName.Symbol]: TSymbol
-  [TTypeName.True]: TTrue
-  [TTypeName.Tuple]: AnyTTuple
-  [TTypeName.Undefined]: TUndefined
-  [TTypeName.Union]: AnyTUnion
-  [TTypeName.Unknown]: TUnknown
-  [TTypeName.Void]: TVoid
-}[T]
-
-/* ---------------------------------------------------- TOptions ---------------------------------------------------- */
-
-export interface TOptionsOpts {
-  readonly additionalIssueKind?: Exclude<TIssueKind, TIssueKind.Required | TIssueKind.InvalidType>
-}
-
-export interface TOptions<Opts extends TOptionsOpts | undefined = undefined> extends GlobalOptions, ParseOptions {
-  readonly color?: string
-  readonly errorMap?: TErrorMap
-  readonly messages?: {
-    readonly [K in
-      | TIssueKind.Required
-      | TIssueKind.InvalidType
-      | ('additionalIssueKind' extends keyof Opts
-          ? Opts['additionalIssueKind'] & string
-          : never) as CamelCase<K>]?: string
-  }
-}
-
-/* ---------------------------------------------------- TManifest --------------------------------------------------- */
-
-export interface TManifest<T = unknown> {
-  readonly title?: string
-  readonly summary?: string
-  readonly description?: string
-  readonly examples?: readonly T[]
-  readonly tags?: readonly string[]
-  readonly notes?: readonly string[]
-  readonly unit?: string
-  readonly meta?: Readonly<Record<string, unknown>>
-}
-
-/* ------------------------------------------------------ TDef ------------------------------------------------------ */
-
-export interface TDef {
-  readonly typeName: TTypeName
-  readonly options: TOptions
-  readonly manifest?: TManifest
-  readonly isOptional?: boolean
-  readonly isNullable?: boolean
-  readonly isReadonly?: boolean
-}
+  type SuccessfulParseResult,
+  type SyncParseResult,
+  type SyncParseResultOf,
+  type TDef,
+  type TInvalidNumberIssue,
+  type TInvalidStringIssue,
+  type TManifest,
+  type TOptions,
+  type TTypeNameMap,
+  type UnionToIntersection,
+} from './_internal'
 
 /* ------------------------------------------------------------------------------------------------------------------ */
 /*                                                        TType                                                       */
 /* ------------------------------------------------------------------------------------------------------------------ */
 
-export abstract class TType<O, D extends TDef, I = O> {
+export abstract class TTypeBase<O, D extends TDef, I = O> {
   declare readonly $O: O
   declare readonly $I: I
 
@@ -177,53 +64,12 @@ export abstract class TType<O, D extends TDef, I = O> {
       isNullable: def.isNullable ?? false,
       isReadonly: def.isReadonly ?? false,
     })
-
-    this._parse = memoize(this._parse.bind(this), { isEqual: deepEqual })
-    this._parseSync = this._parseSync.bind(this)
-    this._parseAsync = this._parseAsync.bind(this)
-    this.parse = this.parse.bind(this)
-    this.safeParse = this.safeParse.bind(this)
-    this.parseAsync = this.parseAsync.bind(this)
-    this.safeParseAsync = this.safeParseAsync.bind(this)
-    this.guard = this.guard.bind(this)
-    this.options = this.options.bind(this)
-    this.manifest = this.manifest.bind(this)
-    this.describe = this.describe.bind(this)
-    this.optional = this.optional.bind(this)
-    this.nullable = this.nullable.bind(this)
-    this.nullish = this.nullish.bind(this)
-    this.required = this.required.bind(this)
-    this.readonly = this.readonly.bind(this)
-    this.array = this.array.bind(this)
-    this.promise = this.promise.bind(this)
-    this.or = this.or.bind(this)
-    this.and = this.and.bind(this)
-    this.brand = this.brand.bind(this)
-    this.default = this.default.bind(this)
-    this.catch = this.catch.bind(this)
-    this.lazy = this.lazy.bind(this)
-    this.pipe = this.pipe.bind(this)
-    this.clone = this.clone.bind(this)
-    this.isOptional = this.isOptional.bind(this)
-    this.isNullable = this.isNullable.bind(this)
-    this.isNullish = this.isNullish.bind(this)
-    this.isRequired = this.isRequired.bind(this)
-    this.isReadonly = this.isReadonly.bind(this)
-    this.isT = this.isT.bind(this)
-
-    Object.keys(this).forEach((k) => Object.defineProperty(this, k, { enumerable: !/^(?:_|\$)\w*/.exec(k) }))
   }
 
   readonly id: string = nanoid()
 
   get typeName(): D['typeName'] {
     return this._def.typeName
-  }
-
-  get hint(): string {
-    const uncolored = TShow(this)
-    const { colorsEnabled } = { ...getGlobal().getOptions(), ...this._def.options }
-    return colorsEnabled ? TShow.colorize(uncolored) : uncolored
   }
 
   _parseSync(ctx: ParseContextOf<this>): SyncParseResultOf<this> {
@@ -273,6 +119,53 @@ export abstract class TType<O, D extends TDef, I = O> {
   guard(data: unknown, options?: Simplify<ParseOptions>): data is O {
     return this.safeParse(data, options).ok
   }
+}
+
+export abstract class TType<O, D extends TDef, I = O> extends TTypeBase<O, D, I> {
+  protected constructor(def: D) {
+    super(def)
+
+    this._parse = memoize(this._parse.bind(this), { isEqual: deepEqual })
+    this._parseSync = this._parseSync.bind(this)
+    this._parseAsync = this._parseAsync.bind(this)
+    this.parse = this.parse.bind(this)
+    this.safeParse = this.safeParse.bind(this)
+    this.parseAsync = this.parseAsync.bind(this)
+    this.safeParseAsync = this.safeParseAsync.bind(this)
+    this.guard = this.guard.bind(this)
+    this.options = this.options.bind(this)
+    this.manifest = this.manifest.bind(this)
+    this.describe = this.describe.bind(this)
+    this.optional = this.optional.bind(this)
+    this.nullable = this.nullable.bind(this)
+    this.nullish = this.nullish.bind(this)
+    this.defined = this.defined.bind(this)
+    this.readonly = this.readonly.bind(this)
+    this.array = this.array.bind(this)
+    this.promise = this.promise.bind(this)
+    this.or = this.or.bind(this)
+    this.and = this.and.bind(this)
+    this.brand = this.brand.bind(this)
+    this.default = this.default.bind(this)
+    this.catch = this.catch.bind(this)
+    this.lazy = this.lazy.bind(this)
+    this.pipe = this.pipe.bind(this)
+    this.clone = this.clone.bind(this)
+    this.isOptional = this.isOptional.bind(this)
+    this.isNullable = this.isNullable.bind(this)
+    this.isNullish = this.isNullish.bind(this)
+    this.isRequired = this.isRequired.bind(this)
+    this.isReadonly = this.isReadonly.bind(this)
+    this.isT = this.isT.bind(this)
+
+    Object.keys(this).forEach((k) => Object.defineProperty(this, k, { enumerable: !/^(?:_|\$)\w*/.exec(k) }))
+  }
+
+  get hint(): string {
+    const uncolored = TShow(this)
+    const { colorsEnabled } = { ...getGlobal().getOptions(), ...this._def.options }
+    return colorsEnabled ? TShow.colorize(uncolored) : uncolored
+  }
 
   options(options: D['options']): this {
     return this._construct({ ...this._def, options: { ...this._def.options, ...options } })
@@ -298,8 +191,8 @@ export abstract class TType<O, D extends TDef, I = O> {
     return TOptional.create(TNullable.create(this, this._def.options), this._def.options)
   }
 
-  required(): TRequired<this> {
-    return TRequired.create(this, this._def.options)
+  defined(): TDefined<this> {
+    return TDefined.create(this, this._def.options)
   }
 
   readonly(): TReadonly<this> {
@@ -383,10 +276,11 @@ export abstract class TType<O, D extends TDef, I = O> {
   }
 }
 
+export type AnyTTypeBase<O = unknown, I = unknown> = TTypeBase<O, TDef, I>
 export type AnyTType<O = unknown, I = unknown> = TType<O, TDef, I>
 
-export type OutputOf<T extends AnyTType> = T['$O']
-export type InputOf<T extends AnyTType> = T['$I']
+export type OutputOf<T extends { readonly $O: unknown }> = T['$O']
+export type InputOf<T extends { readonly $I: unknown }> = T['$I']
 
 /* ------------------------------------------------------------------------------------------------------------------ */
 
@@ -1145,46 +1039,17 @@ export class TBuffer extends TType<Buffer, TBufferDef> {
 /*                                                      TLiteral                                                      */
 /* ------------------------------------------------------------------------------------------------------------------ */
 
-export type TLiteralValue = string | number | bigint | boolean | symbol | null | undefined
-
 export type TLiteralOptions = TOptions<{
   additionalIssueKind: TIssueKind.InvalidLiteral
 }>
 
-export interface TLiteralDef<T extends TLiteralValue> extends TDef {
+export interface TLiteralDef<T extends Primitive> extends TDef {
   readonly typeName: TTypeName.Literal
   readonly options: TLiteralOptions
   readonly value: T
 }
 
-export type Literalize<T extends TLiteralValue> = T extends string
-  ? `"${T}"`
-  : T extends bigint
-  ? `${T}n`
-  : T extends symbol
-  ? `Symbol(${string})`
-  : T extends number | boolean | null | undefined
-  ? `${T}`
-  : never
-
-export const literalize = <T extends TLiteralValue>(value: T): Literalize<T> =>
-  ((): string => {
-    if (typeof value === 'string') {
-      return `"${value}"`
-    }
-
-    if (typeof value === 'bigint') {
-      return `${value}n`
-    }
-
-    if (typeof value === 'symbol') {
-      return `Symbol(${value.description ?? ''})`
-    }
-
-    return String(value)
-  })() as Literalize<T>
-
-export const getLiteralParsedType = (value: TLiteralValue): TParsedType => {
+export const getLiteralParsedType = (value: Primitive): TParsedType => {
   if (value === null) {
     return TParsedType.Null
   }
@@ -1208,7 +1073,7 @@ export const getLiteralParsedType = (value: TLiteralValue): TParsedType => {
   }
 }
 
-export class TLiteral<T extends TLiteralValue> extends TType<T, TLiteralDef<T>> {
+export class TLiteral<T extends Primitive> extends TType<T, TLiteralDef<T>> {
   _parse(ctx: ParseContextOf<this>): ParseResultOf<this> {
     const { value } = this._def
 
@@ -1221,7 +1086,7 @@ export class TLiteral<T extends TLiteralValue> extends TType<T, TLiteralDef<T>> 
     if (ctx.data !== value) {
       return ctx
         .addIssue(
-          { kind: TIssueKind.InvalidLiteral, payload: { expected: value, received: ctx.data as TLiteralValue } },
+          { kind: TIssueKind.InvalidLiteral, payload: { expected: value, received: ctx.data as Primitive } },
           this._def.options.messages?.invalidLiteral
         )
         .abort()
@@ -1234,7 +1099,7 @@ export class TLiteral<T extends TLiteralValue> extends TType<T, TLiteralDef<T>> 
     return this._def.value
   }
 
-  static create<T extends TLiteralValue>(value: T, options?: Simplify<TLiteralOptions>): TLiteral<T> {
+  static create<T extends Primitive>(value: T, options?: Simplify<TLiteralOptions>): TLiteral<T> {
     return new TLiteral({
       typeName: TTypeName.Literal,
       value,
@@ -1245,7 +1110,7 @@ export class TLiteral<T extends TLiteralValue> extends TType<T, TLiteralDef<T>> 
   }
 }
 
-export type AnyTLiteral = TLiteral<TLiteralValue>
+export type AnyTLiteral = TLiteral<Primitive>
 
 /* ------------------------------------------------------------------------------------------------------------------ */
 /*                                                        TEnum                                                       */
@@ -1379,7 +1244,7 @@ export interface TIterable<T extends AnyTType> extends AnyTType {
     options?: { readonly inclusive?: boolean; readonly message?: string }
   ): TIterable<T>
   sparse(enabled?: true): TIterable<TOptional<T>>
-  sparse(enabled: false): TIterable<TRequired<T>>
+  sparse(enabled: false): TIterable<TDefined<T>>
   partial(): TIterable<TOptional<T>>
 }
 
@@ -1567,9 +1432,9 @@ export class TArray<T extends AnyTType, C extends TArrayCardinality = 'many'>
   }
 
   sparse(enabled?: true): TArray<TOptional<T>, C>
-  sparse(enabled: false): TArray<TRequired<T>, C>
-  sparse(enabled = true): TArray<TOptional<T> | TRequired<T>, C> {
-    return new TArray({ ...this._def, element: this.element[enabled ? 'optional' : 'required']() })
+  sparse(enabled: false): TArray<TDefined<T>, C>
+  sparse(enabled = true): TArray<TOptional<T> | TDefined<T>, C> {
+    return new TArray({ ...this._def, element: this.element[enabled ? 'optional' : 'defined']() })
   }
 
   partial(): TArray<TOptional<T>, C> {
@@ -1863,9 +1728,9 @@ export class TSet<T extends AnyTType>
   }
 
   sparse(enabled?: true): TSet<TOptional<T>>
-  sparse(enabled: false): TSet<TRequired<T>>
-  sparse(enabled = true): TSet<TOptional<T> | TRequired<T>> {
-    return new TSet({ ...this._def, element: this.element[enabled ? 'optional' : 'required']() })
+  sparse(enabled: false): TSet<TDefined<T>>
+  sparse(enabled = true): TSet<TOptional<T> | TDefined<T>> {
+    return new TSet({ ...this._def, element: this.element[enabled ? 'optional' : 'defined']() })
   }
 
   partial(): TSet<TOptional<T>> {
@@ -2097,10 +1962,6 @@ export type TObjectShape = Record<string, AnyTType>
 export type TObjectUnknownKeys = 'passthrough' | 'strict' | 'strip'
 export type TObjectCatchall = AnyTType
 
-export type TObjectOptions = TOptions<{
-  additionalIssueKind: TIssueKind.UnrecognizedKeys
-}>
-
 export type TObjectIO<
   S extends TObjectShape,
   UK extends TObjectUnknownKeys | undefined,
@@ -2119,11 +1980,37 @@ export type TObjectIO<
   ? { 0: X; 1: Record<string, never> }[Equals<X, {}>]
   : never
 
+export type TObjectShapeArg<S extends TObjectShape> = {
+  [K in keyof S]: Exclude<S[K], AnyTRef> | TRef<Exclude<ShapePaths<S>, K>, undefined>
+}
+
+export type ContextualizeShapeRefs<S extends TObjectShape> = {
+  [K in keyof S]: S[K] extends TRef<infer R, infer _Ctx> ? ReachSchema<R, S> : S[K]
+}
+
+export const contextualizeShapeRefs = <S extends TObjectShape>(shape: S): ContextualizeShapeRefs<S> => {
+  const resolvedShape = {} as Record<string, unknown>
+
+  for (const k of Object.keys(shape)) {
+    const v = shape[k]
+
+    if (v instanceof TRef) {
+      resolvedShape[k] = v._contextualize(shape)._resolve()
+    } else if (v.isT(TTypeName.Object)) {
+      resolvedShape[k] = v.extend(contextualizeShapeRefs(v.shape))
+    } else {
+      resolvedShape[k] = v
+    }
+  }
+
+  return resolvedShape as ContextualizeShapeRefs<S>
+}
+
 export type PartialShape<S extends TObjectShape, K extends ReadonlyArray<keyof S> = ReadonlyArray<keyof S>> = {
   [K_ in keyof S]: K_ extends K[number] ? TOptional<S[K_]> : S[K_]
 }
-export type DepartialShape<S extends TObjectShape, K extends ReadonlyArray<keyof S> = ReadonlyArray<keyof S>> = {
-  [K_ in keyof S]: K_ extends K[number] ? TRequired<S[K_]> : S[K_]
+export type RequiredShape<S extends TObjectShape, K extends ReadonlyArray<keyof S> = ReadonlyArray<keyof S>> = {
+  [K_ in keyof S]: K_ extends K[number] ? TDefined<S[K_]> : S[K_]
 }
 
 export const pick = <T extends Record<string, unknown>, K extends keyof T>(obj: T, keys: readonly K[]): Pick<T, K> =>
@@ -2131,6 +2018,10 @@ export const pick = <T extends Record<string, unknown>, K extends keyof T>(obj: 
 
 export const omit = <T extends Record<string, unknown>, K extends keyof T>(obj: T, keys: readonly K[]): Omit<T, K> =>
   Object.fromEntries(Object.entries(obj).filter(([k]) => !keys.includes(k as K))) as Omit<T, K>
+
+export type TObjectOptions = TOptions<{
+  additionalIssueKind: TIssueKind.UnrecognizedKeys
+}>
 
 export interface TObjectDef<
   S extends TObjectShape,
@@ -2313,16 +2204,13 @@ export class TObject<
     )
   }
 
-  departial(): TObject<DepartialShape<S>, UK, C>
-  departial<K extends readonly [keyof S, ...Array<keyof S>]>(keys: K): TObject<DepartialShape<S, K>, UK, C>
-  departial(keys?: ReadonlyArray<keyof S>): TObject<DepartialShape<S>, UK, C> {
+  required(): TObject<RequiredShape<S>, UK, C>
+  required<K extends readonly [keyof S, ...Array<keyof S>]>(keys: K): TObject<RequiredShape<S, K>, UK, C>
+  required(keys?: ReadonlyArray<keyof S>): TObject<RequiredShape<S>, UK, C> {
     return this._setShape(
       Object.fromEntries(
-        Object.entries(this.shape).map(([k, v]) => [
-          k,
-          (keys ?? Object.keys(this.shape)).includes(k) ? v.required() : v,
-        ])
-      ) as DepartialShape<S>
+        Object.entries(this.shape).map(([k, v]) => [k, (keys ?? Object.keys(this.shape)).includes(k) ? v.defined() : v])
+      ) as RequiredShape<S>
     )
   }
 
@@ -2342,14 +2230,22 @@ export class TObject<
       this._makeCreate()(shape(), options),
   })
 
-  private static _makeCreate<UK extends TObjectUnknownKeys = 'strip'>(
-    unknownKeys = 'strip' as UK
-  ): <S extends TObjectShape>(shape: S, options?: Simplify<TOptions>) => TObject<S, UK> {
-    return (shape, options) =>
-      new TObject({ typeName: TTypeName.Object, shape, unknownKeys, catchall: undefined, options: { ...options } })
+  private static _makeCreate<UK extends TObjectUnknownKeys = 'strip'>(unknownKeys = 'strip' as UK) {
+    return <S extends TObjectShape>(
+      shape: TObjectShapeArg<S>,
+      options?: Simplify<TOptions>
+    ): TObject<ContextualizeShapeRefs<S>, UK> =>
+      new TObject({
+        typeName: TTypeName.Object,
+        shape: contextualizeShapeRefs(shape as S),
+        unknownKeys,
+        catchall: undefined,
+        options: { ...options },
+      })
   }
 }
 
+export type SomeTObject = TObject<Record<string, AnyTType>>
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 export type AnyTObject = TObject<any>
 
@@ -2543,16 +2439,16 @@ export class TNullable<T extends AnyTType>
 export type AnyTNullable = TNullable<AnyTType>
 
 /* ------------------------------------------------------------------------------------------------------------------ */
-/*                                                      TRequired                                                     */
+/*                                                      TDefined                                                      */
 /* ------------------------------------------------------------------------------------------------------------------ */
 
-export interface TRequiredDef<T extends AnyTType> extends TDef {
-  readonly typeName: TTypeName.Required
+export interface TDefinedDef<T extends AnyTType> extends TDef {
+  readonly typeName: TTypeName.Defined
   readonly underlying: T
 }
 
-export class TRequired<T extends AnyTType>
-  extends TType<Defined<OutputOf<T>>, TRequiredDef<T>, Defined<InputOf<T>>>
+export class TDefined<T extends AnyTType>
+  extends TType<Defined<OutputOf<T>>, TDefinedDef<T>, Defined<InputOf<T>>>
   implements TUnwrappable<T>
 {
   _parse(ctx: ParseContextOf<this>): ParseResultOf<this> {
@@ -2569,19 +2465,19 @@ export class TRequired<T extends AnyTType>
     return this.underlying
   }
 
-  unwrapDeep(): UnwrapDeep<T, TTypeName.Required> {
-    return (this.underlying instanceof TRequired ? this.underlying.unwrapDeep() : this.underlying) as UnwrapDeep<
+  unwrapDeep(): UnwrapDeep<T, TTypeName.Defined> {
+    return (this.underlying instanceof TDefined ? this.underlying.unwrapDeep() : this.underlying) as UnwrapDeep<
       T,
-      TTypeName.Required
+      TTypeName.Defined
     >
   }
 
-  static create<T extends AnyTType>(underlying: T, options?: Simplify<TOptions>): TRequired<T> {
-    return new TRequired({ typeName: TTypeName.Required, underlying, options: { ...options }, isOptional: false })
+  static create<T extends AnyTType>(underlying: T, options?: Simplify<TOptions>): TDefined<T> {
+    return new TDefined({ typeName: TTypeName.Defined, underlying, options: { ...options }, isOptional: false })
   }
 }
 
-export type AnyTRequired = TRequired<AnyTType>
+export type AnyTDefined = TDefined<AnyTType>
 
 /* ------------------------------------------------------------------------------------------------------------------ */
 /*                                                      TPromise                                                      */
@@ -2681,7 +2577,7 @@ export type AnyTReadonly = TReadonly<AnyTType>
 /* ------------------------------------------------------------------------------------------------------------------ */
 
 export const BRAND = Symbol('BRAND')
-// eslint-disable-next-line @typescript-eslint/no-redeclare
+
 export type BRAND = typeof BRAND
 export type BRANDED<T, B extends PropertyKey> = T & { readonly [BRAND]: { readonly [K in B]: true } }
 
@@ -3180,6 +3076,138 @@ export class TPipeline<A extends AnyTType, B extends AnyTType> extends TType<
 export type AnyTPipeline = TPipeline<AnyTType, AnyTType>
 
 /* ------------------------------------------------------------------------------------------------------------------ */
+/*                                                        TRef                                                        */
+/* ------------------------------------------------------------------------------------------------------------------ */
+
+export type TRefContext = TObjectShape | TTupleItems
+
+type TuplePaths<T extends TTupleItems> = ConditionalOmit<
+  OmitIndexSignature<{ [K in keyof T as `${K & number}` extends `${number}` ? K : never]: K }>,
+  never
+> extends infer X
+  ? {
+      [K in keyof X]: K extends infer K_ extends string
+        ?
+            | `[${K_}]`
+            | `.${K_}`
+            | (K_ extends keyof T
+                ? T[K_] extends TObject<infer S>
+                  ? `${`[${K_}]` | `.${K_}`}.${ShapePaths<S>}`
+                  : T[K_] extends TTuple<infer I>
+                  ? `${`[${K_}]` | `.${K_}`}${TuplePaths<I>}`
+                  : never
+                : never)
+        : never
+    }[keyof X]
+  : never
+
+export type ShapePaths<T extends TObjectShape> = {
+  [K in keyof T]:
+    | K
+    | (T[K] extends TObject<infer S>
+        ? `${K & string}.${ShapePaths<S>}`
+        : T[K] extends TTuple<infer I>
+        ? `${K & string}${TuplePaths<I>}`
+        : never)
+}[keyof T] &
+  string
+
+export type AssertTType<T> = T extends AnyTType ? T : never
+
+export type _ReachSchema<R extends string, Ctx extends TRefContext> = Replace<
+  Replace<R, '[', '.', { all: true }>,
+  ']',
+  '.',
+  { all: true }
+> extends infer R_ extends string
+  ? R_ | CastToNumber<R_> extends keyof Ctx
+    ? Ctx[R_ & keyof Ctx]
+    : R_ extends `${infer Left}${'.'}${infer Right}`
+    ? Left extends keyof Ctx
+      ? Right extends ''
+        ? Ctx[Left]
+        : Ctx[Left] extends TObject<infer S>
+        ? _ReachSchema<Right, S>
+        : Ctx[Left] extends TTuple<infer I>
+        ? _ReachSchema<Right, I>
+        : Ctx[Left]
+      : never
+    : never
+  : never
+
+export type ReachSchema<R extends string, Ctx extends TRefContext> = AssertTType<_ReachSchema<R, Ctx>>
+
+export interface TRefDef<R extends string, Ctx extends TRefContext | undefined> extends TDef {
+  readonly typeName: TTypeName.Ref
+  readonly $ref: R
+  readonly $ctx: Ctx
+}
+
+export class TRef<R extends string, Ctx extends TRefContext | undefined> extends TType<
+  OutputOf<ReachSchema<R, NonNullable<Ctx>>>,
+  TRefDef<R, Ctx>,
+  InputOf<ReachSchema<R, NonNullable<Ctx>>>
+> {
+  _parse(ctx: ParseContextOf<this>): ParseResultOf<this> {
+    const underlying = this._resolve()
+    return underlying._parse(ctx.child(underlying, ctx.data))
+  }
+
+  get $ref(): R {
+    return this._def.$ref
+  }
+
+  _contextualize<Ctx_ extends TRefContext>(ctx: Ctx_): TRef<R, Ctx_> {
+    return new TRef({ ...this._def, $ctx: ctx })
+  }
+
+  _resolve(): AnyTType {
+    const { $ref, $ctx } = this._def
+
+    if (!$ctx) {
+      throw new Error(`Unable to resolve path for $ref: ${$ref}`)
+    }
+
+    const path = String($ref)
+      .split(/[.[\]]/g)
+      .filter(Boolean)
+
+    let current = $ctx[(Number.isNaN(Number(path[0])) ? path[0] : Number(path[0])) as keyof TRefContext] as AnyTType
+
+    for (const p of path.slice(1)) {
+      const numeric = Number(p)
+
+      if (Number.isNaN(numeric)) {
+        if (current.isT(TTypeName.Object)) {
+          current = current.shape[p]
+        } else if (current.isT(TTypeName.Union)) {
+          const next = current.members.find((m) => m.isT(TTypeName.Object) && p in m.shape)
+          if (!next) {
+            throw new Error(`Unable to resolve path for $ref: ${$ref}`)
+          }
+
+          current = next
+        } else {
+          throw new Error(`Unable to resolve path for $ref: ${$ref}`)
+        }
+      } else if (current.isT(TTypeName.Tuple)) {
+        current = current.items[numeric]
+      } else {
+        throw new Error(`Unable to resolve path for $ref: ${$ref}`)
+      }
+    }
+
+    return current.clone()
+  }
+
+  static create<R extends string>(ref: R): TRef<R, undefined> {
+    return new TRef({ typeName: TTypeName.Ref, $ref: ref, $ctx: undefined, options: {} })
+  }
+}
+
+export type AnyTRef = TRef<string, TRefContext | undefined>
+
+/* ------------------------------------------------------------------------------------------------------------------ */
 /*                                                       TCoerce                                                      */
 /* ------------------------------------------------------------------------------------------------------------------ */
 
@@ -3216,7 +3244,8 @@ export const optionalType = TOptional.create
 export const pipelineType = TPipeline.create
 export const promiseType = TPromise.create
 export const recordType = TRecord.create
-export const requiredType = TRequired.create
+export const refType = TRef.create
+export const requiredType = TDefined.create
 export const setType = TSet.create
 export const stringType = TString.create
 export const symbolType = TSymbol.create
@@ -3257,6 +3286,7 @@ export {
   pipelineType as pipeline,
   promiseType as promise,
   recordType as record,
+  refType as ref,
   requiredType as required,
   setType as set,
   stringType as string,

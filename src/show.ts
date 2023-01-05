@@ -1,14 +1,14 @@
 import chalk from 'chalk'
-import { TParsedType } from './parse'
 import {
+  TParsedType,
   TTypeName,
   literalize,
   type AnyTType,
-  type TEnumValues,
-  type TLiteralValue,
-  type TObjectShape,
+  type Primitive,
   type TArrayCardinality,
-} from './types'
+  type TEnumValues,
+  type TObjectShape,
+} from './_internal'
 
 export const TShow = (type: AnyTType, options?: { readonly parens?: boolean }): string => {
   if (
@@ -59,7 +59,7 @@ export const TShow = (type: AnyTType, options?: { readonly parens?: boolean }): 
       TTypeName.Promise,
       TTypeName.Nullable,
       TTypeName.Optional,
-      TTypeName.Required,
+      TTypeName.Defined,
       TTypeName.Readonly
     )
   ) {
@@ -70,7 +70,7 @@ export const TShow = (type: AnyTType, options?: { readonly parens?: boolean }): 
       [TTypeName.Promise]: TShow.Promise,
       [TTypeName.Nullable]: TShow.Nullable,
       [TTypeName.Optional]: TShow.Optional,
-      [TTypeName.Required]: TShow.Required,
+      [TTypeName.Defined]: TShow.Defined,
       [TTypeName.Readonly]: TShow.Readonly,
     }[type.typeName](type.underlying, options)
   }
@@ -112,6 +112,8 @@ export const TShow = (type: AnyTType, options?: { readonly parens?: boolean }): 
   if (type.isT(TTypeName.Pipeline)) {
     return TShow.Pipeline(type.from, type.to)
   }
+
+  return TShow.Unknown()
 }
 
 TShow.Any = (): string => TParsedType.Any
@@ -140,7 +142,7 @@ TShow.Nullable = (underlying: AnyTType, options?: { readonly parens?: boolean })
   TShow._unionize([TShow(underlying), TShow.Null()], options)
 TShow.Optional = (underlying: AnyTType, options?: { readonly parens?: boolean }): string =>
   TShow._unionize([TShow(underlying), TShow.Undefined()], options)
-TShow.Required = (underlying: AnyTType): string =>
+TShow.Defined = (underlying: AnyTType): string =>
   TShow._unionize(TShow._deunionize(TShow(underlying)).filter((h) => h !== TShow.Undefined()))
 
 TShow.Readonly = (underlying: AnyTType): string => {
@@ -170,7 +172,7 @@ TShow.Tuple = (items: readonly AnyTType[], rest: AnyTType | undefined): string =
 TShow.Map = (keys: AnyTType, values: AnyTType): string => `Map<${TShow(keys)}, ${TShow(values)}>`
 TShow.Record = (keys: AnyTType, values: AnyTType): string => `Record<${TShow(keys)}, ${TShow(values)}>`
 
-TShow.Literal = (value: TLiteralValue): string => literalize(value)
+TShow.Literal = (value: Primitive): string => literalize(value)
 TShow.Enum = (values: TEnumValues): string => TShow._unionize(values.map(literalize))
 
 TShow.Brand = (underlying: AnyTType, brand: PropertyKey): string =>
@@ -178,12 +180,12 @@ TShow.Brand = (underlying: AnyTType, brand: PropertyKey): string =>
 
 TShow.Object = (shape: TObjectShape, options = { padding: 2 }): string =>
   `{\n${Object.entries(shape)
-    .map(
-      ([k, v]) =>
-        `${' '.repeat(options.padding)}${k}${v.isOptional() ? '?' : ''}: ${
-          v.isT(TTypeName.Object) ? TShow.Object(v.shape, { padding: options.padding + 2 }) : TShow(v)
-        }`
-    )
+    .map(([k, v]) => {
+      const schema = v
+      return `${' '.repeat(options.padding)}${k}${schema.isOptional ? '?' : ''}: ${
+        schema.isT(TTypeName.Object) ? TShow.Object(schema.shape, { padding: options.padding + 2 }) : TShow(v)
+      }`
+    })
     .join(';\n')}\n${' '.repeat(options.padding - 2)}}`
 
 TShow.Pipeline = (a: AnyTType, b: AnyTType): string => `Pipeline<${TShow(a)}, ${TShow(b)}>`

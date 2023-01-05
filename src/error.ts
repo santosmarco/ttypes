@@ -1,8 +1,15 @@
 import safeJsonStringify from 'safe-json-stringify'
-import { getGlobal } from './global'
-import type { AnyParseContext, ParsePath, TParsedType } from './parse'
-import type { AnyTType, TEnumValues, TLiteralValue } from './types'
-import type { Simplify, StripKey } from './utils'
+import {
+  getGlobal,
+  type AnyParseContext,
+  type AnyTType,
+  type ParsePath,
+  type Primitive,
+  type Simplify,
+  type StripKey,
+  type TEnumValues,
+  type TParsedType,
+} from './_internal'
 
 /* ------------------------------------------------------------------------------------------------------------------ */
 /*                                                       TIssue                                                       */
@@ -41,7 +48,7 @@ export type TInvalidTypeIssue = TIssueBase<
 
 export type TInvalidLiteralIssue = TIssueBase<
   TIssueKind.InvalidLiteral,
-  { readonly expected: TLiteralValue; readonly received: TLiteralValue }
+  { readonly expected: Primitive; readonly received: Primitive }
 >
 
 export type TInvalidEnumValueIssue = TIssueBase<
@@ -76,7 +83,7 @@ export type TInvalidStringIssue = TIssueBase<
   | { readonly check: 'url'; readonly received: string }
   | { readonly check: 'cuid'; readonly received: string }
   | { readonly check: 'uuid'; readonly received: string }
-  | { readonly check: 'isoDuration' }
+  | { readonly check: 'isoDuration'; readonly received: string }
   | {
       readonly check: 'base64'
       readonly expected: { readonly paddingRequired: boolean; readonly urlSafe: boolean }

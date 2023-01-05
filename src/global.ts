@@ -1,24 +1,20 @@
-import { TError, type TErrorFormatter, type TErrorMap } from './error'
-
-export interface GlobalOptions {
-  readonly colorsEnabled?: boolean
-}
+import { TError, TOptions, type RequiredTOptions, type TErrorFormatter, type TErrorMap } from './_internal'
 
 export class TGlobal {
   private static _instance: TGlobal | undefined
 
-  private _options: Required<GlobalOptions> = TGlobal.defaultOptions
+  private _options: RequiredTOptions = TOptions.defaultOptions
   private _errorFormatter: TErrorFormatter = TError.defaultFormatter
   private _errorMap: TErrorMap = TError.defaultIssueMap
 
   // eslint-disable-next-line @typescript-eslint/no-empty-function
   private constructor() {}
 
-  getOptions(): Required<GlobalOptions> {
+  getOptions(): RequiredTOptions {
     return this._options
   }
 
-  setOptions(options: GlobalOptions): this {
+  setOptions(options: TOptions): this {
     this._options = { ...this._options, ...options }
     return this
   }
@@ -47,10 +43,6 @@ export class TGlobal {
     }
 
     return this._instance
-  }
-
-  static defaultOptions: Required<GlobalOptions> = {
-    colorsEnabled: true,
   }
 }
 

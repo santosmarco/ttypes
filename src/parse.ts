@@ -1,7 +1,5 @@
-import { TError, TIssueKind, resolveErrorMaps, type TErrorMap, type TIssue } from './error'
-import { getGlobal } from './global'
-import type { AnyTType, InputOf, OutputOf } from './types'
-import { cloneDeep, isArray, isAsync, type StripKey } from './utils'
+import type { AnyTTypeBase, InputOf, OutputOf, ParseOptions, StripKey, TIssue } from './_internal'
+import { TError, TIssueKind, cloneDeep, getGlobal, isArray, isAsync, resolveErrorMaps } from './_internal'
 
 /* --------------------------------------------------- TParsedType -------------------------------------------------- */
 
@@ -84,11 +82,11 @@ export type SyncParseResult<O, I> = SuccessfulParseResult<O> | FailedParseResult
 export type AsyncParseResult<O, I> = Promise<SyncParseResult<O, I>>
 export type ParseResult<O, I> = SyncParseResult<O, I> | AsyncParseResult<O, I>
 
-export type SuccessfulParseResultOf<T extends AnyTType> = SuccessfulParseResult<OutputOf<T>>
-export type FailedParseResultOf<T extends AnyTType> = FailedParseResult<InputOf<T>>
-export type SyncParseResultOf<T extends AnyTType> = SyncParseResult<OutputOf<T>, InputOf<T>>
-export type AsyncParseResultOf<T extends AnyTType> = AsyncParseResult<OutputOf<T>, InputOf<T>>
-export type ParseResultOf<T extends AnyTType> = ParseResult<OutputOf<T>, InputOf<T>>
+export type SuccessfulParseResultOf<T extends AnyTTypeBase> = SuccessfulParseResult<OutputOf<T>>
+export type FailedParseResultOf<T extends AnyTTypeBase> = FailedParseResult<InputOf<T>>
+export type SyncParseResultOf<T extends AnyTTypeBase> = SyncParseResult<OutputOf<T>, InputOf<T>>
+export type AsyncParseResultOf<T extends AnyTTypeBase> = AsyncParseResult<OutputOf<T>, InputOf<T>>
+export type ParseResultOf<T extends AnyTTypeBase> = ParseResult<OutputOf<T>, InputOf<T>>
 
 export const OK = <O>(data: O): SuccessfulParseResult<O> => ({ ok: true, data })
 export const FAIL = <I>(error: TError<I>): FailedParseResult<I> => ({ ok: false, error })
@@ -104,17 +102,11 @@ export enum ParseStatus {
 
 export type ParsePath = ReadonlyArray<string | number>
 
-export interface ParseOptions {
-  readonly abortEarly?: boolean
-  readonly debug?: boolean
-  readonly errorMap?: TErrorMap
-}
-
 export interface ParseContextCommon extends ParseOptions {
   readonly async: boolean
 }
 
-export interface ParseContextDef<T extends AnyTType> {
+export interface ParseContextDef<T extends AnyTTypeBase> {
   readonly schema: T
   readonly data: unknown
   readonly path: ParsePath
@@ -134,7 +126,7 @@ export interface ParseContext<O, I = O> {
   readonly data: unknown
   setData(data: unknown): this
   readonly parsedType: TParsedType
-  readonly schema: AnyTType<O, I>
+  readonly schema: AnyTTypeBase<O, I>
   readonly path: ParsePath
   readonly parent: AnyParseContext | undefined
   readonly root: AnyParseContext
@@ -147,28 +139,22 @@ export interface ParseContext<O, I = O> {
   isInvalid(): boolean
   setInvalid(): this
   isAsync(): boolean
-  child<O_, I_>(schema: AnyTType<O_, I_>, data: unknown, path?: ParsePath): ParseContext<O_, I_>
-  clone<O_, I_>(schema: AnyTType<O_, I_>, data: unknown): ParseContext<O_, I_>
-  addIssue<
-    T extends TIssueKind,
-    U extends StripKey<Extract<TIssue, { readonly kind: T }>, 'path' | 'message'> = StripKey<
-      Extract<TIssue, { readonly kind: T }>,
-      'path' | 'message'
-    >
-  >(
-    issue: U,
+  child<O_, I_>(schema: AnyTTypeBase<O_, I_>, data: unknown, path?: ParsePath): ParseContext<O_, I_>
+  clone<O_, I_>(schema: AnyTTypeBase<O_, I_>, data: unknown): ParseContext<O_, I_>
+  addIssue<T extends TIssueKind>(
+    issue: StripKey<Extract<TIssue, { readonly kind: T }>, 'path' | 'message'>,
     message: string | undefined
   ): this
   invalidType(payload: { readonly expected: TParsedType }): this
+  success<T>(data: T): SuccessfulParseResult<T>
   abort(): FailedParseResult<I>
 }
 
-export type ParseContextOf<T extends AnyTType> = ParseContext<OutputOf<T>, InputOf<T>>
+export type AnyParseContext = ParseContextOf<AnyTTypeBase>
 
-export type AnyParseContext = ParseContextOf<AnyTType>
+export type ParseContextOf<T extends AnyTTypeBase> = ParseContext<OutputOf<T>, InputOf<T>>
 
-// eslint-disable-next-line @typescript-eslint/no-redeclare
-export const ParseContext = <T extends AnyTType>({
+export const ParseContext = <T extends AnyTTypeBase>({
   schema,
   data,
   path,
@@ -193,6 +179,7 @@ export const ParseContext = <T extends AnyTType>({
 
     setData(data: unknown) {
       _internals.data = data
+      return this
     },
 
     get parsedType() {
@@ -283,8 +270,8 @@ export const ParseContext = <T extends AnyTType>({
       const issueMsg =
         message ??
         resolveErrorMaps([
-          this.common.errorMap,
-          this.schema._def.options.errorMap,
+          this.common.contextualErrorMap,
+          this.schema._def.options.schemaErrorMap,
           getGlobal().getErrorMap(),
           TError.defaultIssueMap,
         ])(issueWithPath)
@@ -305,6 +292,10 @@ export const ParseContext = <T extends AnyTType>({
       )
     },
 
+    success(data) {
+      return OK(data)
+    },
+
     abort() {
       return FAIL(TError.fromContext(this))
     },
@@ -313,15 +304,15 @@ export const ParseContext = <T extends AnyTType>({
   return ctx
 }
 
-ParseContext.of = <T extends AnyTType>(schema: T, data: unknown, common: ParseContextCommon): ParseContextOf<T> =>
+ParseContext.of = <T extends AnyTTypeBase>(schema: T, data: unknown, common: ParseContextCommon): ParseContextOf<T> =>
   ParseContext({ schema, data, path: [], parent: undefined, common })
 
 export const SyncParseContext = {
-  of: <T extends AnyTType>(schema: T, data: unknown, options: ParseOptions | undefined): ParseContextOf<T> =>
+  of: <T extends AnyTTypeBase>(schema: T, data: unknown, options: ParseOptions | undefined): ParseContextOf<T> =>
     ParseContext.of(schema, data, { ...schema.options, ...options, async: false }),
 }
 
 export const AsyncParseContext = {
-  of: <T extends AnyTType>(schema: T, data: unknown, options: ParseOptions | undefined): ParseContextOf<T> =>
+  of: <T extends AnyTTypeBase>(schema: T, data: unknown, options: ParseOptions | undefined): ParseContextOf<T> =>
     ParseContext.of(schema, data, { ...schema.options, ...options, async: true }),
 }
