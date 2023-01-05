@@ -483,22 +483,26 @@ export class TString<
         case 'isoDuration':
           if (!TString._internals.regexes[check.check].test(data)) {
             const _x = {
-              email: () => ctx.addIssue(
-                { kind: TIssueKind.InvalidString, payload: { check: 'email', received: data } },
-                check.message
-              ),
-              cuid: () => ctx.addIssue(
-                { kind: TIssueKind.InvalidString, payload: { check: 'cuid', received: data } },
-                check.message
-              ),
-              uuid: () => ctx.addIssue(
-                { kind: TIssueKind.InvalidString, payload: { check: 'uuid', received: data } },
-                check.message
-              ),
-              isoDuration: () => ctx.addIssue(
-                { kind: TIssueKind.InvalidString, payload: { check: 'isoDuration', received: data } },
-                check.message
-              ),
+              email: () =>
+                ctx.addIssue(
+                  { kind: TIssueKind.InvalidString, payload: { check: 'email', received: data } },
+                  check.message
+                ),
+              cuid: () =>
+                ctx.addIssue(
+                  { kind: TIssueKind.InvalidString, payload: { check: 'cuid', received: data } },
+                  check.message
+                ),
+              uuid: () =>
+                ctx.addIssue(
+                  { kind: TIssueKind.InvalidString, payload: { check: 'uuid', received: data } },
+                  check.message
+                ),
+              isoDuration: () =>
+                ctx.addIssue(
+                  { kind: TIssueKind.InvalidString, payload: { check: 'isoDuration', received: data } },
+                  check.message
+                ),
             }[check.check]()
             if (ctx.common.abortEarly) {
               return ctx.abort()
@@ -2326,6 +2330,137 @@ export class TNever extends TType<never, TNeverDef> {
   }
 }
 
+/* ------------------------------------------------------------------------------------------------------------------ */
+/*                                                      TFunction                                                     */
+/* ------------------------------------------------------------------------------------------------------------------ */
+
+export type TFunctionOuterIO<T extends AnyTType, A extends AnyTTuple, R extends AnyTType> = (
+  this: T,
+  ...args: InputOf<A>
+) => OutputOf<R>
+
+export type TFunctionInnerIO<T extends AnyTType, A extends AnyTTuple, R extends AnyTType> = (
+  this: T,
+  ...args: OutputOf<A>
+) => InputOf<R>
+
+export interface TFunctionDef<T extends AnyTType, A extends AnyTTuple, R extends AnyTType> extends TDef {
+  readonly typeName: TTypeName.Function
+  readonly thisType: T
+  readonly parameters: A
+  readonly returnType: R
+}
+
+export class TFunction<T extends AnyTType, A extends TTuple<TTupleItems, AnyTType>, R extends AnyTType> extends TType<
+  TFunctionOuterIO<T, A, R>,
+  TFunctionDef<T, A, R>,
+  TFunctionInnerIO<T, A, R>
+> {
+  _parse(ctx: ParseContextOf<this>): ParseResultOf<this> {}
+
+  get thisType(): T {
+    return this._def.thisType
+  }
+
+  get parameters(): A {
+    return this._def.parameters
+  }
+
+  get returnType(): R {
+    return this._def.returnType
+  }
+
+  this<T_ extends AnyTType>(thisType: T_): TFunction<T_, A, R> {
+    return new TFunction({ ...this._def, thisType })
+  }
+
+  args<A_ extends TTupleItems>(...args: A_): TFunction<T, TTuple<A_, A['restType']>, R> {
+    return new TFunction({
+      ...this._def,
+      parameters: TTuple.create(args, this._def.parameters.restType),
+    })
+  }
+
+  returns<R_ extends AnyTType>(returnType: R_): TFunction<T, A, R_> {
+    return new TFunction({ ...this._def, returnType })
+  }
+
+  implement<F extends TFunctionInnerIO<T, A, R>>(
+    fn: F
+  ): ReturnType<F> extends OutputOf<R> ? (...args: InputOf<A>) => ReturnType<F> : TFunctionOuterIO<T, A, R> {
+    const parsedFn = this.parse(fn)
+    return parsedFn as ReturnType<F> extends OutputOf<R>
+      ? (...args: InputOf<A>) => ReturnType<F>
+      : TFunctionOuterIO<T, A, R>
+  }
+
+  validate<F extends TFunctionInnerIO<T, A, R>>(
+    fn: F
+  ): ReturnType<F> extends OutputOf<R> ? (...args: InputOf<A>) => ReturnType<F> : TFunctionOuterIO<T, A, R> {
+    return this.implement(fn)
+  }
+
+  strictImplement(fn: TFunctionInnerIO<T, A, R>): TFunctionInnerIO<T, A, R> {
+    const parsedFn = this.parse(fn)
+    return parsedFn
+  }
+
+  static create(options?: Simplify<TOptions>): TFunction<TAny, TTuple<[], TUnknown>, TUnknown>
+  static create<A extends TTupleItems>(
+    parameters: A,
+    options?: Simplify<TOptions>
+  ): TFunction<TAny, TTuple<A, TUnknown>, TUnknown>
+  static create<A extends TTupleItems, R extends AnyTType>(
+    parameters: A,
+    returnType: R,
+    options?: Simplify<TOptions>
+  ): TFunction<TAny, TTuple<A, TUnknown>, R>
+  static create<T extends AnyTType, A extends TTupleItems, R extends AnyTType>(
+    thisType: T,
+    parameters: A,
+    returnType: R,
+    options?: Simplify<TOptions>
+  ): TFunction<T, TTuple<A, TUnknown>, R>
+  static create(
+    first?: Simplify<TOptions> | TTupleItems | AnyTType,
+    second?: Simplify<TOptions> | AnyTType | TTupleItems,
+    third?: Simplify<TOptions> | AnyTType,
+    fourth?: Simplify<TOptions>
+  ):
+    | TFunction<AnyTType, TTuple<TTupleItems, TUnknown>, AnyTType>
+    | TFunction<TAny, TTuple<TTupleItems, TUnknown>, AnyTType> {
+    if (first && first instanceof TType && second && isArray(second) && third && third instanceof TType) {
+      return new TFunction({
+        typeName: TTypeName.Function,
+        thisType: first,
+        parameters: TTuple.create(second).rest(TUnknown.create()),
+        returnType: third,
+        options: { ...fourth },
+      })
+    }
+
+    if (first && isArray(first) && (!second || !(second instanceof TType || Array.isArray(second)))) {
+      return new TFunction({
+        typeName: TTypeName.Function,
+        thisType: TAny.create(),
+        parameters: TTuple.create(first).rest(TUnknown.create()),
+        returnType: TUnknown.create(),
+        options: { ...(second as TOptions) },
+      })
+    }
+
+    return new TFunction({
+      typeName: TTypeName.Function,
+      thisType: TAny.create(),
+      parameters: TTuple.create([]).rest(TUnknown.create()),
+      returnType: TUnknown.create(),
+      options: { ...(first as TOptions) },
+    })
+  }
+}
+
+export type AnyTFunction = TFunction<AnyTType, TTuple<TTupleItems, AnyTType>, AnyTType>
+
 /* -------------------------------------------------- TUnwrappable -------------------------------------------------- */
 
 export type UnwrapDeep<T extends AnyTType, TN extends TTypeName> = T extends {
@@ -3229,6 +3364,7 @@ export const dateType = TDate.create
 export const defaultType = TDefault.create
 export const enumType = TEnum.create
 export const falseType = TFalse.create
+export const functionType = TFunction.create
 export const intersectionType = TIntersection.create
 export const lazyType = TLazy.create
 export const literalType = TLiteral.create
@@ -3270,6 +3406,8 @@ export {
   dateType as date,
   enumType as enum,
   falseType as false,
+  functionType as fn,
+  functionType as function,
   intersectionType as intersection,
   lazyType as lazy,
   literalType as literal,

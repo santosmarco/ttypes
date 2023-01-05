@@ -5,13 +5,13 @@ import type {
   AnyTDefault,
   AnyTDefined,
   AnyTEnum,
+  AnyTFunction,
   AnyTIntersection,
   AnyTLazy,
   AnyTLiteral,
   AnyTMap,
   AnyTNativeEnum,
   AnyTNullable,
-  SomeTObject,
   AnyTOptional,
   AnyTPipeline,
   AnyTPromise,
@@ -21,6 +21,7 @@ import type {
   AnyTSet,
   AnyTTuple,
   AnyTUnion,
+  SomeTObject,
   TAny,
   TBigInt,
   TBoolean,
@@ -56,6 +57,7 @@ export enum TTypeName {
   Defined = 'TDefined',
   Enum = 'TEnum',
   False = 'TFalse',
+  Function = 'TFunction',
   Intersection = 'TIntersection',
   Lazy = 'TLazy',
   Literal = 'TLiteral',
@@ -96,6 +98,7 @@ export type TTypeNameMap<T extends TTypeName> = {
   [TTypeName.Default]: AnyTDefault
   [TTypeName.Enum]: AnyTEnum
   [TTypeName.False]: TFalse
+  [TTypeName.Function]: AnyTFunction
   [TTypeName.Intersection]: AnyTIntersection
   [TTypeName.Lazy]: AnyTLazy
   [TTypeName.Literal]: AnyTLiteral
