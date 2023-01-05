@@ -483,23 +483,23 @@ export class TString<
         case 'isoDuration':
           if (!TString._internals.regexes[check.check].test(data)) {
             const _x = {
-              email: ctx.addIssue(
+              email: () => ctx.addIssue(
                 { kind: TIssueKind.InvalidString, payload: { check: 'email', received: data } },
                 check.message
               ),
-              cuid: ctx.addIssue(
+              cuid: () => ctx.addIssue(
                 { kind: TIssueKind.InvalidString, payload: { check: 'cuid', received: data } },
                 check.message
               ),
-              uuid: ctx.addIssue(
+              uuid: () => ctx.addIssue(
                 { kind: TIssueKind.InvalidString, payload: { check: 'uuid', received: data } },
                 check.message
               ),
-              isoDuration: ctx.addIssue(
+              isoDuration: () => ctx.addIssue(
                 { kind: TIssueKind.InvalidString, payload: { check: 'isoDuration', received: data } },
                 check.message
               ),
-            }[check.check]
+            }[check.check]()
             if (ctx.common.abortEarly) {
               return ctx.abort()
             }
@@ -694,7 +694,7 @@ export class TString<
     return this._checks.add({ check: 'endsWith', expected: suffix, message: options?.message })
   }
 
-  constains(substring: string, options?: { readonly message?: string }): this {
+  contains(substring: string, options?: { readonly message?: string }): this {
     return this._checks.add({ check: 'contains', expected: substring, message: options?.message })
   }
 
