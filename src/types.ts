@@ -424,6 +424,16 @@ export interface TAnyDef extends TDef {
   readonly typeName: TTypeName.Any
 }
 
+export class TAny extends TType<any, TAnyDef> {
+  _parse(ctx: ParseContextOf<this>): ParseResultOf<this> {
+    return OK(ctx.data)
+  }
+
+  static create(options?: Simplify<TOptions>): TAny {
+    return new TAny({ typeName: TTypeName.Any, options: { ...options }, isOptional: true, isNullable: true })
+  }
+}
+
 /* ------------------------------------------------------------------------------------------------------------------ */
 /*                                                      TUnknown                                                      */
 /* ------------------------------------------------------------------------------------------------------------------ */
@@ -448,35 +458,35 @@ export class TUnknown extends TType<unknown, TUnknownDef> {
 
 export type TStringTransform = 'trim' | 'lowercase' | 'uppercase' | 'capitalize' | 'uncapitalize'
 
-export type TStringIO<T extends readonly TStringTransform[]> = T extends readonly []
+export type TStringOutput<T extends readonly TStringTransform[]> = T extends readonly []
   ? string
   : T extends readonly [infer H extends TStringTransform, ...infer R extends TStringTransform[]]
   ? H extends 'trim'
-    ? TStringIO<R>
+    ? TStringOutput<R>
     : {
-        lowercase: Lowercase<TStringIO<R>>
-        uppercase: Uppercase<TStringIO<R>>
-        capitalize: Capitalize<TStringIO<R>>
-        uncapitalize: Uncapitalize<TStringIO<R>>
+        lowercase: Lowercase<TStringOutput<R>>
+        uppercase: Uppercase<TStringOutput<R>>
+        capitalize: Capitalize<TStringOutput<R>>
+        uncapitalize: Uncapitalize<TStringOutput<R>>
       }[Exclude<H, 'trim'>]
   : never
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 export type TStringInput<C extends boolean> = C extends true ? any : string
 
-export interface TStringDef extends TDef {
+export interface TStringDef<C extends boolean> extends TDef {
   readonly typeName: TTypeName.String
   readonly transforms: readonly TStringTransform[]
   readonly checks: ReadonlyArray<
     LooseStripKey<TInvalidStringIssue['payload'], 'received'> & { readonly message: string | undefined }
   >
-  readonly coerce: boolean
+  readonly coerce: C
 }
 
 export class TString<
   T extends readonly TStringTransform[] = readonly TStringTransform[],
   C extends boolean = boolean
-> extends TType<TStringIO<T>, TStringDef, TStringInput<C>> {
+> extends TType<TStringOutput<T>, TStringDef<C>, TStringInput<C>> {
   _parse(ctx: ParseContextOf<this>): ParseResultOf<this> {
     const { transforms, checks, coerce } = this._def
 
@@ -872,15 +882,18 @@ export class TString<
 /*                                                       TNumber                                                      */
 /* ------------------------------------------------------------------------------------------------------------------ */
 
-export interface TNumberDef extends TDef {
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+export type TNumberInput<C extends boolean> = C extends true ? any : number
+
+export interface TNumberDef<C extends boolean> extends TDef {
   readonly typeName: TTypeName.Number
   readonly checks: ReadonlyArray<
     LooseStripKey<TInvalidNumberIssue['payload'], 'received'> & { readonly message: string | undefined }
   >
-  readonly coerce: boolean
+  readonly coerce: C
 }
 
-export class TNumber extends TType<number, TNumberDef> {
+export class TNumber<C extends boolean = boolean> extends TType<number, TNumberDef<C>, TNumberInput<C>> {
   _parse(ctx: ParseContextOf<this>): ParseResultOf<this> {
     if (typeof ctx.data !== 'number' || Number.isNaN(ctx.data)) {
       return ctx.invalidType({ expected: TParsedType.Number }).abort()
@@ -888,6 +901,14 @@ export class TNumber extends TType<number, TNumberDef> {
 
     return OK(ctx.data)
   }
+
+  /* --------------------------------------------------- Coercion --------------------------------------------------- */
+
+  coerce<V extends boolean = true>(value = true as V): TNumber<V> {
+    return new TNumber({ ...this._def, coerce: value })
+  }
+
+  /* ---------------------------------------------------- Checks ---------------------------------------------------- */
 
   min(value: number, options?: { readonly inclusive?: boolean; readonly message?: string }): this {
     return this._checks.add({
@@ -965,7 +986,7 @@ export class TNumber extends TType<number, TNumberDef> {
 
   private readonly _checks = initChecksAssistantFor(this)
 
-  static create(options?: Simplify<TOptions>): TNumber {
+  static create(options?: Simplify<TOptions>): TNumber<false> {
     return new TNumber({ typeName: TTypeName.Number, checks: [], coerce: false, options: { ...options } })
   }
 }
@@ -3157,6 +3178,15 @@ export class TPipeline<A extends AnyTType, B extends AnyTType> extends TType<
 }
 
 export type AnyTPipeline = TPipeline<AnyTType, AnyTType>
+
+/* ------------------------------------------------------------------------------------------------------------------ */
+/*                                                       TCoerce                                                      */
+/* ------------------------------------------------------------------------------------------------------------------ */
+
+export const coerce = {
+  string: (...args: Parameters<typeof TString.create>): TString<[], true> => TString.create(...args).coerce(),
+  number: (...args: Parameters<typeof TNumber.create>): TNumber<true> => TNumber.create(...args).coerce(),
+}
 
 /* ---------------------------------------------------- External ---------------------------------------------------- */
 
