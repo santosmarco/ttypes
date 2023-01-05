@@ -1368,31 +1368,6 @@ export class TSet<T extends AnyTType>
 
 export type AnyTSet = TSet<AnyTType>
 
-/* --------------------------------------------------- TDictionary -------------------------------------------------- */
-
-export const handleTDictionaryResults = <T extends AnyTType, K extends AnyTType, V extends AnyTType>(
-  ctx: ParseContextOf<T>,
-  resultGetters: Array<() => { key: SyncParseResultOf<K>; value: SyncParseResultOf<V> }>
-): FailedParseResult<InputOf<T>> | SuccessfulParseResult<Map<OutputOf<K>, OutputOf<V>>> => {
-  const result = new Map<OutputOf<K>, OutputOf<V>>()
-
-  for (const getResult of resultGetters) {
-    const { key: keyRes, value: valueRes } = getResult()
-
-    if (!keyRes.ok || !valueRes.ok) {
-      if (ctx.common.abortEarly) {
-        return ctx.abort()
-      }
-
-      continue
-    }
-
-    result.set(keyRes.data, valueRes.data)
-  }
-
-  return ctx.isValid() ? OK(result) : ctx.abort()
-}
-
 /* ------------------------------------------------------------------------------------------------------------------ */
 /*                                                       TRecord                                                      */
 /* ------------------------------------------------------------------------------------------------------------------ */
