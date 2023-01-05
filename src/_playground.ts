@@ -17,41 +17,10 @@ console.log(
     b: 2,
   })
 )
-const a = t
-  .object({
-    a: t.string(),
-    b: t.number(),
-    c: t.bigint(),
-    d: t.boolean(),
-    e: t.null(),
-    f: t.undefined(),
-    g: t.buffer().nullish(),
-    h: t.unknown(),
-    i: t.any(),
-    j: t.record(t.string(), t.number()),
-    k: t.array(t.number()).nonempty(),
-    l: t.tuple([t.string(), t.number()]).rest(t.string().optional()).readonly(),
-    m: t.promise(t.number()),
-    n: t.set(t.date()),
-    s: t.object({
-      a: t.string(),
-      b: t.number(),
-      c: t.bigint(),
-      d: t.boolean(),
-      e: t.null(),
-      f: t.undefined(),
-      g: t.buffer().nullish(),
-      h: t.unknown(),
-      i: t.any(),
-      j: t.record(t.string(), t.number()),
-      k: t.array(t.number()).nonempty(),
-      l: t.tuple([t.string(), t.number()]).rest(t.string()),
-      m: t.promise(t.number()),
-      n: t.set(t.date()),
-    }),
-  })
-  .readonly()
+const a = t.string().lowercase().capitalize()
 type a = t.infer<typeof a>
+
+const asdsd: a = 'a'
 
 console.log(a.hint)
 console.log(t.undefined().required().hint)

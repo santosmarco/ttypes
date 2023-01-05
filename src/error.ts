@@ -13,6 +13,7 @@ export enum TIssueKind {
   InvalidType = 'invalid_type',
   InvalidLiteral = 'invalid_literal',
   InvalidEnumValue = 'invalid_enum_value',
+  InvalidString = 'invalid_string',
   InvalidArray = 'invalid_array',
   InvalidTuple = 'invalid_tuple',
   InvalidSet = 'invalid_set',
@@ -45,6 +46,48 @@ export type TInvalidLiteralIssue = TIssueBase<
 export type TInvalidEnumValueIssue = TIssueBase<
   TIssueKind.InvalidEnumValue,
   { readonly expected: TEnumValues; readonly received: string }
+>
+
+export type TInvalidStringIssue = TIssueBase<
+  TIssueKind.InvalidString,
+  | {
+      readonly check: 'min'
+      readonly expected: { readonly value: number; readonly inclusive: boolean }
+      readonly received: number
+    }
+  | {
+      readonly check: 'max'
+      readonly expected: { readonly value: number; readonly inclusive: boolean }
+      readonly received: number
+    }
+  | { readonly check: 'length'; readonly expected: number; readonly received: number }
+  | {
+      readonly check: 'pattern'
+      readonly expected: { readonly pattern: RegExp; readonly name: string }
+      readonly received: string
+    }
+  | {
+      readonly check: 'replace'
+      readonly expected: { readonly pattern: RegExp; readonly name: string; readonly replacement: string }
+      readonly received: string
+    }
+  | { readonly check: 'email'; readonly received: string }
+  | { readonly check: 'url'; readonly received: string }
+  | { readonly check: 'cuid'; readonly received: string }
+  | { readonly check: 'uuid'; readonly received: string }
+  | { readonly check: 'isoDuration' }
+  | {
+      readonly check: 'base64'
+      readonly expected: { readonly paddingRequired: boolean; readonly urlSafe: boolean }
+      readonly received: string
+    }
+  | { readonly check: 'startsWith'; readonly expected: string; readonly received: string }
+  | { readonly check: 'endsWith'; readonly expected: string; readonly received: string }
+  | {
+      readonly check: 'contains'
+      readonly expected: string
+      readonly received: string
+    }
 >
 
 export type TInvalidArrayIssue = TIssueBase<
@@ -97,6 +140,7 @@ export type TIssue =
   | TInvalidTypeIssue
   | TInvalidLiteralIssue
   | TInvalidEnumValueIssue
+  | TInvalidStringIssue
   | TInvalidArrayIssue
   | TInvalidTupleIssue
   | TInvalidSetIssue
@@ -247,12 +291,15 @@ export class TError<I> extends Error {
     return this._issues
   }
 
-  static readonly defaultFormatter: TErrorFormatter = DEFAULT_ERROR_FORMATTER
-
-  static readonly defaultIssueMap: TErrorMap = DEFAULT_ERROR_MAP
-
   static fromContext(ctx: AnyParseContext): AnyTError {
     return new TError(ctx.root.schema, ctx.allIssues)
+  }
+
+  static readonly defaultFormatter: TErrorFormatter = DEFAULT_ERROR_FORMATTER
+  static readonly defaultIssueMap: TErrorMap = DEFAULT_ERROR_MAP
+
+  static assertNever(_x: never): never {
+    throw new Error('Impossible')
   }
 }
 

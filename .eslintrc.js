@@ -18,13 +18,15 @@ module.exports = {
   },
   plugins: ['prettier'],
   rules: {
+    '@typescript-eslint/consistent-type-assertions': 'off',
     '@typescript-eslint/consistent-type-definitions': ['warn', 'interface'],
     '@typescript-eslint/consistent-type-imports': 'error',
     '@typescript-eslint/explicit-function-return-type': 'warn',
     '@typescript-eslint/member-ordering': 'off',
     '@typescript-eslint/naming-convention': 'off',
-    '@typescript-eslint/no-unused-vars': ['error', { argsIgnorePattern: '^_' }],
+    '@typescript-eslint/no-unused-vars': ['error', { argsIgnorePattern: '^_', varsIgnorePattern: '^_' }],
     'new-cap': 'off',
+    'no-case-declarations': 'off',
     complexity: 'off',
   },
   overrides: [

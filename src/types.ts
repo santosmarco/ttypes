@@ -2,7 +2,7 @@ import { deepEqual } from 'fast-equals'
 import memoize from 'micro-memoize'
 import { nanoid } from 'nanoid'
 import type { CamelCase, NonNegativeInteger, UnionToIntersection } from 'type-fest'
-import { TIssueKind, type TErrorMap } from './error'
+import { TError, TIssueKind, type TErrorMap, type TInvalidStringIssue } from './error'
 import { getGlobal, type GlobalOptions } from './global'
 import {
   AsyncParseContext,
@@ -30,6 +30,7 @@ import {
   type Equals,
   type Merge,
   type Simplify,
+  type StripKey,
 } from './utils'
 
 /* ---------------------------------------------------- TTypeName --------------------------------------------------- */
@@ -430,21 +431,377 @@ export class TUnknown extends TType<unknown, TUnknownDef> {
 /*                                                       TString                                                      */
 /* ------------------------------------------------------------------------------------------------------------------ */
 
+export type TStringTransform = 'trim' | 'lowercase' | 'uppercase' | 'capitalize' | 'uncapitalize'
+
+// eslint-disable-next-line @typescript-eslint/ban-types
+export type TStringIO<T extends readonly TStringTransform[]> = T extends readonly []
+  ? string
+  : T extends readonly [infer H extends TStringTransform, ...infer R extends TStringTransform[]]
+  ? H extends 'trim'
+    ? TStringIO<R>
+    : {
+        lowercase: Lowercase<TStringIO<R>>
+        uppercase: Uppercase<TStringIO<R>>
+        capitalize: Capitalize<TStringIO<R>>
+        uncapitalize: Uncapitalize<TStringIO<R>>
+      }[Exclude<H, 'trim'>]
+  : never
+
 export interface TStringDef extends TDef {
   readonly typeName: TTypeName.String
+  readonly transforms: readonly TStringTransform[]
+  readonly checks: ReadonlyArray<
+    StripKey<TInvalidStringIssue['payload'], 'received'> & { readonly message: string | undefined }
+  >
 }
 
-export class TString extends TType<string, TStringDef> {
+export class TString<T extends readonly TStringTransform[]> extends TType<TStringIO<T>, TStringDef> {
   _parse(ctx: ParseContextOf<this>): ParseResultOf<this> {
     if (typeof ctx.data !== 'string') {
       return ctx.invalidType({ expected: TParsedType.String }).abort()
     }
 
-    return OK(ctx.data)
+    const { transforms, checks } = this._def
+
+    for (const transform of transforms) {
+      switch (transform) {
+        case 'trim':
+          ctx.setData(ctx.data.trim())
+          break
+        case 'lowercase':
+          ctx.setData(ctx.data.toLowerCase())
+          break
+        case 'uppercase':
+          ctx.setData(ctx.data.toUpperCase())
+          break
+        case 'capitalize':
+          ctx.setData(ctx.data.charAt(0).toUpperCase() + ctx.data.slice(1))
+          break
+        case 'uncapitalize':
+          ctx.setData(ctx.data.charAt(0).toLowerCase() + ctx.data.slice(1))
+          break
+
+        default:
+          TError.assertNever(transform)
+      }
+    }
+
+    const { data } = ctx
+
+    for (const check of checks) {
+      switch (check.check) {
+        case 'min':
+          if (check.expected.inclusive ? data.length < check.expected.value : data.length <= check.expected.value) {
+            ctx.addIssue(
+              { kind: TIssueKind.InvalidString, payload: { ...check, received: data.length } },
+              check.message
+            )
+            if (ctx.common.abortEarly) {
+              return ctx.abort()
+            }
+          }
+
+          break
+        case 'max':
+          if (check.expected.inclusive ? data.length > check.expected.value : data.length >= check.expected.value) {
+            ctx.addIssue(
+              { kind: TIssueKind.InvalidString, payload: { ...check, received: data.length } },
+              check.message
+            )
+            if (ctx.common.abortEarly) {
+              return ctx.abort()
+            }
+          }
+
+          break
+        case 'length':
+          if (data.length !== check.expected) {
+            ctx.addIssue(
+              { kind: TIssueKind.InvalidString, payload: { ...check, received: data.length } },
+              check.message
+            )
+            if (ctx.common.abortEarly) {
+              return ctx.abort()
+            }
+          }
+
+          break
+        case 'pattern':
+          if (!check.expected.pattern.test(data)) {
+            ctx.addIssue({ kind: TIssueKind.InvalidString, payload: { ...check, received: data } }, check.message)
+            if (ctx.common.abortEarly) {
+              return ctx.abort()
+            }
+          }
+
+          break
+
+        case 'replace':
+          const transformed = data.replace(check.expected.pattern, check.expected.replacement)
+          if (transformed === data) {
+            ctx.addIssue({ kind: TIssueKind.InvalidString, payload: { ...check, received: data } }, check.message)
+            if (ctx.common.abortEarly) {
+              return ctx.abort()
+            }
+          } else {
+            ctx.setData(transformed)
+          }
+
+          break
+        case 'email':
+        case 'cuid':
+        case 'uuid':
+        case 'isoDuration':
+          if (!TString._internals.regexes[check.check].test(data)) {
+            const _x = {
+              email: ctx.addIssue(
+                { kind: TIssueKind.InvalidString, payload: { check: 'email', received: data } },
+                check.message
+              ),
+              cuid: ctx.addIssue(
+                { kind: TIssueKind.InvalidString, payload: { check: 'cuid', received: data } },
+                check.message
+              ),
+              uuid: ctx.addIssue(
+                { kind: TIssueKind.InvalidString, payload: { check: 'uuid', received: data } },
+                check.message
+              ),
+              isoDuration: ctx.addIssue(
+                { kind: TIssueKind.InvalidString, payload: { check: 'isoDuration', received: data } },
+                check.message
+              ),
+            }[check.check]
+            if (ctx.common.abortEarly) {
+              return ctx.abort()
+            }
+          }
+
+          break
+        case 'base64':
+          if (
+            !TString._internals.regexes[check.check][
+              check.expected.paddingRequired ? 'paddingRequired' : 'paddingNotRequired'
+            ][check.expected.urlSafe ? 'urlSafe' : 'urlUnsafe'].test(data)
+          ) {
+            ctx.addIssue({ kind: TIssueKind.InvalidString, payload: { ...check, received: data } }, check.message)
+            if (ctx.common.abortEarly) {
+              return ctx.abort()
+            }
+          }
+
+          break
+        case 'url':
+          try {
+            // eslint-disable-next-line no-new
+            new URL(data)
+          } catch {
+            ctx.addIssue({ kind: TIssueKind.InvalidString, payload: { ...check, received: data } }, check.message)
+            if (ctx.common.abortEarly) {
+              return ctx.abort()
+            }
+          }
+
+          break
+        case 'startsWith':
+          if (!data.startsWith(check.expected)) {
+            ctx.addIssue({ kind: TIssueKind.InvalidString, payload: { ...check, received: data } }, check.message)
+            if (ctx.common.abortEarly) {
+              return ctx.abort()
+            }
+          }
+
+          break
+        case 'endsWith':
+          if (!data.endsWith(check.expected)) {
+            ctx.addIssue({ kind: TIssueKind.InvalidString, payload: { ...check, received: data } }, check.message)
+            if (ctx.common.abortEarly) {
+              return ctx.abort()
+            }
+          }
+
+          break
+
+        case 'contains':
+          if (!data.includes(check.expected)) {
+            ctx.addIssue({ kind: TIssueKind.InvalidString, payload: { ...check, received: data } }, check.message)
+            if (ctx.common.abortEarly) {
+              return ctx.abort()
+            }
+          }
+
+          break
+        default:
+          TError.assertNever(check)
+      }
+    }
+
+    return OK(ctx.data as OutputOf<this>)
   }
 
-  static create(options?: Simplify<TOptions>): TString {
-    return new TString({ typeName: TTypeName.String, options: { ...options } })
+  min<V extends number>(
+    value: NonNegativeInteger<V>,
+    options?: { readonly inclusive?: boolean; readonly message?: string }
+  ): TString<T> {
+    return this._addCheck({
+      check: 'min',
+      expected: { value, inclusive: options?.inclusive ?? true },
+      message: options?.message,
+    })._removeCheck('length')
+  }
+
+  max<V extends number>(
+    value: NonNegativeInteger<V>,
+    options?: { readonly inclusive?: boolean; readonly message?: string }
+  ): TString<T> {
+    return this._addCheck({
+      check: 'max',
+      expected: { value, inclusive: options?.inclusive ?? true },
+      message: options?.message,
+    })._removeCheck('length')
+  }
+
+  length<L extends number>(length: NonNegativeInteger<L>, options?: { readonly message?: string }): TString<T> {
+    return this._addCheck({ check: 'length', expected: length, message: options?.message })
+      ._removeCheck('min')
+      ._removeCheck('max')
+  }
+
+  pattern(pattern: RegExp, options?: { readonly name?: string; readonly message?: string }): TString<T> {
+    return this._addCheck({
+      check: 'pattern',
+      expected: { pattern, name: options?.name ?? pattern.source },
+      message: options?.message,
+    })
+  }
+
+  replace(
+    pattern: RegExp,
+    replacement: string,
+    options?: { readonly name?: string; readonly message?: string }
+  ): TString<T> {
+    return this._addCheck({
+      check: 'replace',
+      expected: { pattern, replacement, name: options?.name ?? pattern.source },
+      message: options?.message,
+    })
+  }
+
+  regex(pattern: RegExp, options?: { readonly name?: string; readonly message?: string }): TString<T> {
+    return this.pattern(pattern, options)
+  }
+
+  email(options?: { readonly message?: string }): TString<T> {
+    return this._addCheck({ check: 'email', message: options?.message })
+  }
+
+  url(options?: { readonly message?: string }): TString<T> {
+    return this._addCheck({ check: 'url', message: options?.message })
+  }
+
+  cuid(options?: { readonly message?: string }): TString<T> {
+    return this._addCheck({ check: 'cuid', message: options?.message })
+  }
+
+  uuid(options?: { readonly message?: string }): TString<T> {
+    return this._addCheck({ check: 'uuid', message: options?.message })
+  }
+
+  isoDuration(options?: { readonly message?: string }): TString<T> {
+    return this._addCheck({ check: 'isoDuration', message: options?.message })
+  }
+
+  base64(options?: {
+    readonly paddingRequired?: boolean
+    readonly urlSafe?: boolean
+    readonly message?: string
+  }): TString<T> {
+    return this._addCheck({
+      check: 'base64',
+      expected: { paddingRequired: options?.paddingRequired ?? true, urlSafe: options?.urlSafe ?? true },
+      message: options?.message,
+    })
+  }
+
+  startsWith(prefix: string, options?: { readonly message?: string }): TString<T> {
+    return this._addCheck({ check: 'startsWith', expected: prefix, message: options?.message })
+  }
+
+  endsWith(suffix: string, options?: { readonly message?: string }): TString<T> {
+    return this._addCheck({ check: 'endsWith', expected: suffix, message: options?.message })
+  }
+
+  constains(substring: string, options?: { readonly message?: string }): TString<T> {
+    return this._addCheck({ check: 'constains', expected: substring, message: options?.message })
+  }
+
+  trim(): TString<[...T, 'trim']> {
+    return this._addTransform('trim')
+  }
+
+  lowercase(): TString<[...T, 'lowercase']> {
+    return this._addTransform('lowercase')
+  }
+
+  uppercase(): TString<[...T, 'uppercase']> {
+    return this._addTransform('uppercase')
+  }
+
+  capitalize(): TString<[...T, 'capitalize']> {
+    return this._addTransform('capitalize')
+  }
+
+  uncapitalize(): TString<[...T, 'uncapitalize']> {
+    return this._addTransform('uncapitalize')
+  }
+
+  private _addCheck(check: TStringDef['checks'][number]): TString<T> {
+    return new TString({
+      ...this._def,
+      checks: [...this._def.checks, check].filter((c, i, arr) => arr.findIndex((c2) => c2.check === c.check) === i),
+    })
+  }
+
+  private _removeCheck(kind: TStringDef['checks'][number]['check']): TString<T> {
+    return new TString({ ...this._def, checks: this._def.checks.filter((check) => check.check !== kind) })
+  }
+
+  private _addTransform<T_ extends TStringTransform>(transform: T_): TString<[...T, T_]> {
+    return new TString({
+      ...this._def,
+      transforms: [...new Set([...this._def.transforms, transform])],
+    })
+  }
+
+  static create(options?: Simplify<TOptions>): TString<[]> {
+    return new TString({ typeName: TTypeName.String, checks: [], transforms: [], options: { ...options } })
+  }
+
+  private static readonly _internals: {
+    readonly regexes: Readonly<Record<'alphanum' | 'email' | 'cuid' | 'uuid' | 'isoDuration', RegExp>> & {
+      readonly base64: {
+        readonly paddingRequired: { readonly urlSafe: RegExp; readonly urlUnsafe: RegExp }
+        readonly paddingNotRequired: { readonly urlSafe: RegExp; readonly urlUnsafe: RegExp }
+      }
+    }
+  } = {
+    regexes: {
+      alphanum: /^[a-zA-Z0-9]+$/,
+      email:
+        /^(([^<>()[\].,;:\s@"]+(\.[^<>()[\].,;:\s@"]+)*)|(".+"))@((?!-)([^<>()[\].,;:\s@"]+\.)+[^<>()[\].,;:\s@"]{1,})[^-<>()[\].,;:\s@"]$/i,
+      cuid: /^c[^\s-]{8,}$/i,
+      uuid: /^([a-f0-9]{8}-[a-f0-9]{4}-[1-5][a-f0-9]{3}-[a-f0-9]{4}-[a-f0-9]{12}|00000000-0000-0000-0000-000000000000)$/i,
+      isoDuration: /^P(?!$)(\d+Y)?(\d+M)?(\d+W)?(\d+D)?(T(?=\d)(\d+H)?(\d+M)?(\d+S)?)?$/,
+      base64: {
+        paddingRequired: {
+          urlSafe: /^(?:[\w\-]{2}[\w\-]{2})*(?:[\w\-]{2}==|[\w\-]{3}=)?$/,
+          urlUnsafe: /^(?:[A-Za-z0-9+\/]{2}[A-Za-z0-9+\/]{2})*(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+\/]{3}=)?$/,
+        },
+        paddingNotRequired: {
+          urlSafe: /^(?:[\w\-]{2}[\w\-]{2})*(?:[\w\-]{2}(==)?|[\w\-]{3}=?)?$/,
+          urlUnsafe: /^(?:[A-Za-z0-9+\/]{2}[A-Za-z0-9+\/]{2})*(?:[A-Za-z0-9+/]{2}(==)?|[A-Za-z0-9+\/]{3}=?)?$/,
+        },
+      },
+    },
   }
 }
 
@@ -1391,7 +1748,6 @@ export class TRecord<K extends AnyTType<PropertyKey, PropertyKey>, V extends Any
     const { keys, values } = this._def
     const { data } = ctx
 
-    // eslint-disable-next-line @typescript-eslint/consistent-type-assertions
     const result = {} as Record<OutputOf<K>, OutputOf<V>>
 
     if (ctx.isAsync()) {

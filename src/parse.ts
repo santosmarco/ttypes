@@ -132,6 +132,7 @@ export interface ParseContextInternals {
 export interface ParseContext<O, I = O> {
   readonly status: ParseStatus
   readonly data: unknown
+  setData(data: unknown): this
   readonly parsedType: TParsedType
   readonly schema: AnyTType<O, I>
   readonly path: ParsePath
@@ -148,7 +149,16 @@ export interface ParseContext<O, I = O> {
   isAsync(): boolean
   child<O_, I_>(schema: AnyTType<O_, I_>, data: unknown, path?: ParsePath): ParseContext<O_, I_>
   clone<O_, I_>(schema: AnyTType<O_, I_>, data: unknown): ParseContext<O_, I_>
-  addIssue(issue: StripKey<TIssue, 'path' | 'message'>, message: string | undefined): this
+  addIssue<
+    T extends TIssueKind,
+    U extends StripKey<Extract<TIssue, { readonly kind: T }>, 'path' | 'message'> = StripKey<
+      Extract<TIssue, { readonly kind: T }>,
+      'path' | 'message'
+    >
+  >(
+    issue: U,
+    message: string | undefined
+  ): this
   invalidType(payload: { readonly expected: TParsedType }): this
   abort(): FailedParseResult<I>
 }
@@ -179,6 +189,10 @@ export const ParseContext = <T extends AnyTType>({
 
     get data() {
       return _internals.data
+    },
+
+    setData(data: unknown) {
+      _internals.data = data
     },
 
     get parsedType() {
