@@ -657,8 +657,20 @@ export class TString<
   /**
    * Alias for {@link TString.pattern|`TString.pattern`}.
    */
-  regex(pattern: RegExp, options?: { readonly name?: string; readonly message?: string }): this {
+  regex(
+    pattern: RegExp,
+    options?: { readonly type?: 'enforce' | 'disallow'; readonly name?: string; readonly message?: string }
+  ): this {
     return this.pattern(pattern, options)
+  }
+
+  /**
+   * Specifies a regular expression that the string must **not** match.
+   *
+   * This is a shorthand for {@link TString.pattern|`TString.pattern`} but with the `type` option set to `'disallow'`.
+   */
+  disallow(pattern: RegExp, options?: { readonly name?: string; readonly message?: string }): this {
+    return this.pattern(pattern, { ...options, type: 'disallow' })
   }
 
   email(options?: { readonly message?: string }): this {
