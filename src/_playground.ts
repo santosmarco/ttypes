@@ -1,54 +1,85 @@
 import { t, type ObjectShapePaths, type ReachSchema } from './index'
 
-const a = t
+// Const a = t
+//   .object({
+//     a: t.number().coerce(),
+//     b: t.string().coerce(),
+//     c: t.ref('b'),
+//     d: t.object({
+//       a: t.bigint(),
+//       b: t.boolean(),
+//       c: t.date(),
+//       d: t.literal('a'),
+//       e: t.nan(),
+//       f: t.symbol(),
+//       g: t.buffer(),
+//       h: t.array(t.number()),
+//       i: t.set(t.number()),
+//       j: t.tuple([
+//         t.number(),
+//         t.string(),
+//         t.object({
+//           a: t.number(),
+//           b: t.nan().optional(),
+//         }),
+//         t.tuple([t.boolean()]),
+//       ]),
+//       k: t.record(t.string(), t.number()),
+//       l: t.ref('j.3[0]'),
+//       dfbfg: t.object({
+//         a: t.number(),
+//         b: t.string(),
+//         asda: t.object({
+//           a: t.number(),
+//           b: t.nan(),
+//         }),
+//       }),
+//     }),
+//   })
+//   .pick(['d'])
+//   .shape.d.pick(['l'])
+
+// console.log(a.shape)
+
+// const bool = console.log(t.coerce.bigint().parse(false))
+// type b = t.output<typeof bool>
+// type bb = t.input<typeof bool>
+
+// type c = ObjectShapePaths<typeof a.shape>
+
+// type cc = ReachSchema<'d.j.3[0]', typeof a.shape>
+
+// type adsad = t.infer<typeof a>
+
+// console.log(a.parse({ l: true }))
+
+const asd = t
   .object({
-    a: t.number().coerce(),
-    b: t.string().coerce(),
-    c: t.ref('b'),
-    d: t.object({
-      a: t.bigint(),
-      b: t.boolean(),
-      c: t.date(),
-      d: t.literal('a'),
-      e: t.nan(),
-      f: t.symbol(),
-      g: t.buffer(),
-      h: t.array(t.number()),
-      i: t.set(t.number()),
-      j: t.tuple([
-        t.number(),
-        t.string(),
-        t.object({
-          a: t.number(),
-          b: t.nan().optional(),
-        }),
-        t.tuple([t.boolean()]),
-      ]),
-      k: t.record(t.string(), t.number()),
-      l: t.ref('j.3[0]'),
-      dfbfg: t.object({
-        a: t.number(),
-        b: t.string(),
-        asda: t.object({
-          a: t.number(),
-          b: t.nan(),
-        }),
-      }),
-    }),
+    a: t.string(),
+    b: t.number(),
+    c: t.bigint(),
+    d: t.boolean(),
+    e: t.null(),
+    f: t.undefined(),
+    g: t.buffer().nullish(),
+    h: t.unknown(),
+    i: t.any(),
+    j: t.record(t.string(), t.number()),
+    k: t.array(t.number()).nonempty(),
+    l: t.tuple([t.string(), t.number()]).rest(t.string()),
+    m: t.tuple([t.string(), t.bigint()]).tail().,
+    n: t.set(t.date()),
   })
-  .pick(['d'])
-  .shape.d.pick(['l'])
+  .values()
 
-console.log(a.shape)
+type asd = t.infer<typeof asd>
 
-const bool = console.log(t.coerce.bigint().parse(false))
-type b = t.output<typeof bool>
-type bb = t.input<typeof bool>
+console.log(asd.hint)
 
-type c = ObjectShapePaths<typeof a.shape>
+const sdkjsd = t.literal(2).negate().absolute().add(213092310).multiply(4000)
 
-type cc = ReachSchema<'d.j.3[0]', typeof a.shape>
+type sadd = t.infer<typeof sdkjsd>
 
-type adsad = t.infer<typeof a>
-
-console.log(a.parse({ l: true }))
+type C = [string, number, ...boolean[]]
+type D = [...bigint[]]
+type CD = [...C, ...D, 'a']

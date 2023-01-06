@@ -8,7 +8,7 @@ export interface TChecks<
 > {
   add(check: T['_def']['checks'][number]): T
   remove(kind: T['_def']['checks'][number]['check']): T
-  checkExists(kind: T['_def']['checks'][number]['check']): boolean
+  has(kind: T['_def']['checks'][number]['check']): boolean
 }
 
 export const TChecks = {
@@ -19,21 +19,19 @@ export const TChecks = {
     >
   >(
     type: T
-  ): {
-    add(check: T['_def']['checks'][number]): T
-    remove(kind: T['_def']['checks'][number]['check']): T
-    checkExists(kind: T['_def']['checks'][number]['check']): boolean
-  } => ({
+  ): TChecks<T> => ({
     add(check): T {
       return type._construct({
         ...type._def,
         checks: [...type._def.checks, check].filter((c, i, arr) => arr.findIndex((c2) => c2.check === c.check) === i),
       })
     },
+
     remove(kind): T {
       return type._construct({ ...type._def, checks: type._def.checks.filter((check) => check.check !== kind) })
     },
-    checkExists(kind): boolean {
+
+    has(kind): boolean {
       return type._def.checks.some((check) => check.check === kind)
     },
   }),

@@ -1,8 +1,5 @@
 import cloneDeep_ from 'clone-deep'
 
-export const UNSET_MARKER = Symbol('UNSET_MARKER')
-export type UNSET_MARKER = typeof UNSET_MARKER
-
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 export type Fn = (...args: readonly any[]) => any
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -24,6 +21,8 @@ export type BuiltIn =
 export type Defined<T> = T extends undefined ? never : T
 export type Equals<A, B> = (<X>() => X extends A ? 1 : 0) extends <Y>() => Y extends B ? 1 : 0 ? 1 : 0
 export type Merge<A, B> = Omit<A, keyof B> & B
+export type Intersect<A, B> = Pick<A, Extract<keyof A, keyof B>>
+export type Diff<A, B> = Pick<A, Exclude<keyof A, keyof B>>
 export type SimplifyFlat<T> = { 0: T extends BuiltIn ? T : { [K in keyof T]: T[K] }; 1: T }[Equals<T, unknown>]
 export type SimplifyDeep<T> = { 0: T extends BuiltIn ? T : { [K in keyof T]: SimplifyDeep<T[K]> }; 1: T }[Equals<
   T,
@@ -49,7 +48,8 @@ export type Integer<T extends number> = `${T}` extends `${bigint}` ? T : never
 export type Negative<T extends Numeric> = T extends Zero ? never : `${T}` extends `-${string}` ? T : never
 export type NonNegative<T extends Numeric> = T extends Zero ? T : Negative<T> extends never ? T : never
 export type NonNegativeInteger<T extends number> = NonNegative<Integer<T>>
-export type CastToNumber<T extends string> = T extends `${infer N extends number}` ? N : never
+export type ToNumber<T extends string> = T extends `${infer N extends number}` ? N : never
+export type ToBoolean<T extends 0 | 1> = T extends 0 ? false : true
 export type Split<S extends string, D extends string> = S extends `${infer H}${D}${infer T}`
   ? [H, ...Split<T, D>]
   : S extends D
