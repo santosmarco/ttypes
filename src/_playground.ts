@@ -1,4 +1,5 @@
-import { t, type ObjectShapePaths, type ReachSchema } from './index'
+import { type S } from 'ts-toolbelt'
+import { t, type ObjectShapePaths, type ReachSchema, stringUtils } from './index'
 
 // Const a = t
 //   .object({
@@ -67,19 +68,15 @@ const asd = t
     j: t.record(t.string(), t.number()),
     k: t.array(t.number()).nonempty(),
     l: t.tuple([t.string(), t.number()]).rest(t.string()),
-    m: t.tuple([t.string(), t.bigint()]).tail().,
+    m: t.tuple([t.string(), t.bigint()]).tail(),
     n: t.set(t.date()),
   })
   .values()
 
 type asd = t.infer<typeof asd>
-
+type c = String
 console.log(asd.hint)
 
-const sdkjsd = t.literal(2).negate().absolute().add(213092310).multiply(4000)
-
-type sadd = t.infer<typeof sdkjsd>
-
-type C = [string, number, ...boolean[]]
-type D = [...bigint[]]
-type CD = [...C, ...D, 'a']
+t.string().max(2, {
+  message:
+})

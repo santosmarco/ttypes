@@ -7,6 +7,9 @@
   "author": "santosmarco",
   "main": "out/index.js",
   "scripts": {
+    "format:check": "prettier --check .",
+    "format:write": "prettier --write .",
+    "lint": "eslint --ext .ts .",
     "test": "echo \"Error: no test specified\" && exit 1"
   },
   "dependencies": {

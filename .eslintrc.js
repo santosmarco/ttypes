@@ -25,11 +25,12 @@ module.exports = {
     '@typescript-eslint/explicit-function-return-type': 'warn',
     '@typescript-eslint/member-ordering': 'off',
     '@typescript-eslint/naming-convention': 'off',
+    '@typescript-eslint/no-namespace': 'off',
+    '@typescript-eslint/no-redeclare': 'off',
     '@typescript-eslint/no-unused-vars': ['error', { argsIgnorePattern: '^_', varsIgnorePattern: '^_' }],
     'new-cap': 'off',
     'no-case-declarations': 'off',
     complexity: 'off',
-    '@typescript-eslint/no-redeclare': 'off',
   },
   overrides: [
     {

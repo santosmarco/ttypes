@@ -1,5 +1,19 @@
-import type { AnyTTypeBase, InputOf, OutputOf, ParseOptions, StripKey, TIssue } from './_internal'
-import { TError, TIssueKind, cloneDeep, getGlobal, isArray, isAsync, resolveErrorMaps } from './_internal'
+import { type OptionalKeysOf } from 'type-fest'
+import {
+  TError,
+  TIssueKind,
+  cloneDeep,
+  getGlobal,
+  isArray,
+  isAsync,
+  resolveErrorMaps,
+  type AnyTTypeBase,
+  type InputOf,
+  type OutputOf,
+  type ParseOptions,
+  type StripKey,
+  type TIssue,
+} from './_internal'
 
 /* --------------------------------------------------- TParsedType -------------------------------------------------- */
 
@@ -144,9 +158,11 @@ export interface ParseContext<O, I = O> {
   isAsync(): boolean
   child<O_, I_>(schema: AnyTTypeBase<O_, I_>, data: unknown, path?: ParsePath): ParseContext<O_, I_>
   clone<O_, I_>(schema: AnyTTypeBase<O_, I_>, data: unknown): ParseContext<O_, I_>
-  addIssue<T extends TIssueKind>(
-    issue: StripKey<Extract<TIssue, { readonly kind: T }>, 'path' | 'message'>,
-    message: string | undefined
+  addIssue<K extends TIssueKind>(
+    kind: K,
+    ...args: 'payload' extends OptionalKeysOf<TIssue<K>>
+      ? [message: string | undefined]
+      : [payload: TIssue<K>['payload'], message: string | undefined]
   ): this
   invalidType(payload: { readonly expected: TParsedType }): this
   success<T>(data: T): SuccessfulParseResult<T>
@@ -259,7 +275,7 @@ export const ParseContext = <T extends AnyTTypeBase>({
       return ParseContext.of(schema, data, this.common)
     },
 
-    addIssue(issue, message) {
+    addIssue(kind, ...args) {
       if (this.isInvalid()) {
         if (this.common.abortEarly) {
           return this
@@ -268,7 +284,12 @@ export const ParseContext = <T extends AnyTTypeBase>({
         this.setInvalid()
       }
 
-      const issueWithPath = { ...issue, path: this.path }
+      const [issuePayload, message] = args.length === 2 ? args : [undefined, args[0]]
+
+      const issueWithPath = { kind, path: this.path }
+      const issueWithPathAndPayload = (
+        issuePayload ? { ...issueWithPath, payload: issuePayload } : issueWithPath
+      ) as StripKey<TIssue, 'message'>
 
       const issueMsg =
         message ??
@@ -277,20 +298,21 @@ export const ParseContext = <T extends AnyTTypeBase>({
           this.schema._def.options.schemaErrorMap,
           getGlobal().getErrorMap(),
           TError.defaultIssueMap,
-        ])(issueWithPath)
+        ])(issueWithPathAndPayload)
 
-      _internals.ownIssues.push({ ...issueWithPath, message: issueMsg })
+      _internals.ownIssues.push({ ...issueWithPathAndPayload, message: issueMsg })
 
       return this
     },
 
     invalidType(payload) {
       if (this.data === undefined) {
-        return this.addIssue({ kind: TIssueKind.Required }, this.schema._def.options.messages?.required)
+        return this.addIssue(TIssueKind.Required, this.schema._def.options.messages?.required)
       }
 
       return this.addIssue(
-        { kind: TIssueKind.InvalidType, payload: { expected: payload.expected, received: this.parsedType } },
+        TIssueKind.InvalidType,
+        { expected: payload.expected, received: this.parsedType },
         this.schema._def.options.messages?.invalidType
       )
     },
