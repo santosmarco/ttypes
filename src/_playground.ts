@@ -77,6 +77,8 @@ type asd = t.infer<typeof asd>
 type c = String
 console.log(asd.hint)
 
-t.string().max(2, {
+const a = t.string().max(2, {
   message:
-})
+}).lowercase().uppercase().capitalize().uncapitalize()
+
+type sdasd = t.infer<typeof a>

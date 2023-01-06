@@ -6,7 +6,7 @@ export interface TChecks<
     TDef & { readonly checks: ReadonlyArray<{ readonly check: string; readonly [x: string]: unknown }> }
   >
 > {
-  add(check: T['_def']['checks'][number]): T
+  add(check: T['_def']['checks'][number], options?: { readonly noReplace?: boolean }): T
   remove(kind: T['_def']['checks'][number]['check']): T
   has(kind: T['_def']['checks'][number]['check']): boolean
 }
@@ -20,10 +20,14 @@ export const TChecks = {
   >(
     type: T
   ): TChecks<T> => ({
-    add(check): T {
+    add(check, options): T {
+      const updated = [...type._def.checks, check]
+
       return type._construct({
         ...type._def,
-        checks: [...type._def.checks, check].filter((c, i, arr) => arr.findIndex((c2) => c2.check === c.check) === i),
+        checks: options?.noReplace
+          ? updated
+          : updated.filter((c, i, arr) => arr.findIndex((c2) => c2.check === c.check) === i),
       })
     },
 

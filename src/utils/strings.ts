@@ -106,17 +106,17 @@ export namespace stringUtils {
   export type ReplaceAll<T extends string, S extends string, R extends string> = Join<Split<T, S>, R>
 
   /**
-   * Removes leading spaces from a string.
+   * Removes leading whitespace from a string.
    */
   export type TrimLeft<T extends string> = T extends ` ${infer R}` ? TrimLeft<R> : T
 
   /**
-   * Removes trailing spaces from a string.
+   * Removes trailing whitespace from a string.
    */
   export type TrimRight<T extends string> = T extends `${infer R} ` ? TrimRight<R> : T
 
   /**
-   * Removes leading and trailing spaces from a string.
+   * Removes leading and trailing whitespace from a string.
    */
   export type Trim<T extends string> = TrimLeft<TrimRight<T>>
 

@@ -644,11 +644,14 @@ export class TString<
     pattern: RegExp,
     options?: { readonly type?: 'enforce' | 'disallow'; readonly name?: string; readonly message?: string }
   ): this {
-    return this._checks.add({
-      check: 'pattern',
-      expected: { pattern, type: options?.type ?? 'enforce', name: options?.name ?? pattern.source },
-      message: options?.message,
-    })
+    return this._checks.add(
+      {
+        check: 'pattern',
+        expected: { pattern, type: options?.type ?? 'enforce', name: options?.name ?? pattern.source },
+        message: options?.message,
+      },
+      { noReplace: true }
+    )
   }
 
   /**
@@ -722,6 +725,8 @@ export class TString<
     return this._checks.has('base64')
   }
 
+  /* ---------------------------------------------------------------------------------------------------------------- */
+
   startsWith(prefix: string, options?: { readonly message?: string }): this {
     return this._checks.add({ check: 'starts_with', expected: prefix, message: options?.message })
   }
@@ -736,22 +741,47 @@ export class TString<
 
   /* -------------------------------------------------- Transforms -------------------------------------------------- */
 
+  /**
+   * Removes leading and trailing whitespace from the string.
+   *
+   * @returns {TString} A new instance of `TString` with the transform added.
+   */
   trim(): TString<[...T, 'trim'], C> {
     return this._addTransform({ kind: 'trim' })
   }
 
+  /**
+   * Converts the string to lowercase.
+   *
+   * @returns {TString} A new instance of `TString` with the transform added.
+   */
   lowercase(): TString<[...T, 'lowercase'], C> {
     return this._addTransform({ kind: 'lowercase' })
   }
 
+  /**
+   * Converts the string to uppercase.
+   *
+   * @returns {TString} A new instance of `TString` with the transform added.
+   */
   uppercase(): TString<[...T, 'uppercase'], C> {
     return this._addTransform({ kind: 'uppercase' })
   }
 
+  /**
+   * Converts the string to capitalized.
+   *
+   * @returns {TString} A new instance of `TString` with the transform added.
+   */
   capitalize(): TString<[...T, 'capitalize'], C> {
     return this._addTransform({ kind: 'capitalize' })
   }
 
+  /**
+   * Converts the string to uncapitalized.
+   *
+   * @returns {TString} A new instance of `TString` with the transform added.
+   */
   uncapitalize(): TString<[...T, 'uncapitalize'], C> {
     return this._addTransform({ kind: 'uncapitalize' })
   }
