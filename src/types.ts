@@ -418,6 +418,7 @@ export class TString<
       switch (transform.kind) {
         case 'trim':
           ctx.setData(ctx.data.trim())
+
           break
         case 'replace':
           if (typeof transform.search === 'string') {
@@ -486,7 +487,7 @@ export class TString<
         case 'cuid':
         case 'uuid':
         case 'iso_duration':
-          if (!TString._internals.regexes[check.check].test(data)) {
+          if (!TString._internals.re[check.check].test(data)) {
             ctx.addIssue(
               TIssueKind.InvalidString,
               { check: check.check, received: data },
@@ -509,7 +510,7 @@ export class TString<
           break
         case 'base64':
           if (
-            !TString._internals.regexes[check.check][
+            !TString._internals.re[check.check][
               check.expected.paddingRequired ? 'paddingRequired' : 'paddingNotRequired'
             ][check.expected.urlSafe ? 'urlSafe' : 'urlUnsafe'].test(data)
           ) {
@@ -573,7 +574,7 @@ export class TString<
    *
    * @template V
    * @param {NonNegativeInteger<V>} value The minimum length allowed. Must be a non-negative integer.
-   * @param {{ readonly inclusive?: boolean; readonly message?: string }} [options] Options for this check.
+   * @param {{ inclusive?: boolean; message?: string }} [options] Options for this check.
    * @param {boolean} [options.inclusive=true] Whether the requirement is inclusive or exclusive.
    * @param {string} [options.message] The error message to use if the check fails.
    * @returns {TString} A new instance of `TString` with the check added.
@@ -582,9 +583,10 @@ export class TString<
     value: NonNegativeInteger<V>,
     options?: { readonly inclusive?: boolean; readonly message?: string }
   ): this {
-    return this._checks
-      .add({ check: 'min', expected: { value, inclusive: options?.inclusive ?? true }, message: options?.message })
-      ._checks.remove('length')
+    return this._checks.add(
+      { check: 'min', expected: { value, inclusive: options?.inclusive ?? true }, message: options?.message },
+      { remove: ['length'] }
+    )
   }
 
   /**
@@ -594,7 +596,7 @@ export class TString<
    *
    * @template V
    * @param {NonNegativeInteger<V>} value The maximum length allowed. Must be a non-negative integer.
-   * @param {{ readonly inclusive?: boolean; readonly message?: string }} [options] Options for this check.
+   * @param {{ inclusive?: boolean; message?: string }} [options] Options for this check.
    * @param {boolean} [options.inclusive=true] Whether the requirement is inclusive or exclusive.
    * @param {string} [options.message] The error message to use if the check fails.
    * @returns {TString} A new instance of `TString` with the check added.
@@ -603,9 +605,10 @@ export class TString<
     value: NonNegativeInteger<V>,
     options?: { readonly inclusive?: boolean; readonly message?: string }
   ): this {
-    return this._checks
-      .add({ check: 'max', expected: { value, inclusive: options?.inclusive ?? true }, message: options?.message })
-      ._checks.remove('length')
+    return this._checks.add(
+      { check: 'max', expected: { value, inclusive: options?.inclusive ?? true }, message: options?.message },
+      { remove: ['length'] }
+    )
   }
 
   /**
@@ -615,15 +618,15 @@ export class TString<
    *
    * @template L
    * @param {NonNegativeInteger<L>} length The required length. Must be a non-negative integer.
-   * @param {{ readonly message?: string }} [options] Options for this check.
+   * @param {{ message?: string }} [options] Options for this check.
    * @param {string} [options.message] The error message to use if the check fails.
    * @returns {TString} A new instance of `TString` with the check added.
    */
   length<L extends number>(length: NonNegativeInteger<L>, options?: { readonly message?: string }): this {
-    return this._checks
-      .add({ check: 'length', expected: length, message: options?.message })
-      ._checks.remove('min')
-      ._checks.remove('max')
+    return this._checks.add(
+      { check: 'length', expected: length, message: options?.message },
+      { remove: ['min', 'max'] }
+    )
   }
 
   /* ------------------------------------------------ Pattern checks ------------------------------------------------ */
@@ -632,7 +635,7 @@ export class TString<
    * Specifies a regular expression that the string must or must not match.
    *
    * @param {RegExp} pattern The regular expression to match the string against.
-   * @param {({ readonly type?: 'enforce' | 'disallow'; readonly name?: string; readonly message?: string })} [options] Options for this check.
+   * @param {({ type?: 'enforce' | 'disallow'; name?: string; message?: string })} [options] Options for this check.
    * @param {('enforce'|'prevent')} [options.type='enforce'] Whether the string must or must not match the specified pattern.
    * - `'enforce'` - Input must match the pattern _(default)_.
    * - `'disallow'` - Input must **not** match the pattern.
@@ -667,7 +670,7 @@ export class TString<
   /**
    * Specifies a regular expression that the string must **not** match.
    *
-   * This is a shorthand for {@link TString.pattern|`TString.pattern`} but with the `type` option set to `'disallow'`.
+   * This is a shorthand for {@link TString.pattern|`TString.pattern`} with the `type` option set to `'disallow'`.
    */
   disallow(pattern: RegExp, options?: { readonly name?: string; readonly message?: string }): this {
     return this.pattern(pattern, { ...options, type: 'disallow' })
@@ -803,7 +806,7 @@ export class TString<
    *
    * @param {(RegExp | string)} search The string or regular expression to search for.
    * @param {string} replace The string to replace with.
-   * @param {{ readonly all?: boolean }} [options] Options for this check.
+   * @param {{ all?: boolean }} [options] Options for this check.
    * @param {boolean} [options.all=true] Whether to replace all occurrences of the `search` string/pattern or just the first.
    * **Note:** This only works when `search` is a string. If you want the same behavior for a regular expression, use the `g` flag.
    * @returns {TString} A new instance of `TString` with the transform added.
@@ -839,7 +842,7 @@ export class TString<
   }
 
   static readonly _internals: {
-    readonly regexes: Readonly<Record<'alphanum' | 'email' | 'cuid' | 'uuid' | 'iso_date' | 'iso_duration', RegExp>> & {
+    readonly re: Readonly<Record<'alphanum' | 'email' | 'cuid' | 'uuid' | 'iso_date' | 'iso_duration', RegExp>> & {
       readonly base64: {
         readonly paddingRequired: { readonly urlSafe: RegExp; readonly urlUnsafe: RegExp }
         readonly paddingNotRequired: { readonly urlSafe: RegExp; readonly urlUnsafe: RegExp }
@@ -849,7 +852,7 @@ export class TString<
       isIsoDate(data: string): string | null
     }
   } = {
-    regexes: {
+    re: {
       alphanum: /^[a-zA-Z0-9]+$/,
       email:
         /^(([^<>()[\].,;:\s@"]+(\.[^<>()[\].,;:\s@"]+)*)|(".+"))@((?!-)([^<>()[\].,;:\s@"]+\.)+[^<>()[\].,;:\s@"]{1,})[^-<>()[\].,;:\s@"]$/i,
@@ -872,7 +875,7 @@ export class TString<
 
     validators: {
       isIsoDate(value) {
-        if (!TString._internals.regexes.iso_date.test(value)) {
+        if (!TString._internals.re.iso_date.test(value)) {
           return null
         }
 
@@ -1020,9 +1023,10 @@ export class TNumber<C extends boolean = boolean> extends TType<number, TNumberD
   /* ---------------------------------------------------- Checks ---------------------------------------------------- */
 
   min(value: number, options?: { readonly inclusive?: boolean; readonly message?: string }): this {
-    return this._checks
-      .add({ check: 'min', expected: { value, inclusive: options?.inclusive ?? true }, message: options?.message })
-      ._checks.remove('range')
+    return this._checks.add(
+      { check: 'min', expected: { value, inclusive: options?.inclusive ?? true }, message: options?.message },
+      { remove: ['range'] }
+    )
   }
 
   gt(value: number, options?: { readonly message?: string }): this {
@@ -1034,9 +1038,10 @@ export class TNumber<C extends boolean = boolean> extends TType<number, TNumberD
   }
 
   max(value: number, options?: { readonly inclusive?: boolean; readonly message?: string }): this {
-    return this._checks
-      .add({ check: 'max', expected: { value, inclusive: options?.inclusive ?? true }, message: options?.message })
-      ._checks.remove('range')
+    return this._checks.add(
+      { check: 'max', expected: { value, inclusive: options?.inclusive ?? true }, message: options?.message },
+      { remove: ['range'] }
+    )
   }
 
   lt(value: number, options?: { readonly message?: string }): this {
@@ -1052,17 +1057,17 @@ export class TNumber<C extends boolean = boolean> extends TType<number, TNumberD
     max: number,
     options?: { readonly minInclusive?: boolean; readonly maxInclusive?: boolean; readonly message?: string }
   ): this {
-    return this._checks
-      .add({
+    return this._checks.add(
+      {
         check: 'range',
         expected: {
           min: { value: min, inclusive: options?.minInclusive ?? true },
           max: { value: max, inclusive: options?.maxInclusive ?? true },
         },
         message: options?.message,
-      })
-      ._checks.remove('min')
-      ._checks.remove('max')
+      },
+      { remove: ['min', 'max'] }
+    )
   }
 
   between(
@@ -1140,6 +1145,8 @@ export class TNumber<C extends boolean = boolean> extends TType<number, TNumberD
   /* ---------------------------------------------------------------------------------------------------------------- */
 
   private readonly _checks = TChecks.of(this)
+
+  /* ---------------------------------------------------------------------------------------------------------------- */
 
   static create(options?: SimplifyFlat<TOptions>): TNumber<false> {
     return new TNumber({ typeName: TTypeName.Number, checks: [], coerce: false, options: { ...options } })
@@ -1286,13 +1293,14 @@ export class TBigInt<C extends boolean = boolean> extends TType<bigint, TBigIntD
   /* ---------------------------------------------------- Checks ---------------------------------------------------- */
 
   min(value: Numeric, options?: { readonly inclusive?: boolean; readonly message?: string }): this {
-    return this._checks
-      .add({
+    return this._checks.add(
+      {
         check: 'min',
         expected: { value: BigInt(value), inclusive: options?.inclusive ?? true },
         message: options?.message,
-      })
-      ._checks.remove('range')
+      },
+      { remove: ['range'] }
+    )
   }
 
   gt(value: Numeric, options?: { readonly message?: string }): this {
@@ -1304,13 +1312,14 @@ export class TBigInt<C extends boolean = boolean> extends TType<bigint, TBigIntD
   }
 
   max(value: Numeric, options?: { readonly inclusive?: boolean; readonly message?: string }): this {
-    return this._checks
-      .add({
+    return this._checks.add(
+      {
         check: 'max',
         expected: { value: BigInt(value), inclusive: options?.inclusive ?? true },
         message: options?.message,
-      })
-      ._checks.remove('range')
+      },
+      { remove: ['range'] }
+    )
   }
 
   lt(value: Numeric, options?: { readonly message?: string }): this {
@@ -1326,17 +1335,17 @@ export class TBigInt<C extends boolean = boolean> extends TType<bigint, TBigIntD
     max: Numeric,
     options?: { readonly minInclusive?: boolean; readonly maxInclusive?: boolean; readonly message?: string }
   ): this {
-    return this._checks
-      .add({
+    return this._checks.add(
+      {
         check: 'range',
         expected: {
           min: { value: BigInt(min), inclusive: options?.minInclusive ?? true },
           max: { value: BigInt(max), inclusive: options?.maxInclusive ?? true },
         },
         message: options?.message,
-      })
-      ._checks.remove('min')
-      ._checks.remove('max')
+      },
+      { remove: ['min', 'max'] }
+    )
   }
 
   between(
@@ -1386,6 +1395,8 @@ export class TBigInt<C extends boolean = boolean> extends TType<bigint, TBigIntD
   /* ---------------------------------------------------------------------------------------------------------------- */
 
   private readonly _checks = TChecks.of(this)
+
+  /* ---------------------------------------------------------------------------------------------------------------- */
 
   static create(options?: SimplifyFlat<TOptions>): TBigInt<false> {
     return new TBigInt({ typeName: TTypeName.BigInt, checks: [], coerce: false, options: { ...options } })
@@ -1438,7 +1449,7 @@ export class TBoolean<C extends TBooleanCoercion = TBooleanCoercion> extends TTy
       return ctx.invalidType({ expected: TParsedType.Boolean }).abort()
     }
 
-    return OK(ctx.data as OutputOf<this>)
+    return OK(ctx.data)
   }
 
   /* --------------------------------------------------- Coercion --------------------------------------------------- */
@@ -1493,9 +1504,13 @@ export class TTrue extends TType<true, TTrueDef> {
     return ctx.data === true ? OK(ctx.data) : ctx.invalidType({ expected: TParsedType.True }).abort()
   }
 
+  /* ---------------------------------------------------------------------------------------------------------------- */
+
   invert(): TFalse {
     return new TFalse({ ...this._def, typeName: TTypeName.False })
   }
+
+  /* ---------------------------------------------------------------------------------------------------------------- */
 
   static create(options?: SimplifyFlat<TOptions>): TTrue {
     return new TTrue({ typeName: TTypeName.True, options: { ...options } })
@@ -1513,9 +1528,13 @@ export class TFalse extends TType<false, TFalseDef> {
     return ctx.data === false ? OK(ctx.data) : ctx.invalidType({ expected: TParsedType.False }).abort()
   }
 
+  /* ---------------------------------------------------------------------------------------------------------------- */
+
   invert(): TTrue {
     return new TTrue({ ...this._def, typeName: TTypeName.True })
   }
+
+  /* ---------------------------------------------------------------------------------------------------------------- */
 
   static create(options?: SimplifyFlat<TOptions>): TFalse {
     return new TFalse({ typeName: TTypeName.False, options: { ...options } })
@@ -1530,7 +1549,8 @@ export type TDateCheckInput = Date | number | LiteralUnion<'now', string>
 
 export type TDateInput<C extends boolean> = Date | (C extends true ? string | number : never)
 
-const handleTDateCheckInput = (value: Date | 'now', currentDate: Date): Date => (value === 'now' ? currentDate : value)
+export const handleTDateCheckInput = (value: Date | 'now', currentDate: Date): Date =>
+  value === 'now' ? currentDate : value
 
 export interface TDateDef<C extends boolean> extends TDef {
   readonly typeName: TTypeName.Date
@@ -1609,16 +1629,17 @@ export class TDate<C extends boolean = boolean> extends TType<Date, TDateDef<C>,
     return new TDate({ ...this._def, coerce: value })
   }
 
-  /* ---------------------------------------------------------------------------------------------------------------- */
+  /* ---------------------------------------------------- Checks ---------------------------------------------------- */
 
   min(value: TDateCheckInput, options?: { readonly inclusive?: boolean; readonly message?: string }): this {
-    return this._checks
-      .add({
+    return this._checks.add(
+      {
         check: 'min',
         expected: { value: value === 'now' ? 'now' : new Date(value), inclusive: options?.inclusive ?? true },
         message: options?.message,
-      })
-      ._checks.remove('range')
+      },
+      { remove: ['range'] }
+    )
   }
 
   after(value: TDateCheckInput, options?: { readonly message?: string }): this {
@@ -1630,13 +1651,14 @@ export class TDate<C extends boolean = boolean> extends TType<Date, TDateDef<C>,
   }
 
   max(value: TDateCheckInput, options?: { readonly inclusive?: boolean; readonly message?: string }): this {
-    return this._checks
-      .add({
+    return this._checks.add(
+      {
         check: 'max',
         expected: { value: value === 'now' ? 'now' : new Date(value), inclusive: options?.inclusive ?? true },
         message: options?.message,
-      })
-      ._checks.remove('range')
+      },
+      { remove: ['range'] }
+    )
   }
 
   before(value: TDateCheckInput, options?: { readonly message?: string }): this {
@@ -1652,17 +1674,17 @@ export class TDate<C extends boolean = boolean> extends TType<Date, TDateDef<C>,
     max: TDateCheckInput,
     options?: { readonly minInclusive?: boolean; readonly maxInclusive?: boolean; readonly message?: string }
   ): this {
-    return this._checks
-      .add({
+    return this._checks.add(
+      {
         check: 'range',
         expected: {
           min: { value: min === 'now' ? 'now' : new Date(min), inclusive: options?.minInclusive ?? true },
           max: { value: max === 'now' ? 'now' : new Date(max), inclusive: options?.maxInclusive ?? true },
         },
         message: options?.message,
-      })
-      ._checks.remove('min')
-      ._checks.remove('max')
+      },
+      { remove: ['min', 'max'] }
+    )
   }
 
   between(
@@ -1676,6 +1698,8 @@ export class TDate<C extends boolean = boolean> extends TType<Date, TDateDef<C>,
   /* ---------------------------------------------------------------------------------------------------------------- */
 
   private readonly _checks = TChecks.of(this)
+
+  /* ---------------------------------------------------------------------------------------------------------------- */
 
   static create(options?: SimplifyFlat<TOptions>): TDate<false> {
     return new TDate({ typeName: TTypeName.Date, checks: [], coerce: false, options: { ...options } })
@@ -1752,34 +1776,40 @@ export class TBuffer extends TType<Buffer, TBufferDef> {
     return ctx.isValid() ? OK(data) : ctx.abort()
   }
 
+  /* ---------------------------------------------------- Checks ---------------------------------------------------- */
+
   min<V extends number>(
     value: NonNegative<V>,
     options?: { readonly inclusive?: boolean; readonly message?: string }
   ): this {
-    return this._checks
-      .add({ check: 'min', expected: { value, inclusive: options?.inclusive ?? true }, message: options?.message })
-      ._checks.remove('length')
+    return this._checks.add(
+      { check: 'min', expected: { value, inclusive: options?.inclusive ?? true }, message: options?.message },
+      { remove: ['length'] }
+    )
   }
 
   max<V extends number>(
     value: NonNegative<V>,
     options?: { readonly inclusive?: boolean; readonly message?: string }
   ): this {
-    return this._checks
-      .add({ check: 'max', expected: { value, inclusive: options?.inclusive ?? true }, message: options?.message })
-      ._checks.remove('length')
+    return this._checks.add(
+      { check: 'max', expected: { value, inclusive: options?.inclusive ?? true }, message: options?.message },
+      { remove: ['length'] }
+    )
   }
 
   length<L extends number>(length: NonNegative<L>, options?: { readonly message?: string }): this {
-    return this._checks
-      .add({ check: 'length', expected: length, message: options?.message })
-      ._checks.remove('min')
-      ._checks.remove('max')
+    return this._checks.add(
+      { check: 'length', expected: length, message: options?.message },
+      { remove: ['min', 'max'] }
+    )
   }
 
   /* ---------------------------------------------------------------------------------------------------------------- */
 
   private readonly _checks = TChecks.of(this)
+
+  /* ---------------------------------------------------------------------------------------------------------------- */
 
   static create(options?: SimplifyFlat<TOptions>): TBuffer {
     return new TBuffer({ typeName: TTypeName.Buffer, checks: [], options: { ...options } })
@@ -1953,27 +1983,33 @@ export type MapStringLiteralsToTTupleItems<T extends readonly string[]> = Assert
 }>
 
 export class TStringLiteral<T extends string> extends TLiteral<T> {
-  lowercase(): TStringLiteral<Lowercase<T>> {
+  // eslint-disable-next-line @typescript-eslint/explicit-function-return-type
+  lowercase() {
     return this._update(stringUtils.lowercase(this.value))
   }
 
-  uppercase(): TStringLiteral<Uppercase<T>> {
+  // eslint-disable-next-line @typescript-eslint/explicit-function-return-type
+  uppercase() {
     return this._update(stringUtils.uppercase(this.value))
   }
 
-  camelCase(): TStringLiteral<stringUtils.CamelCase<T>> {
+  // eslint-disable-next-line @typescript-eslint/explicit-function-return-type
+  camelCase() {
     return this._update(stringUtils.camelCase(this.value))
   }
 
-  snakeCase(): TStringLiteral<stringUtils.SnakeCase<T>> {
+  // eslint-disable-next-line @typescript-eslint/explicit-function-return-type
+  snakeCase() {
     return this._update(stringUtils.snakeCase(this.value))
   }
 
-  screamingSnakeCase(): TStringLiteral<stringUtils.ScreamingSnakeCase<T>> {
+  // eslint-disable-next-line @typescript-eslint/explicit-function-return-type
+  screamingSnakeCase() {
     return this._update(stringUtils.screamingSnakeCase(this.value))
   }
 
-  kebabCase(): TStringLiteral<stringUtils.KebabCase<T>> {
+  // eslint-disable-next-line @typescript-eslint/explicit-function-return-type
+  kebabCase() {
     return this._update(stringUtils.kebabCase(this.value))
   }
 
@@ -2976,8 +3012,6 @@ export const resolveShapeRefs = <S extends TObjectShape>(shape: S): GetRefResolv
   return resolvedShape as GetRefResolvedShape<S>
 }
 
-export type TypeToTObjectShape<T extends Record<string, unknown>> = { [K in keyof T]: AnyTType<T[K]> }
-
 export type PartialShape<S extends TObjectShape, K extends ReadonlyArray<keyof S> = ReadonlyArray<keyof S>> = {
   [K_ in keyof S]: K_ extends K[number] ? TOptional<S[K_]> : S[K_]
 }
@@ -3036,7 +3070,7 @@ export class TObject<
       }
     }
 
-    const result: Record<string, unknown> = {}
+    const resultObj: Record<string, unknown> = {}
 
     if (ctx.isAsync()) {
       return Promise.all(
@@ -3070,11 +3104,11 @@ export class TObject<
           }
 
           if (k in data) {
-            result[k] = res.data
+            resultObj[k] = res.data
           }
         }
 
-        return ctx.isValid() ? OK(result as OutputOf<this>) : ctx.abort()
+        return ctx.isValid() ? OK(resultObj as OutputOf<this>) : ctx.abort()
       })
     }
 
@@ -3095,23 +3129,27 @@ export class TObject<
     } else if (unknownKeys === 'strict') {
       if (extraKeys.length > 0) {
         ctx.addIssue(TIssueKind.UnrecognizedKeys, { keys: extraKeys }, this._def.options.messages?.unrecognizedKeys)
-        if (ctx.common.abortEarly) return ctx.abort()
+        if (ctx.common.abortEarly) {
+          return ctx.abort()
+        }
       }
     }
 
     for (const [k, res] of results) {
       if (!res.ok) {
-        if (ctx.common.abortEarly) return ctx.abort()
+        if (ctx.common.abortEarly) {
+          return ctx.abort()
+        }
 
         continue
       }
 
       if (k in data) {
-        result[k] = res.data
+        resultObj[k] = res.data
       }
     }
 
-    return ctx.isValid() ? OK(result as OutputOf<this>) : ctx.abort()
+    return ctx.isValid() ? OK(resultObj as OutputOf<this>) : ctx.abort()
   }
 
   /* ---------------------------------------------------------------------------------------------------------------- */
@@ -3223,7 +3261,7 @@ export class TObject<
     return new TObject({ ...this._def, shape })
   }
 
-  private _setUnknownKeys<T extends TObjectUnknownKeys>(unknownKeys: T): TObject<S, T, undefined> {
+  private _setUnknownKeys<K extends TObjectUnknownKeys>(unknownKeys: K): TObject<S, K, undefined> {
     return new TObject({ ...this._def, unknownKeys, catchall: undefined })
   }
 
@@ -3284,7 +3322,7 @@ export interface TVoidDef extends TDef {
 
 export class TVoid extends TType<void, TVoidDef> {
   _parse(ctx: ParseContextOf<this>): ParseResultOf<this> {
-    return ctx.data === undefined ? OK(undefined) : ctx.invalidType({ expected: TParsedType.Void }).abort()
+    return ctx.data === undefined ? OK(ctx.data) : ctx.invalidType({ expected: TParsedType.Void }).abort()
   }
 
   static create(options?: SimplifyFlat<TOptions>): TVoid {
@@ -3302,7 +3340,7 @@ export interface TNullDef extends TDef {
 
 export class TNull extends TType<null, TNullDef> {
   _parse(ctx: ParseContextOf<this>): ParseResultOf<this> {
-    return ctx.data === null ? OK(null) : ctx.invalidType({ expected: TParsedType.Null }).abort()
+    return ctx.data === null ? OK(ctx.data) : ctx.invalidType({ expected: TParsedType.Null }).abort()
   }
 
   static create(options?: SimplifyFlat<TOptions>): TNull {
@@ -3504,7 +3542,7 @@ export class TOptional<T extends AnyTType>
 {
   _parse(ctx: ParseContextOf<this>): ParseResultOf<this> {
     return ctx.data === undefined
-      ? OK(undefined)
+      ? OK(ctx.data)
       : this._def.underlying._parse(ctx.child(this._def.underlying, ctx.data))
   }
 
@@ -3553,7 +3591,7 @@ export class TNullable<T extends AnyTType>
   implements TUnwrappable<T>
 {
   _parse(ctx: ParseContextOf<this>): ParseResultOf<this> {
-    return ctx.data === null ? OK(null) : this._def.underlying._parse(ctx.child(this._def.underlying, ctx.data))
+    return ctx.data === null ? OK(ctx.data) : this._def.underlying._parse(ctx.child(this._def.underlying, ctx.data))
   }
 
   get underlying(): T {
@@ -4284,13 +4322,13 @@ export interface TPrimitiveDef extends TDef {
 
 export class TPrimitive extends TType<Primitive, TPrimitiveDef> {
   _parse(ctx: ParseContextOf<this>): ParseResultOf<this> {
-    return ctx.data === null ||
-      ctx.data === undefined ||
-      typeof ctx.data === 'string' ||
+    return typeof ctx.data === 'string' ||
       typeof ctx.data === 'number' ||
+      typeof ctx.data === 'bigint' ||
       typeof ctx.data === 'boolean' ||
       typeof ctx.data === 'symbol' ||
-      typeof ctx.data === 'bigint'
+      ctx.data === null ||
+      ctx.data === undefined
       ? OK(ctx.data)
       : ctx.invalidType({ expected: TParsedType.Primitive }).abort()
   }
