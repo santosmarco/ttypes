@@ -1,8 +1,12 @@
+import util from 'util'
+import type validator from 'validator'
 import safeJsonStringify from 'safe-json-stringify'
 import {
   getGlobal,
+  stringUtils,
   type AnyTType,
   type InputOf,
+  type LooseStripKey,
   type ParseContextOf,
   type ParsePath,
   type Primitive,
@@ -10,7 +14,6 @@ import {
   type StripKey,
   type TParsedType,
   type objectUtils,
-  stringUtils,
 } from './_internal'
 
 /* ------------------------------------------------------------------------------------------------------------------ */
@@ -76,6 +79,10 @@ export interface LengthCheck {
   readonly received: number
 }
 
+export type ToChecks<T extends TIssue> = ReadonlyArray<
+  LooseStripKey<T['payload'], 'received'> & { readonly message: string | undefined }
+>
+
 /* ----------------------------------------------------- Issues ----------------------------------------------------- */
 
 export type IssueBase<
@@ -85,6 +92,7 @@ export type IssueBase<
   {
     readonly kind: K
     readonly path: ParsePath
+    readonly data: unknown
     readonly message: string
   } & (P extends undefined ? { readonly payload?: never } : { readonly payload: Readonly<P> })
 >
@@ -136,24 +144,23 @@ export type InvalidStringIssue = IssueBase<
   | LengthCheck
   | {
       readonly check: 'pattern'
-      readonly expected: { readonly pattern: RegExp; readonly type: 'enforce' | 'disallow'; readonly name: string }
-      readonly received: string
+      readonly pattern: RegExp
+      readonly options: { readonly type: 'enforce' | 'disallow'; readonly name: string }
     }
   | { readonly check: 'alphanum'; readonly received: string }
-  | { readonly check: 'email'; readonly received: string }
-  | { readonly check: 'url'; readonly received: string }
-  | { readonly check: 'cuid'; readonly received: string }
-  | { readonly check: 'uuid'; readonly received: string }
-  | { readonly check: 'iso_date'; readonly received: string }
-  | { readonly check: 'iso_duration'; readonly received: string }
   | {
-      readonly check: 'base64'
-      readonly expected: { readonly paddingRequired: boolean; readonly urlSafe: boolean }
-      readonly received: string
+      readonly check: 'email'
+      readonly options: Readonly<Required<objectUtils.CamelCaseProperties<validator.IsEmailOptions>>>
     }
-  | { readonly check: 'starts_with'; readonly expected: string; readonly received: string }
-  | { readonly check: 'ends_with'; readonly expected: string; readonly received: string }
-  | { readonly check: 'contains'; readonly expected: string; readonly received: string }
+  | { readonly check: 'url' }
+  | { readonly check: 'cuid' }
+  | { readonly check: 'uuid' }
+  | { readonly check: 'iso_date' }
+  | { readonly check: 'iso_duration' }
+  | { readonly check: 'base64'; readonly options: { readonly paddingRequired: boolean; readonly urlSafe: boolean } }
+  | { readonly check: 'starts_with'; readonly prefix: string }
+  | { readonly check: 'ends_with'; readonly suffix: string }
+  | { readonly check: 'contains'; readonly substring: string }
 >
 
 export type InvalidNumberIssue = IssueBase<
@@ -241,22 +248,13 @@ export type TIssue<K extends IssueKind = IssueKind> = {
 export type TErrorFormatter = (issues: readonly TIssue[]) => string
 
 export const DEFAULT_ERROR_FORMATTER: TErrorFormatter = (issues) =>
-  safeJsonStringify(
-    issues,
-    (_, value) => {
-      if (typeof value === 'bigint') {
-        return `${String(value)}n`
-      }
-
-      if (typeof value === 'symbol') {
-        return value.toString()
-      }
-
-      // eslint-disable-next-line @typescript-eslint/no-unsafe-return
-      return value
-    },
-    2
-  )
+  util.inspect(issues, {
+    colors: Boolean(getGlobal().getOptions().colorsEnabled),
+    depth: Infinity,
+    maxArrayLength: Infinity,
+    maxStringLength: Infinity,
+    sorted: true,
+  })
 
 export type ErrorMapIssueInput = StripKey<TIssue, 'message'>
 export type TErrorMapFn = (issue: ErrorMapIssueInput) => string
@@ -300,8 +298,8 @@ export const DEFAULT_ERROR_MAP: TErrorMapFn = (issue) => {
         } character(s)`
       if (issue.payload.check === 'length') return `String must contain exactly ${issue.payload.expected} character(s)`
       if (issue.payload.check === 'pattern')
-        return `String must ${issue.payload.expected.type === 'enforce' ? 'match' : 'not match'} the pattern: ${
-          issue.payload.expected.name
+        return `String must ${issue.payload.options.type === 'enforce' ? 'match' : 'not match'} the pattern: ${
+          issue.payload.options.name
         }`
       if (issue.payload.check === 'alphanum') return 'String must contain only alphanumeric characters'
       if (issue.payload.check === 'email') return 'String must be a valid email address'
@@ -311,9 +309,9 @@ export const DEFAULT_ERROR_MAP: TErrorMapFn = (issue) => {
       if (issue.payload.check === 'iso_date') return 'String must be a valid ISO date'
       if (issue.payload.check === 'iso_duration') return 'String must be a valid ISO duration'
       if (issue.payload.check === 'base64') return 'String must be a valid base64 string'
-      if (issue.payload.check === 'starts_with') return `String must start with "${issue.payload.expected}"`
-      if (issue.payload.check === 'ends_with') return `String must end with "${issue.payload.expected}"`
-      if (issue.payload.check === 'contains') return `String must contain the substring "${issue.payload.expected}"`
+      if (issue.payload.check === 'starts_with') return `String must start with "${issue.payload.prefix}"`
+      if (issue.payload.check === 'ends_with') return `String must end with "${issue.payload.suffix}"`
+      if (issue.payload.check === 'contains') return `String must contain the substring "${issue.payload.substring}"`
       return TError.assertNever(issue.payload)
     case IssueKind.InvalidNumber:
       if (issue.payload.check === 'min')

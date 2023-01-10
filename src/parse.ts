@@ -27,6 +27,7 @@ export enum TParsedType {
   False = 'false',
   Falsy = 'false | 0 | "" | null | undefined',
   Function = 'function',
+  Integer = 'integer',
   Map = 'Map',
   NaN = 'NaN',
   Never = 'never',
@@ -106,6 +107,11 @@ export namespace TParsedType {
       default:
         return TParsedType.Unknown
     }
+  }
+
+  export const Enum = (values: ReadonlyArray<string | number>): TParsedType => {
+    const types = [...new Set(values.map(TParsedType.Literal))]
+    return types.length === 1 ? types[0] : TParsedType.StringOrNumber
   }
 
   /* eslint-enable @typescript-eslint/no-unnecessary-qualifier */
@@ -192,7 +198,10 @@ export interface ParseContext<O, I = O> {
   ): ParseContext<O_, I_>
   clone<O_, I_>(schema: AnyTTypeBase<O_, I_>, data: unknown): ParseContext<O_, I_>
   _addIssue<K extends IssueKind>(
-    issue: objectUtils.StripKey<TIssue<K>, 'path'> & { readonly path?: ParsePath; readonly fatal?: boolean }
+    issue: objectUtils.LooseStripKey<TIssue<K>, 'path' | 'data'> & {
+      readonly path?: ParsePath
+      readonly fatal?: boolean
+    }
   ): void
   addIssue<K extends IssueKind>(
     kind: K,
@@ -322,9 +331,7 @@ export const ParseContext = <T extends AnyTTypeBase>({
         this.setInvalid()
       }
 
-      const issueWithPath = { ...issue, path: this.path.concat(issue.path ?? []) }
-
-      console.log(issueWithPath)
+      const issueWithPath = { ...issue, path: this.path.concat(issue.path ?? []), data: this.data }
 
       const issueMsg =
         issue.message ??

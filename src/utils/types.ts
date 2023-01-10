@@ -97,6 +97,10 @@ export namespace typeUtils {
   export type Try<T, U, Catch = never> = T extends U ? T : Catch
 
   export type SimplifyFlat<T> = { 0: T extends BuiltIn ? T : { [K in keyof T]: T[K] }; 1: T }[Equals<T, unknown>]
+  export type SimplifyDeep<T> = { 0: T extends BuiltIn ? T : { [K in keyof T]: SimplifyDeep<T[K]> }; 1: T }[Equals<
+    T,
+    unknown
+  >]
 
   export type UnionToTuple<T> = UnionToTupleRaw<T>
 

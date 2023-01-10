@@ -98,7 +98,7 @@ export enum TTypeName {
   Void = 'TVoid',
 }
 
-export type TTypeNameMap<T extends TTypeName> = {
+export type TTypeNameMap<T extends TTypeName = TTypeName> = {
   [TTypeName.Any]: TAny
   [TTypeName.Array]: AnyTArray
   [TTypeName.BigInt]: AnyTBigInt
