@@ -24,11 +24,11 @@ describe('TBoolean', () => {
   })
 
   test('is', () => {
-    expect(t.boolean().isOptional()).toStrictEqual(false)
-    expect(t.boolean().isNullable()).toStrictEqual(false)
-    expect(t.boolean().isNullish()).toStrictEqual(false)
-    expect(t.boolean().isRequired()).toStrictEqual(true)
-    expect(t.boolean().isReadonly()).toStrictEqual(false)
+    expect(t.boolean().isOptional).toStrictEqual(false)
+    expect(t.boolean().isNullable).toStrictEqual(false)
+    expect(t.boolean().isNullish).toStrictEqual(false)
+    expect(t.boolean().isRequired).toStrictEqual(true)
+    expect(t.boolean().isReadonly).toStrictEqual(false)
   })
 
   test('inference', () => {
@@ -59,11 +59,11 @@ describe('TTrue', () => {
   })
 
   test('is', () => {
-    expect(t.true().isOptional()).toStrictEqual(false)
-    expect(t.true().isNullable()).toStrictEqual(false)
-    expect(t.true().isNullish()).toStrictEqual(false)
-    expect(t.true().isRequired()).toStrictEqual(true)
-    expect(t.true().isReadonly()).toStrictEqual(false)
+    expect(t.true().isOptional).toStrictEqual(false)
+    expect(t.true().isNullable).toStrictEqual(false)
+    expect(t.true().isNullish).toStrictEqual(false)
+    expect(t.true().isRequired).toStrictEqual(true)
+    expect(t.true().isReadonly).toStrictEqual(false)
   })
 
   test('inference', () => {
@@ -94,11 +94,11 @@ describe('TFalse', () => {
   })
 
   test('is', () => {
-    expect(t.false().isOptional()).toStrictEqual(false)
-    expect(t.false().isNullable()).toStrictEqual(false)
-    expect(t.false().isNullish()).toStrictEqual(false)
-    expect(t.false().isRequired()).toStrictEqual(true)
-    expect(t.false().isReadonly()).toStrictEqual(false)
+    expect(t.false().isOptional).toStrictEqual(false)
+    expect(t.false().isNullable).toStrictEqual(false)
+    expect(t.false().isNullish).toStrictEqual(false)
+    expect(t.false().isRequired).toStrictEqual(true)
+    expect(t.false().isReadonly).toStrictEqual(false)
   })
 
   test('inference', () => {

@@ -19,11 +19,11 @@ describe('TNaN', () => {
   })
 
   test('is', () => {
-    expect(t.nan().isOptional()).toStrictEqual(false)
-    expect(t.nan().isNullable()).toStrictEqual(false)
-    expect(t.nan().isNullish()).toStrictEqual(false)
-    expect(t.nan().isRequired()).toStrictEqual(true)
-    expect(t.nan().isReadonly()).toStrictEqual(false)
+    expect(t.nan().isOptional).toStrictEqual(false)
+    expect(t.nan().isNullable).toStrictEqual(false)
+    expect(t.nan().isNullish).toStrictEqual(false)
+    expect(t.nan().isRequired).toStrictEqual(true)
+    expect(t.nan().isReadonly).toStrictEqual(false)
   })
 
   test('inference', () => {
@@ -52,11 +52,11 @@ describe('TSymbol', () => {
   })
 
   test('is', () => {
-    expect(t.symbol().isOptional()).toStrictEqual(false)
-    expect(t.symbol().isNullable()).toStrictEqual(false)
-    expect(t.symbol().isNullish()).toStrictEqual(false)
-    expect(t.symbol().isRequired()).toStrictEqual(true)
-    expect(t.symbol().isReadonly()).toStrictEqual(false)
+    expect(t.symbol().isOptional).toStrictEqual(false)
+    expect(t.symbol().isNullable).toStrictEqual(false)
+    expect(t.symbol().isNullish).toStrictEqual(false)
+    expect(t.symbol().isRequired).toStrictEqual(true)
+    expect(t.symbol().isReadonly).toStrictEqual(false)
   })
 
   test('inference', () => {
@@ -83,11 +83,11 @@ describe('TBuffer', () => {
   })
 
   test('is', () => {
-    expect(t.buffer().isOptional()).toStrictEqual(false)
-    expect(t.buffer().isNullable()).toStrictEqual(false)
-    expect(t.buffer().isNullish()).toStrictEqual(false)
-    expect(t.buffer().isRequired()).toStrictEqual(true)
-    expect(t.buffer().isReadonly()).toStrictEqual(false)
+    expect(t.buffer().isOptional).toStrictEqual(false)
+    expect(t.buffer().isNullable).toStrictEqual(false)
+    expect(t.buffer().isNullish).toStrictEqual(false)
+    expect(t.buffer().isRequired).toStrictEqual(true)
+    expect(t.buffer().isReadonly).toStrictEqual(false)
   })
 
   test('inference', () => {

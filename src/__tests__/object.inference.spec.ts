@@ -27,10 +27,8 @@ describe('TObject -> inference', () => {
         b: number
         c: bigint
         d: boolean
-        // eslint-disable-next-line @typescript-eslint/ban-types
         e: null
         f?: undefined
-        // eslint-disable-next-line @typescript-eslint/ban-types
         g?: Buffer | null | undefined
         h?: unknown
         // eslint-disable-next-line @typescript-eslint/no-explicit-any

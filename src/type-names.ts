@@ -27,6 +27,7 @@ import type {
   AnyTSet,
   AnyTString,
   AnyTTuple,
+  AnyTType,
   AnyTUnion,
   SomeTObject,
   TAny,
@@ -44,6 +45,8 @@ import type {
   TUnknown,
   TVoid,
 } from './_internal'
+
+/* ------------------------------------------------------------------------------------------------------------------ */
 /*                                                      TTypeName                                                     */
 /* ------------------------------------------------------------------------------------------------------------------ */
 
@@ -55,6 +58,7 @@ export enum TTypeName {
   Brand = 'TBrand',
   Buffer = 'TBuffer',
   Catch = 'TCatch',
+  Custom = 'TCustom',
   Date = 'TDate',
   Default = 'TDefault',
   Defined = 'TDefined',
@@ -102,6 +106,7 @@ export type TTypeNameMap<T extends TTypeName> = {
   [TTypeName.Brand]: AnyTBrand
   [TTypeName.Buffer]: TBuffer
   [TTypeName.Catch]: AnyTCatch
+  [TTypeName.Custom]: AnyTType
   [TTypeName.Date]: AnyTDate
   [TTypeName.Default]: AnyTDefault
   [TTypeName.Defined]: AnyTDefined

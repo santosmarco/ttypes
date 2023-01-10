@@ -21,11 +21,11 @@ describe('TDate', () => {
   })
 
   test('is', () => {
-    expect(t.date().isOptional()).toStrictEqual(false)
-    expect(t.date().isNullable()).toStrictEqual(false)
-    expect(t.date().isNullish()).toStrictEqual(false)
-    expect(t.date().isRequired()).toStrictEqual(true)
-    expect(t.date().isReadonly()).toStrictEqual(false)
+    expect(t.date().isOptional).toStrictEqual(false)
+    expect(t.date().isNullable).toStrictEqual(false)
+    expect(t.date().isNullish).toStrictEqual(false)
+    expect(t.date().isRequired).toStrictEqual(true)
+    expect(t.date().isReadonly).toStrictEqual(false)
   })
 
   test('inference', () => {

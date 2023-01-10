@@ -35,11 +35,11 @@ describe('TEnum', () => {
   })
 
   test('is', () => {
-    expect(schema.isOptional()).toStrictEqual(false)
-    expect(schema.isNullable()).toStrictEqual(false)
-    expect(schema.isNullish()).toStrictEqual(false)
-    expect(schema.isRequired()).toStrictEqual(true)
-    expect(schema.isReadonly()).toStrictEqual(false)
+    expect(schema.isOptional).toStrictEqual(false)
+    expect(schema.isNullable).toStrictEqual(false)
+    expect(schema.isNullish).toStrictEqual(false)
+    expect(schema.isRequired).toStrictEqual(true)
+    expect(schema.isReadonly).toStrictEqual(false)
   })
 
   test('inference', () => {
@@ -94,11 +94,11 @@ describe('TNativeEnum', () => {
   })
 
   test('is', () => {
-    expect(schema.isOptional()).toStrictEqual(false)
-    expect(schema.isNullable()).toStrictEqual(false)
-    expect(schema.isNullish()).toStrictEqual(false)
-    expect(schema.isRequired()).toStrictEqual(true)
-    expect(schema.isReadonly()).toStrictEqual(false)
+    expect(schema.isOptional).toStrictEqual(false)
+    expect(schema.isNullable).toStrictEqual(false)
+    expect(schema.isNullish).toStrictEqual(false)
+    expect(schema.isRequired).toStrictEqual(true)
+    expect(schema.isReadonly).toStrictEqual(false)
   })
 
   test('inference', () => {

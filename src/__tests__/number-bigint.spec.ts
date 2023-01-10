@@ -21,11 +21,11 @@ describe('TNumber', () => {
   })
 
   test('is', () => {
-    expect(t.number().isOptional()).toStrictEqual(false)
-    expect(t.number().isNullable()).toStrictEqual(false)
-    expect(t.number().isNullish()).toStrictEqual(false)
-    expect(t.number().isRequired()).toStrictEqual(true)
-    expect(t.number().isReadonly()).toStrictEqual(false)
+    expect(t.number().isOptional).toStrictEqual(false)
+    expect(t.number().isNullable).toStrictEqual(false)
+    expect(t.number().isNullish).toStrictEqual(false)
+    expect(t.number().isRequired).toStrictEqual(true)
+    expect(t.number().isReadonly).toStrictEqual(false)
   })
 
   test('inference', () => {
@@ -54,11 +54,11 @@ describe('TBigInt', () => {
   })
 
   test('is', () => {
-    expect(t.bigint().isOptional()).toStrictEqual(false)
-    expect(t.bigint().isNullable()).toStrictEqual(false)
-    expect(t.bigint().isNullish()).toStrictEqual(false)
-    expect(t.bigint().isRequired()).toStrictEqual(true)
-    expect(t.bigint().isReadonly()).toStrictEqual(false)
+    expect(t.bigint().isOptional).toStrictEqual(false)
+    expect(t.bigint().isNullable).toStrictEqual(false)
+    expect(t.bigint().isNullish).toStrictEqual(false)
+    expect(t.bigint().isRequired).toStrictEqual(true)
+    expect(t.bigint().isReadonly).toStrictEqual(false)
   })
 
   test('inference', () => {

@@ -71,3 +71,5 @@ const asd = t.object({
 })
 
 console.log(t.string().preprocess(String).transform(Number).parse(true))
+
+console.log(t.lazy(() => t.string().optional()).isNullable)

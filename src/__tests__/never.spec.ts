@@ -18,11 +18,11 @@ describe('TNever', () => {
   })
 
   test('is', () => {
-    expect(t.never().isOptional()).toStrictEqual(false)
-    expect(t.never().isNullable()).toStrictEqual(false)
-    expect(t.never().isNullish()).toStrictEqual(false)
-    expect(t.never().isRequired()).toStrictEqual(true)
-    expect(t.never().isReadonly()).toStrictEqual(false)
+    expect(t.never().isOptional).toStrictEqual(false)
+    expect(t.never().isNullable).toStrictEqual(false)
+    expect(t.never().isNullish).toStrictEqual(false)
+    expect(t.never().isRequired).toStrictEqual(true)
+    expect(t.never().isReadonly).toStrictEqual(false)
   })
 
   test('options', () => {
@@ -31,7 +31,7 @@ describe('TNever', () => {
         messages: {
           forbidden: 'foo',
         },
-      }).options
+      })._def.options
     ).toStrictEqual({
       messages: {
         forbidden: 'foo',

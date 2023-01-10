@@ -29,11 +29,11 @@ describe('TUndefined', () => {
   })
 
   test('is', () => {
-    expect(t.undefined().isOptional()).toStrictEqual(true)
-    expect(t.undefined().isNullable()).toStrictEqual(false)
-    expect(t.undefined().isNullish()).toStrictEqual(false)
-    expect(t.undefined().isRequired()).toStrictEqual(false)
-    expect(t.undefined().isReadonly()).toStrictEqual(false)
+    expect(t.undefined().isOptional).toStrictEqual(true)
+    expect(t.undefined().isNullable).toStrictEqual(false)
+    expect(t.undefined().isNullish).toStrictEqual(false)
+    expect(t.undefined().isRequired).toStrictEqual(false)
+    expect(t.undefined().isReadonly).toStrictEqual(false)
   })
 
   test('inference', () => {
@@ -71,11 +71,11 @@ describe('TVoid', () => {
   })
 
   test('is', () => {
-    expect(t.void().isOptional()).toStrictEqual(true)
-    expect(t.void().isNullable()).toStrictEqual(false)
-    expect(t.void().isNullish()).toStrictEqual(false)
-    expect(t.void().isRequired()).toStrictEqual(false)
-    expect(t.void().isReadonly()).toStrictEqual(false)
+    expect(t.void().isOptional).toStrictEqual(true)
+    expect(t.void().isNullable).toStrictEqual(false)
+    expect(t.void().isNullish).toStrictEqual(false)
+    expect(t.void().isRequired).toStrictEqual(false)
+    expect(t.void().isReadonly).toStrictEqual(false)
   })
 
   test('inference', () => {
@@ -105,16 +105,15 @@ describe('TNull', () => {
   })
 
   test('is', () => {
-    expect(t.null().isOptional()).toStrictEqual(false)
-    expect(t.null().isNullable()).toStrictEqual(true)
-    expect(t.null().isNullish()).toStrictEqual(false)
-    expect(t.null().isRequired()).toStrictEqual(true)
-    expect(t.null().isReadonly()).toStrictEqual(false)
+    expect(t.null().isOptional).toStrictEqual(false)
+    expect(t.null().isNullable).toStrictEqual(true)
+    expect(t.null().isNullish).toStrictEqual(false)
+    expect(t.null().isRequired).toStrictEqual(true)
+    expect(t.null().isReadonly).toStrictEqual(false)
   })
 
   test('inference', () => {
     const schema = t.null()
-    // eslint-disable-next-line @typescript-eslint/ban-types
     assertEqual<t.infer<typeof schema>, null>(true)
   })
 })

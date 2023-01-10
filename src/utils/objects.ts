@@ -2,7 +2,7 @@ import { TParsedType } from '../parse'
 import { arrayUtils } from './arrays'
 
 export interface ObjectUtils {
-  isAnyRecord(obj: unknown): obj is objectUtils.AnyRecord
+  isPlainObject(obj: unknown): obj is objectUtils.AnyRecord
   keys<T extends objectUtils.AnyRecord>(obj: T): ReadonlyArray<keyof T>
   keys(obj: object): readonly PropertyKey[]
   values<T extends objectUtils.AnyRecord>(obj: T): ReadonlyArray<T[keyof T]>
@@ -16,7 +16,7 @@ export interface ObjectUtils {
 }
 
 export const objectUtils: ObjectUtils = {
-  isAnyRecord(obj: unknown): obj is objectUtils.AnyRecord {
+  isPlainObject(obj: unknown): obj is objectUtils.AnyRecord {
     return obj !== null && typeof obj === 'object' && TParsedType.get(obj) === TParsedType.Object
   },
 

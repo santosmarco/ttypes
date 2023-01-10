@@ -12,6 +12,7 @@ import {
   type Primitive,
   type TIssue,
   type objectUtils,
+  cloneUtils,
 } from './_internal'
 
 /* --------------------------------------------------- TParsedType -------------------------------------------------- */
@@ -215,12 +216,12 @@ export const ParseContext = <T extends AnyTTypeBase>({
   parent,
   common,
 }: ParseContextDef<T>): ParseContextOf<T> => {
-  const _internals: ParseContextInternals = {
+  const _internals: ParseContextInternals = cloneUtils.cloneDeep({
     status: ParseStatus.Valid,
     data,
     ownChildren: [],
     ownIssues: [],
-  }
+  })
 
   const ctx: ParseContextOf<T> = {
     get status() {

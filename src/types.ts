@@ -28,7 +28,7 @@ import {
   TShow,
   TTypeName,
   arrayUtils,
-  cloneDeep,
+  cloneUtils,
   getGlobal,
   isArray,
   isAsync,
@@ -54,9 +54,11 @@ import {
   type NonNegative,
   type NonNegativeInteger,
   type Numeric,
+  type ParseContext,
   type ParseContextOf,
   type ParseOptions,
   type ParsePath,
+  type ParseResult,
   type ParseResultOf,
   type Primitive,
   type SimplifyDeep,
@@ -72,12 +74,13 @@ import {
   type UnionToIntersection,
   type typeUtils,
 } from './_internal'
+
 /* ------------------------------------------------------------------------------------------------------------------ */
 /*                                                        TType                                                       */
 /* ------------------------------------------------------------------------------------------------------------------ */
 
 const handleDef = <D extends TDef>(def: D): D =>
-  cloneDeep({
+  cloneUtils.cloneDeep({
     ...def,
     isOptional: def.isOptional ?? false,
     isNullable: def.isNullable ?? false,
@@ -2153,7 +2156,7 @@ export class TEnum<T extends ReadonlyArray<string | number>> extends TType<T[num
     return this.values.reduce((acc, value) => ({ ...acc, [value]: value }), {} as { readonly [K in T[number]]: K })
   }
 
-  static create<T extends string | number, U extends readonly T[]>(
+  static create<T extends string | number, U extends readonly [T, ...T[]] | readonly []>(
     values: U,
     options?: SimplifyFlat<TEnumOptions>
   ): TEnum<U> {
@@ -2172,7 +2175,7 @@ export interface EnumLike {
   readonly [x: number]: string
 }
 
-export const getValidEnum = <T extends EnumLike>(enum_: T): Readonly<Record<string, T[keyof T]>> =>
+const _getValidEnum = <T extends EnumLike>(enum_: T): Readonly<Record<string, T[keyof T]>> =>
   objectUtils.fromEntries(
     objectUtils
       .keys(enum_)
@@ -2190,7 +2193,7 @@ export class TNativeEnum<T extends EnumLike> extends TType<T[keyof T], TNativeEn
   _parse(ctx: ParseContextOf<this>): ParseResultOf<this> {
     const { data } = ctx
 
-    const values = objectUtils.values(getValidEnum(this.enum))
+    const values = objectUtils.values(_getValidEnum(this.enum))
 
     const expectedParsedTypes = [...new Set(values.map(TParsedType.Literal))]
 
@@ -2223,11 +2226,11 @@ export class TNativeEnum<T extends EnumLike> extends TType<T[keyof T], TNativeEn
   }
 
   get enum(): T {
-    return this._def.enum
+    return _getValidEnum(this._def.enum) as unknown as T
   }
 
   get values(): Readonly<typeUtils.UnionToTuple<T[keyof T]>> {
-    return objectUtils.values(getValidEnum(this.enum)) as typeUtils.UnionToTuple<T[keyof T]>
+    return objectUtils.values(_getValidEnum(this.enum)) as typeUtils.UnionToTuple<T[keyof T]>
   }
 
   static create<T extends EnumLike>(enum_: T, options?: SimplifyFlat<TEnumOptions>): TNativeEnum<T> {
@@ -2976,7 +2979,7 @@ export class TRecord<
       ctx.setData(objectUtils.fromEntries([...ctx.data.entries()]))
     }
 
-    if (!objectUtils.isAnyRecord(ctx.data)) {
+    if (!objectUtils.isPlainObject(ctx.data)) {
       return ctx.invalidType({ expected: TParsedType.Object }).abort()
     }
 
@@ -3310,7 +3313,7 @@ export class TObject<
   C extends TObjectCatchall | undefined = undefined
 > extends TType<TObjectIO<S, UK, C>, TObjectDef<S, UK, C>, TObjectIO<S, UK, C, '$I'>> {
   _parse(ctx: ParseContextOf<this>): ParseResultOf<this> {
-    if (!objectUtils.isAnyRecord(ctx.data)) {
+    if (!objectUtils.isPlainObject(ctx.data)) {
       return ctx.invalidType({ expected: TParsedType.Object }).abort()
     }
 
@@ -3435,10 +3438,8 @@ export class TObject<
   }
 
   keyof(): TEnum<typeUtils.Try<typeUtils.UnionToTuple<keyof S>, ReadonlyArray<string | number>>> {
-    return TEnum.create(
-      objectUtils.keys(this.shape) as typeUtils.Try<typeUtils.UnionToTuple<keyof S>, ReadonlyArray<string | number>>,
-      this._def.options
-    )
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any, @typescript-eslint/no-unsafe-return
+    return TEnum.create(objectUtils.keys(this.shape) as any, this._def.options) as any
   }
 
   keys(): TUnion<typeUtils.Try<typeUtils.UnionToTuple<keyof S>, readonly AnyTType[]>> {
@@ -4276,6 +4277,8 @@ export class TDefault<T extends AnyTType, D extends Defined<OutputOf<T>>>
       getDefault: isFunction(defaultValueOrGetter) ? defaultValueOrGetter : (): D => defaultValueOrGetter,
       options: { ...options },
       isOptional: true,
+      isNullable: underlying._def.isNullable,
+      isReadonly: underlying._def.isReadonly,
     })
   }
 }
@@ -4352,6 +4355,9 @@ export class TCatch<T extends AnyTType, C extends OutputOf<T>>
       underlying,
       getCatch: isFunction(catchValueOrGetter) ? catchValueOrGetter : (): C => catchValueOrGetter,
       options: { ...options },
+      isOptional: true,
+      isNullable: true,
+      isReadonly: underlying._def.isReadonly,
     })
   }
 }
@@ -4389,7 +4395,23 @@ export class TLazy<T extends AnyTType> extends TType<OutputOf<T>, TLazyDef<T>, I
   }
 
   static create<T extends AnyTType>(factory: () => T, options?: SimplifyFlat<TOptions>): TLazy<T> {
-    return new TLazy({ typeName: TTypeName.Lazy, getType: factory, options: { ...options } })
+    return new TLazy({
+      typeName: TTypeName.Lazy,
+      getType: factory,
+      options: { ...options },
+      get manifest(): TManifest<OutputOf<T>> {
+        return factory().describe()
+      },
+      get isOptional(): boolean {
+        return factory().isOptional
+      },
+      get isNullable(): boolean {
+        return factory().isNullable
+      },
+      get isReadonly(): boolean {
+        return factory().isReadonly
+      },
+    })
   }
 }
 
@@ -4451,7 +4473,13 @@ export class TUnion<T extends readonly AnyTType[]> extends TType<
   /* ---------------------------------------------------------------------------------------------------------------- */
 
   static create<T extends readonly AnyTType[]>(alternatives: T, options?: SimplifyFlat<TOptions>): TUnion<T> {
-    return new TUnion({ typeName: TTypeName.Union, members: alternatives, options: { ...options } })
+    return new TUnion({
+      typeName: TTypeName.Union,
+      members: alternatives,
+      options: { ...options },
+      isOptional: alternatives.some((alt) => alt.isOptional),
+      isNullable: alternatives.some((alt) => alt.isNullable),
+    })
   }
 }
 
@@ -5008,6 +5036,35 @@ export class TTransform<T extends AnyTType, O> extends TEffects<T, O> {
 }
 
 /* ------------------------------------------------------------------------------------------------------------------ */
+/*                                                       TCustom                                                      */
+/* ------------------------------------------------------------------------------------------------------------------ */
+
+export interface TCustomDef<O, I> extends TDef {
+  readonly typeName: TTypeName.Custom
+  readonly parser: (ctx: ParseContext<O, I>) => ParseResult<O, I>
+}
+
+export class TCustom<O, I> extends TType<O, TCustomDef<O, I>, I> {
+  _parse(ctx: ParseContextOf<this>): ParseResultOf<this> {
+    return this._def.parser(ctx)
+  }
+
+  static create<O, I = unknown>(
+    check:
+      | ((data: unknown, ctx: EffectCtx<AnyTType<O, I>>) => data is O)
+      | ((data: unknown, ctx: EffectCtx<AnyTType<O, I>>) => boolean | Promise<boolean>)
+      | ((data: unknown, ctx: EffectCtx<AnyTType<O, I>>) => unknown),
+    options?: TOptions
+  ): TCustom<O, I> {
+    return new TCustom<O, I>({
+      typeName: TTypeName.Custom,
+      parser: TAny.create().superRefine(check)._parse,
+      options: { ...options },
+    })
+  }
+}
+
+/* ------------------------------------------------------------------------------------------------------------------ */
 /*                                                        TRef                                                        */
 /* ------------------------------------------------------------------------------------------------------------------ */
 
@@ -5201,6 +5258,7 @@ export const booleanType = TBoolean.create
 export const brandType = TBrand.create
 export const bufferType = TBuffer.create
 export const catchType = TCatch.create
+export const customType = TCustom.create
 export const dateType = TDate.create
 export const defaultType = TDefault.create
 export const enumType = TEnum.create
@@ -5252,6 +5310,7 @@ export {
   bufferType as binary,
   bufferType as buffer,
   catchType as catch,
+  customType as custom,
   dateType as date,
   enumType as enum,
   falseType as false,
