@@ -1,5 +1,4 @@
-import { type S } from 'ts-toolbelt'
-import { t, type ObjectShapePaths, type ReachSchema, stringUtils } from './index'
+import { t } from './index'
 
 // Const a = t
 //   .object({
@@ -54,31 +53,21 @@ import { t, type ObjectShapePaths, type ReachSchema, stringUtils } from './index
 
 // console.log(a.parse({ l: true }))
 
-const asd = t
-  .object({
-    a: t.string(),
-    b: t.number(),
-    c: t.bigint(),
-    d: t.boolean(),
-    e: t.null(),
-    f: t.undefined(),
-    g: t.buffer().nullish(),
-    h: t.unknown(),
-    i: t.any(),
-    j: t.record(t.string(), t.number()),
-    k: t.array(t.number()).nonempty(),
-    l: t.tuple([t.string(), t.number()]).rest(t.string()),
-    m: t.tuple([t.string(), t.bigint()]).tail(),
-    n: t.set(t.date()),
-  })
-  .values()
+const asd = t.object({
+  a: t.string(),
+  b: t.number(),
+  c: t.bigint(),
+  d: t.boolean(),
+  e: t.null(),
+  f: t.undefined(),
+  g: t.buffer().nullish(),
+  h: t.unknown(),
+  i: t.any(),
+  j: t.record(t.string(), t.number()),
+  k: t.array(t.number()).nonempty(),
+  l: t.tuple([t.string(), t.number()]).rest(t.string()),
+  m: t.tuple([t.string(), t.bigint()]).tail(),
+  n: t.set(t.date()),
+})
 
-type asd = t.infer<typeof asd>
-type c = String
-console.log(asd.hint)
-
-const a = t.string().max(2, {
-  message:
-}).lowercase().uppercase().capitalize().uncapitalize()
-
-type sdasd = t.infer<typeof a>
+console.log(t.string().preprocess(String).transform(Number).parse(true))

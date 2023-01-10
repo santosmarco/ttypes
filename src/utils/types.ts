@@ -38,8 +38,6 @@ export type LooseStripKey<T, K extends PropertyKey> = T extends unknown ? Omit<T
 
 export type Try<A, B, Catch = never> = A extends B ? A : Catch
 
-export type ValueOf<T> = T[keyof T]
-
 export type LiteralUnion<T, U extends Primitive> = T | (U & Record<never, never>)
 
 export type UnionToIntersection<T> = (T extends unknown ? (x: T) => void : never) extends (i: infer I) => void
@@ -89,3 +87,30 @@ type _Narrow<T> =
   | (T extends string | number | bigint | boolean ? T : never)
   | { [K in keyof T]: T[K] extends Function ? T[K] : _Narrow<T[K]> }
 export type Narrow<T> = Try<T, [], _Narrow<T>>
+
+/* ------------------------------------------------------------------------------------------------------------------ */
+
+export namespace typeUtils {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  export type AnyFunction = (...args: readonly any[]) => unknown
+
+  export type Try<T, U, Catch = never> = T extends U ? T : Catch
+
+  export type SimplifyFlat<T> = { 0: T extends BuiltIn ? T : { [K in keyof T]: T[K] }; 1: T }[Equals<T, unknown>]
+
+  export type UnionToTuple<T> = UnionToTupleRaw<T>
+
+  /* ---------------------------------------------------- Helpers --------------------------------------------------- */
+
+  type Prepend<T extends readonly unknown[], U> = [U, ...T]
+
+  type UnionToIntersectionFn<T> = (T extends T ? (x: () => T) => unknown : never) extends (x: infer U) => unknown
+    ? U
+    : never
+
+  type GetUnionLast<T> = UnionToIntersectionFn<T> extends () => infer U ? U : never
+
+  type UnionToTupleRaw<T, Res_ extends unknown[] = [], Last_ = GetUnionLast<T>> = Equals<T, never> extends 1
+    ? Res_
+    : UnionToTupleRaw<Exclude<T, Last_>, Prepend<Res_, Last_>>
+}

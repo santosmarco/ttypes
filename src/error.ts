@@ -7,9 +7,7 @@ import {
   type Primitive,
   type SimplifyDeep,
   type StripKey,
-  type TEnumValues,
   type TParsedType,
-  type ValueOf,
   type objectUtils,
   type stringUtils,
 } from './_internal'
@@ -41,11 +39,12 @@ export const IssueKind = {
   InvalidTuple: 'invalid_tuple',
   InvalidBuffer: 'invalid_buffer',
   Forbidden: 'forbidden',
+  Custom: 'custom',
 } as const
 
 export type EIssueKind = typeof IssueKind
 
-export type IssueKind = ValueOf<EIssueKind>
+export type IssueKind = EIssueKind[keyof EIssueKind]
 
 /* ----------------------------------------------------- Checks ----------------------------------------------------- */
 
@@ -105,7 +104,7 @@ export type InvalidEnumValueIssue = IssueBase<
   EIssueKind['InvalidEnumValue'],
   {
     readonly expected: {
-      readonly values: TEnumValues
+      readonly values: ReadonlyArray<string | number>
       readonly formatted: ReadonlyArray<stringUtils.Literalize<string> | stringUtils.Literalize<number>>
     }
     readonly received: {
@@ -201,6 +200,12 @@ export type InvalidBufferIssue = IssueBase<EIssueKind['InvalidBuffer'], MinCheck
 
 export type ForbiddenIssue = IssueBase<EIssueKind['Forbidden']>
 
+export interface CustomIssue {
+  readonly path?: ParsePath
+  readonly message?: string
+  readonly payload?: Record<string, unknown>
+}
+
 export type TIssue<K extends IssueKind = IssueKind> = {
   [IssueKind.Required]: RequiredIssue
   [IssueKind.InvalidType]: InvalidTypeIssue
@@ -222,6 +227,7 @@ export type TIssue<K extends IssueKind = IssueKind> = {
   [IssueKind.InvalidTuple]: InvalidTupleIssue
   [IssueKind.InvalidBuffer]: InvalidBufferIssue
   [IssueKind.Forbidden]: ForbiddenIssue
+  [IssueKind.Custom]: CustomIssue & { readonly kind: EIssueKind['Custom'] }
 }[K]
 
 /* ------------------------------------------------------------------------------------------------------------------ */

@@ -1,4 +1,3 @@
-import { type OptionalKeysOf } from 'type-fest'
 import {
   IssueKind,
   TError,
@@ -11,8 +10,8 @@ import {
   type OutputOf,
   type ParseOptions,
   type Primitive,
-  type StripKey,
   type TIssue,
+  type objectUtils,
 } from './_internal'
 
 /* --------------------------------------------------- TParsedType -------------------------------------------------- */
@@ -191,9 +190,12 @@ export interface ParseContext<O, I = O> {
     path?: ReadonlyArray<ParsePath[number] | symbol>
   ): ParseContext<O_, I_>
   clone<O_, I_>(schema: AnyTTypeBase<O_, I_>, data: unknown): ParseContext<O_, I_>
+  _addIssue<K extends IssueKind>(
+    issue: objectUtils.StripKey<TIssue<K>, 'path'> & { readonly path?: ParsePath; readonly fatal?: boolean }
+  ): void
   addIssue<K extends IssueKind>(
     kind: K,
-    ...args: 'payload' extends OptionalKeysOf<TIssue<K>>
+    ...args: 'payload' extends objectUtils.OptionalKeysOf<TIssue<K>>
       ? [message: string | undefined]
       : [payload: TIssue<K>['payload'], message: string | undefined]
   ): this
@@ -304,32 +306,39 @@ export const ParseContext = <T extends AnyTTypeBase>({
       return ParseContext.of(schema, data, this.common)
     },
 
-    addIssue(kind, ...args) {
+    _addIssue(issue) {
+      const shouldAbort = issue.fatal ?? this.common.abortEarly
+
+      if (issue.fatal && this.isValid()) {
+        this.setInvalid()
+      }
+
       if (this.isInvalid()) {
-        if (this.common.abortEarly) {
-          return this
+        if (shouldAbort) {
+          return
         }
       } else {
         this.setInvalid()
       }
 
-      const [issuePayload, message] = args.length === 2 ? args : [undefined, args[0]]
-
-      const issueWithPath = { kind, path: this.path }
-      const issueWithPathAndPayload = (
-        issuePayload ? { ...issueWithPath, payload: issuePayload } : issueWithPath
-      ) as StripKey<TIssue, 'message'>
+      const issueWithPath = { ...issue, path: this.path.concat(issue.path ?? []) }
 
       const issueMsg =
-        message ??
+        issue.message ??
         resolveErrorMaps([
           this.common.contextualErrorMap,
           this.schema._def.options.schemaErrorMap,
           getGlobal().getErrorMap(),
           TError.defaultIssueMap,
-        ])(issueWithPathAndPayload)
+        ])(issueWithPath)
 
-      _internals.ownIssues.push({ ...issueWithPathAndPayload, message: issueMsg })
+      _internals.ownIssues.push({ ...issueWithPath, message: issueMsg })
+    },
+
+    addIssue(kind, ...args) {
+      const [payload, message] = args.length === 2 ? args : [undefined, args[0]]
+
+      this._addIssue({ kind, payload, message: message ?? '' } as TIssue)
 
       return this
     },
