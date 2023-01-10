@@ -147,20 +147,11 @@ console.log(
 //     b: t.symbol(),
 //   }),
 // ])
-
-type du = t.output<typeof du>
-
-// const asd = t.TString.extension({ marco: (value: number) => ({ number: value }) })
-
-// console.log(asd.marco(3)._checks.add('min').marco())
-
-const dsa = t.extend(t.TString, {
-  a() {
-    console.log('a')
-    return this
-  },
+const myobj = t.object({
+  a: t.enum(['a', 'b', 2]),
+  b: t.ref('a'),
 })
 
-const as = dsa.create().a().a().a().a()
+type c = t.infer<typeof myobj>
 
-console.log(as.pattern())
+console.log(myobj.nullish().nonnullable().parse(null))

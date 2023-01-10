@@ -17,6 +17,7 @@ import type {
   AnyTLiteral,
   AnyTMap,
   AnyTNativeEnum,
+  AnyTNonNullable,
   AnyTNullable,
   AnyTNumber,
   AnyTOptional,
@@ -77,6 +78,7 @@ export enum TTypeName {
   NaN = 'TNaN',
   NativeEnum = 'TNativeEnum',
   Never = 'TNever',
+  NonNullable = 'TNonNullable',
   Null = 'TNull',
   Nullable = 'TNullable',
   Number = 'TNumber',
@@ -126,6 +128,7 @@ export type TTypeNameMap<T extends TTypeName = TTypeName> = {
   [TTypeName.NaN]: TNaN
   [TTypeName.NativeEnum]: AnyTNativeEnum
   [TTypeName.Never]: TNever
+  [TTypeName.NonNullable]: AnyTNonNullable
   [TTypeName.Null]: TNull
   [TTypeName.Nullable]: AnyTNullable
   [TTypeName.Number]: AnyTNumber

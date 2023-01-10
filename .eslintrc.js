@@ -9,7 +9,7 @@ module.exports = {
     'plugin:@typescript-eslint/recommended',
     'xo',
     'xo-typescript',
-    'plugin:jsdoc/recommended',
+    // 'plugin:jsdoc/recommended',
     'plugin:prettier/recommended',
   ],
   parserOptions: {
