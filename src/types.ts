@@ -5945,6 +5945,87 @@ export class TCustom<O, I> extends TType<O, TCustomDef<O, I>, I> {
 // }
 
 /* ------------------------------------------------------------------------------------------------------------------ */
+/*                                                         TIf                                                        */
+/* ------------------------------------------------------------------------------------------------------------------ */
+
+export interface TIfDef<C extends AnyTType, T extends AnyTType<unknown, OutputOf<C>>, E extends AnyTType | null>
+  extends TDef {
+  readonly typeName: TTypeName.If
+  readonly condition: C
+  readonly then: T
+  readonly else: E
+}
+
+export class TIf<C extends AnyTType, T extends AnyTType<unknown, OutputOf<C>>, E extends AnyTType | null> extends TType<
+  OutputOf<T> | (E extends AnyTType ? OutputOf<E> : never),
+  TIfDef<C, T, E>,
+  InputOf<T> | (E extends AnyTType ? InputOf<E> : never)
+> {
+  get _manifest(): TManifest<OutputOf<this>> {
+    return { ...TManifest.default(TParsedType.Unknown) }
+  }
+
+  _parse(ctx: ParseContextOf<this>): ParseResultOf<this> {
+    const { condition, then: thenSchema, else: elseSchema } = this._def
+
+    if (ctx.common.async) {
+      return condition._parseAsync(ctx.child(condition, ctx.data)).then(async (conditionRes) => {
+        if (conditionRes.ok) {
+          return thenSchema._parseAsync(ctx.child(thenSchema, conditionRes.data))
+        }
+
+        return elseSchema ? elseSchema._parseAsync(ctx.child(elseSchema, ctx.data)) : ctx.abort()
+      })
+    }
+
+    const conditionRes = condition._parseSync(ctx.child(condition, ctx.data))
+    if (conditionRes.ok) {
+      return thenSchema._parseSync(ctx.child(thenSchema, conditionRes.data))
+    }
+
+    return elseSchema ? elseSchema._parseSync(ctx.child(elseSchema, ctx.data)) : ctx.abort()
+  }
+
+  /* ---------------------------------------------------------------------------------------------------------------- */
+
+  get condition(): C {
+    return this._def.condition
+  }
+
+  get then(): T {
+    return this._def.then
+  }
+
+  get else(): E {
+    return this._def.else
+  }
+
+  /* ---------------------------------------------------------------------------------------------------------------- */
+
+  static create<C extends AnyTType, T extends AnyTType<unknown, OutputOf<C>>>(
+    condition: C,
+    then_: T,
+    options?: TOptions
+  ): TIf<C, T, null>
+  static create<C extends AnyTType, T extends AnyTType<unknown, OutputOf<C>>, E extends AnyTType>(
+    condition: C,
+    then_: T,
+    else_: E extends AnyTType<unknown, OutputOf<C>> ? never : E,
+    options?: TOptions
+  ): TIf<C, T, E>
+  static create<C extends AnyTType, T extends AnyTType<unknown, OutputOf<C>>, E extends AnyTType | null>(
+    condition: C,
+    then_: T,
+    else_: E,
+    options?: TOptions
+  ): TIf<C, T, E> {
+    return new TIf<C, T, E>({ typeName: TTypeName.If, condition, then: then_, else: else_, options: { ...options } })
+  }
+}
+
+export type AnyTIf = TIf<AnyTType, AnyTType, AnyTType | null>
+
+/* ------------------------------------------------------------------------------------------------------------------ */
 /*                                                        TRef                                                        */
 /* ------------------------------------------------------------------------------------------------------------------ */
 
@@ -6150,6 +6231,7 @@ export const enumType = TEnum.create
 export const falseType = TFalse.create
 export const falsyType = TFalsy.create
 export const functionType = TFunction.create
+export const ifType = TIf.create
 export const instanceofType = TInstanceOf.create
 export const intersectionType = TIntersection.create
 export const lazyType = TLazy.create
@@ -6205,6 +6287,8 @@ export {
   falsyType as falsy,
   functionType as fn,
   functionType as function,
+  ifType as conditional,
+  ifType as if,
   instanceofType as instanceof,
   intersectionType as intersection,
   lazyType as lazy,

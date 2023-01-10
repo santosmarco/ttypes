@@ -11,6 +11,7 @@ import type {
   AnyTEffects,
   AnyTEnum,
   AnyTFunction,
+  AnyTIf,
   AnyTInstanceOf,
   AnyTIntersection,
   AnyTLazy,
@@ -70,6 +71,7 @@ export enum TTypeName {
   False = 'TFalse',
   Falsy = 'TFalsy',
   Function = 'TFunction',
+  If = 'TIf',
   InstanceOf = 'TInstanceOf',
   Intersection = 'TIntersection',
   Lazy = 'TLazy',
@@ -120,6 +122,7 @@ export type TTypeNameMap<T extends TTypeName = TTypeName> = {
   [TTypeName.False]: TFalse
   [TTypeName.Falsy]: TFalsy
   [TTypeName.Function]: AnyTFunction
+  [TTypeName.If]: AnyTIf
   [TTypeName.InstanceOf]: AnyTInstanceOf
   [TTypeName.Intersection]: AnyTIntersection
   [TTypeName.Lazy]: AnyTLazy
