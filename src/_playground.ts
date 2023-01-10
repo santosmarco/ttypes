@@ -130,5 +130,37 @@ console.log(
   )
 )
 
-const a = t.string().pattern(/asdda/).parse('marco@.rio.br')
-console.log(a)
+// const a = t.string().pattern(/asdda/).parse('marco@.rio.br')
+// console.log(a)
+
+// const du = t.discriminatedUnion('type', [
+//   t.object({
+//     type: t.literal('a'),
+//     a: t.string(),
+//   }),
+//   t.object({
+//     type: t.literal('b'),
+//     b: t.number(),
+//   }),
+//   t.object({
+//     type: t.literal('c'),
+//     b: t.symbol(),
+//   }),
+// ])
+
+type du = t.output<typeof du>
+
+// const asd = t.TString.extension({ marco: (value: number) => ({ number: value }) })
+
+// console.log(asd.marco(3)._checks.add('min').marco())
+
+const dsa = t.extend(t.TString, {
+  a() {
+    console.log('a')
+    return this
+  },
+})
+
+const as = dsa.create().a().a().a().a()
+
+console.log(as.pattern())

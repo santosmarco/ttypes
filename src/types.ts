@@ -71,6 +71,7 @@ import {
   type UnionToIntersection,
   type typeUtils,
 } from './_internal'
+import { type SetReturnType } from 'type-fest'
 
 /* ------------------------------------------------------------------------------------------------------------------ */
 /*                                                        TType                                                       */
@@ -85,7 +86,7 @@ export abstract class TType<O = unknown, D extends TDef = TDef, I = O> {
   abstract _parse(ctx: ParseContextOf<this>): ParseResultOf<this>
   abstract get _manifest(): TManifest<O>
 
-  protected constructor(def: D) {
+  constructor(def: D) {
     this._def = cloneUtils.cloneDeep(def)
 
     this._parse = memoize(this._parse.bind(this))
@@ -202,9 +203,9 @@ export abstract class TType<O = unknown, D extends TDef = TDef, I = O> {
     return this._construct({ ...this._def, options: { ...this._def.options, ...options } })
   }
 
-  manifest(): TManifest.Final<this>
+  manifest(): this['_manifest'] & { readonly typeName: D['typeName'] }
   manifest(manifest: TManifest.Public<this>): this
-  manifest(maybeManifest?: TManifest.Public<this>): TManifest.Final<this> | this {
+  manifest(maybeManifest?: TManifest.Public<this>): (this['_manifest'] & { readonly typeName: D['typeName'] }) | this {
     if (!maybeManifest) {
       const { type, required, nullable, readonly, ...main } = { ...this._def.manifest, ...this._manifest }
 
@@ -215,7 +216,7 @@ export abstract class TType<O = unknown, D extends TDef = TDef, I = O> {
         required,
         nullable,
         readonly,
-      }) as TManifest.Final<this>
+      }) as this['_manifest'] & { readonly typeName: D['typeName'] }
     }
 
     return this._construct({ ...this._def, manifest: { ...this.manifest(), ...maybeManifest } })
@@ -351,7 +352,7 @@ export abstract class TType<O = unknown, D extends TDef = TDef, I = O> {
 
   /* ---------------------------------------------------------------------------------------------------------------- */
 
-  _construct(def?: D): this {
+  _construct(def?: TDef): this {
     return Reflect.construct<[def: D], this>(this.constructor as new (def: D) => this, [{ ...this._def, ...def }])
   }
 }
@@ -362,7 +363,7 @@ export type AnyTType<O = unknown, I = unknown> = TType<O, TDef, I>
 
 export type OutputOf<T extends { readonly $O: unknown }> = T['$O']
 export type InputOf<T extends { readonly $I: unknown }> = T['$I']
-export type ManifestOf<T> = T extends AnyTType ? T['_manifest'] & { readonly typeName: T['typeName'] } : never
+export type ManifestOf<T extends AnyTType> = T['_manifest'] & { readonly typeName: T['typeName'] }
 
 /* ------------------------------------------------------------------------------------------------------------------ */
 /*                                                        TAny                                                        */
@@ -415,50 +416,52 @@ export class TUnknown extends TType<unknown, TUnknownDef> {
 /* ------------------------------------------------------------------------------------------------------------------ */
 
 export type TStringTransform =
-  | { readonly kind: 'trim' }
   | { readonly kind: 'lowercase' }
   | { readonly kind: 'uppercase' }
   | { readonly kind: 'capitalize' }
   | { readonly kind: 'uncapitalize' }
+  | { readonly kind: 'trim' }
   | { readonly kind: 'replace'; readonly search: RegExp | string; readonly replace: string; readonly all?: boolean }
 
 export type TStringTransformKind = TStringTransform['kind']
 
-export type TStringOutput<T extends readonly TStringTransformKind[]> = T extends readonly []
+export type TStringOutput<Transforms extends readonly TStringTransformKind[]> = Transforms extends readonly []
   ? string
-  : T extends readonly [infer H extends TStringTransformKind, ...infer R extends TStringTransformKind[]]
-  ? H extends 'trim' | 'replace'
-    ? TStringOutput<R>
-    : {
-        lowercase: Lowercase<TStringOutput<R>>
-        uppercase: Uppercase<TStringOutput<R>>
-        capitalize: Capitalize<TStringOutput<R>>
-        uncapitalize: Uncapitalize<TStringOutput<R>>
-      }[Exclude<H, 'trim' | 'replace'>]
+  : Transforms extends readonly [
+      infer H extends TStringTransformKind,
+      ...infer R extends readonly TStringTransformKind[]
+    ]
+  ? {
+      lowercase: Lowercase<TStringOutput<R>>
+      uppercase: Uppercase<TStringOutput<R>>
+      capitalize: Capitalize<TStringOutput<R>>
+      uncapitalize: Uncapitalize<TStringOutput<R>>
+      trim: TStringOutput<R>
+      replace: TStringOutput<R>
+    }[H]
   : never
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-export type TStringInput<C extends boolean> = C extends true ? any : string
+export type TStringInput<Coerce extends boolean> = Coerce extends true ? any : string
 
-export interface TStringManifest<T extends string> extends TManifest<T> {
+export interface TStringManifest<Out extends string> extends TManifest<Out> {
   readonly transforms: readonly TStringTransform[]
   readonly checks: ToChecks<InvalidStringIssue>
   readonly coerce: boolean
 }
 
-export interface TStringDef<C extends boolean> extends TDef {
+export interface TStringDef<Coerce extends boolean> extends TDef {
   readonly typeName: TTypeName.String
   readonly transforms: readonly TStringTransform[]
   readonly checks: ToChecks<InvalidStringIssue>
-  readonly coerce: C
+  readonly coerce: Coerce
 }
 
-export class TString<T extends readonly TStringTransformKind[] = [], C extends boolean = false> extends TType<
-  TStringOutput<T>,
-  TStringDef<C>,
-  TStringInput<C>
-> {
-  get _manifest(): TStringManifest<TStringOutput<T>> {
+export class TString<
+  Transforms extends readonly TStringTransformKind[] = [],
+  Coerce extends boolean = false
+> extends TType<TStringOutput<Transforms>, TStringDef<Coerce>, TStringInput<Coerce>> {
+  get _manifest(): TStringManifest<OutputOf<this>> {
     const { transforms, checks, coerce } = this._def
     return { ...TManifest.default(TParsedType.String), transforms, checks, coerce }
   }
@@ -516,7 +519,9 @@ export class TString<T extends readonly TStringTransformKind[] = [], C extends b
               { check: check.check, expected: check.expected, received: data.length },
               check.message
             )
-            if (ctx.common.abortEarly) return ctx.abort()
+            if (ctx.common.abortEarly) {
+              return ctx.abort()
+            }
           }
 
           break
@@ -527,7 +532,9 @@ export class TString<T extends readonly TStringTransformKind[] = [], C extends b
               { check: check.check, expected: check.expected, received: data.length },
               check.message
             )
-            if (ctx.common.abortEarly) return ctx.abort()
+            if (ctx.common.abortEarly) {
+              return ctx.abort()
+            }
           }
 
           break
@@ -538,7 +545,9 @@ export class TString<T extends readonly TStringTransformKind[] = [], C extends b
               { check: check.check, expected: check.expected, received: data.length },
               check.message
             )
-            if (ctx.common.abortEarly) return ctx.abort()
+            if (ctx.common.abortEarly) {
+              return ctx.abort()
+            }
           }
 
           break
@@ -554,7 +563,9 @@ export class TString<T extends readonly TStringTransformKind[] = [], C extends b
               { check: check.check, pattern: check.pattern, options: check.options },
               check.message
             )
-            if (ctx.common.abortEarly) return ctx.abort()
+            if (ctx.common.abortEarly) {
+              return ctx.abort()
+            }
           }
 
           break
@@ -564,7 +575,9 @@ export class TString<T extends readonly TStringTransformKind[] = [], C extends b
         case 'iso_duration':
           if (!TString._internals.re[check.check].test(data)) {
             ctx.addIssue(IssueKind.InvalidString, { check: check.check, received: data }, check.message)
-            if (ctx.common.abortEarly) return ctx.abort()
+            if (ctx.common.abortEarly) {
+              return ctx.abort()
+            }
           }
 
           break
@@ -574,14 +587,18 @@ export class TString<T extends readonly TStringTransformKind[] = [], C extends b
             ctx.setData(validated)
           } else {
             ctx.addIssue(IssueKind.InvalidString, { check: check.check }, check.message)
-            if (ctx.common.abortEarly) return ctx.abort()
+            if (ctx.common.abortEarly) {
+              return ctx.abort()
+            }
           }
 
           break
         case 'email':
           if (!validator.isEmail(data, objectUtils.snakeCaseProperties(check.options))) {
             ctx.addIssue(IssueKind.InvalidString, { check: check.check, options: check.options }, check.message)
-            if (ctx.common.abortEarly) return ctx.abort()
+            if (ctx.common.abortEarly) {
+              return ctx.abort()
+            }
           }
 
           break
@@ -592,7 +609,9 @@ export class TString<T extends readonly TStringTransformKind[] = [], C extends b
             ][check.options.urlSafe ? 'urlSafe' : 'urlUnsafe'].test(data)
           ) {
             ctx.addIssue(IssueKind.InvalidString, { check: check.check, options: check.options }, check.message)
-            if (ctx.common.abortEarly) return ctx.abort()
+            if (ctx.common.abortEarly) {
+              return ctx.abort()
+            }
           }
 
           break
@@ -602,28 +621,36 @@ export class TString<T extends readonly TStringTransformKind[] = [], C extends b
             new URL(data)
           } catch {
             ctx.addIssue(IssueKind.InvalidString, { check: check.check }, check.message)
-            if (ctx.common.abortEarly) return ctx.abort()
+            if (ctx.common.abortEarly) {
+              return ctx.abort()
+            }
           }
 
           break
         case 'starts_with':
           if (!data.startsWith(check.prefix)) {
             ctx.addIssue(IssueKind.InvalidString, { check: check.check, prefix: check.prefix }, check.message)
-            if (ctx.common.abortEarly) return ctx.abort()
+            if (ctx.common.abortEarly) {
+              return ctx.abort()
+            }
           }
 
           break
         case 'ends_with':
           if (!data.endsWith(check.suffix)) {
             ctx.addIssue(IssueKind.InvalidString, { check: check.check, suffix: check.suffix }, check.message)
-            if (ctx.common.abortEarly) return ctx.abort()
+            if (ctx.common.abortEarly) {
+              return ctx.abort()
+            }
           }
 
           break
         case 'contains':
           if (!data.includes(check.substring)) {
             ctx.addIssue(IssueKind.InvalidString, { check: check.check, substring: check.substring }, check.message)
-            if (ctx.common.abortEarly) return ctx.abort()
+            if (ctx.common.abortEarly) {
+              return ctx.abort()
+            }
           }
 
           break
@@ -638,7 +665,7 @@ export class TString<T extends readonly TStringTransformKind[] = [], C extends b
 
   /* --------------------------------------------------- Coercion --------------------------------------------------- */
 
-  coerce<T_ extends boolean = true>(value = true as T_): TString<T, T_> {
+  coerce<T_ extends boolean = true>(value = true as T_): TString<Transforms, T_> {
     return new TString({ ...this._def, coerce: value })
   }
 
@@ -918,7 +945,7 @@ export class TString<T extends readonly TStringTransformKind[] = [], C extends b
    *
    * @returns {TString} A new instance of `TString` with the transform added.
    */
-  trim(): TString<[...T, 'trim'], C> {
+  trim(): TString<[...Transforms, 'trim'], Coerce> {
     return this._addTransform({ kind: 'trim' })
   }
 
@@ -927,7 +954,7 @@ export class TString<T extends readonly TStringTransformKind[] = [], C extends b
    *
    * @returns {TString} A new instance of `TString` with the transform added.
    */
-  lowercase(): TString<[...T, 'lowercase'], C> {
+  lowercase(): TString<[...Transforms, 'lowercase'], Coerce> {
     return this._addTransform({ kind: 'lowercase' })
   }
 
@@ -936,7 +963,7 @@ export class TString<T extends readonly TStringTransformKind[] = [], C extends b
    *
    * @returns {TString} A new instance of `TString` with the transform added.
    */
-  uppercase(): TString<[...T, 'uppercase'], C> {
+  uppercase(): TString<[...Transforms, 'uppercase'], Coerce> {
     return this._addTransform({ kind: 'uppercase' })
   }
 
@@ -945,7 +972,7 @@ export class TString<T extends readonly TStringTransformKind[] = [], C extends b
    *
    * @returns {TString} A new instance of `TString` with the transform added.
    */
-  capitalize(): TString<[...T, 'capitalize'], C> {
+  capitalize(): TString<[...Transforms, 'capitalize'], Coerce> {
     return this._addTransform({ kind: 'capitalize' })
   }
 
@@ -954,7 +981,7 @@ export class TString<T extends readonly TStringTransformKind[] = [], C extends b
    *
    * @returns {TString} A new instance of `TString` with the transform added.
    */
-  uncapitalize(): TString<[...T, 'uncapitalize'], C> {
+  uncapitalize(): TString<[...Transforms, 'uncapitalize'], Coerce> {
     return this._addTransform({ kind: 'uncapitalize' })
   }
 
@@ -972,7 +999,7 @@ export class TString<T extends readonly TStringTransformKind[] = [], C extends b
     search: RegExp | string,
     replace: string,
     options?: { readonly all?: boolean }
-  ): TString<[...T, 'replace'], C> {
+  ): TString<[...Transforms, 'replace'], Coerce> {
     return this._addTransform({ kind: 'replace', search, replace, all: options?.all ?? true })
   }
 
@@ -982,7 +1009,7 @@ export class TString<T extends readonly TStringTransformKind[] = [], C extends b
 
   private _addTransform<K extends TStringTransformKind>(
     transform: Extract<TStringTransform, { readonly kind: K }>
-  ): TString<[...T, K], C> {
+  ): TString<[...Transforms, K], Coerce> {
     return new TString({ ...this._def, transforms: [...this._def.transforms, transform] })
   }
 
@@ -999,7 +1026,7 @@ export class TString<T extends readonly TStringTransformKind[] = [], C extends b
   }
 
   static readonly _internals: {
-    readonly re: Readonly<Record<'alphanum' | 'email' | 'cuid' | 'uuid' | 'iso_date' | 'iso_duration', RegExp>> & {
+    readonly re: Readonly<Record<'alphanum' | 'cuid' | 'uuid' | 'iso_date' | 'iso_duration', RegExp>> & {
       readonly base64: {
         readonly paddingRequired: { readonly urlSafe: RegExp; readonly urlUnsafe: RegExp }
         readonly paddingNotRequired: { readonly urlSafe: RegExp; readonly urlUnsafe: RegExp }
@@ -1011,8 +1038,6 @@ export class TString<T extends readonly TStringTransformKind[] = [], C extends b
   } = {
     re: {
       alphanum: /^[a-zA-Z0-9]+$/,
-      email:
-        /^(([^<>()[\].,;:\s@"]+(\.[^<>()[\].,;:\s@"]+)*)|(".+"))@((?!-)([^<>()[\].,;:\s@"]+\.)+[^<>()[\].,;:\s@"]{1,})[^-<>()[\].,;:\s@"]$/i,
       cuid: /^c[^\s-]{8,}$/i,
       uuid: /^([a-f0-9]{8}-[a-f0-9]{4}-[1-5][a-f0-9]{3}-[a-f0-9]{4}-[a-f0-9]{12}|00000000-0000-0000-0000-000000000000)$/i,
       iso_date:
@@ -1095,14 +1120,18 @@ export class TNumber<C extends boolean = false> extends TType<number, TNumberDef
         case 'min':
           if (check.expected.inclusive ? data < check.expected.value : data <= check.expected.value) {
             ctx.addIssue(IssueKind.InvalidNumber, { ...check, received: data }, check.message)
-            if (ctx.common.abortEarly) return ctx.abort()
+            if (ctx.common.abortEarly) {
+              return ctx.abort()
+            }
           }
 
           break
         case 'max':
           if (check.expected.inclusive ? data > check.expected.value : data >= check.expected.value) {
             ctx.addIssue(IssueKind.InvalidNumber, { ...check, received: data }, check.message)
-            if (ctx.common.abortEarly) return ctx.abort()
+            if (ctx.common.abortEarly) {
+              return ctx.abort()
+            }
           }
 
           break
@@ -1112,63 +1141,81 @@ export class TNumber<C extends boolean = false> extends TType<number, TNumberDef
             (check.expected.max.inclusive ? data > check.expected.max.value : data >= check.expected.max.value)
           ) {
             ctx.addIssue(IssueKind.InvalidNumber, { ...check, received: data }, check.message)
-            if (ctx.common.abortEarly) return ctx.abort()
+            if (ctx.common.abortEarly) {
+              return ctx.abort()
+            }
           }
 
           break
         case 'integer':
           if (!Number.isInteger(data)) {
             ctx.addIssue(IssueKind.InvalidNumber, { ...check, received: data }, check.message)
-            if (ctx.common.abortEarly) return ctx.abort()
+            if (ctx.common.abortEarly) {
+              return ctx.abort()
+            }
           }
 
           break
         case 'positive':
           if (data <= 0) {
             ctx.addIssue(IssueKind.InvalidNumber, { ...check, received: data }, check.message)
-            if (ctx.common.abortEarly) return ctx.abort()
+            if (ctx.common.abortEarly) {
+              return ctx.abort()
+            }
           }
 
           break
         case 'nonpositive':
           if (data > 0) {
             ctx.addIssue(IssueKind.InvalidNumber, { ...check, received: data }, check.message)
-            if (ctx.common.abortEarly) return ctx.abort()
+            if (ctx.common.abortEarly) {
+              return ctx.abort()
+            }
           }
 
           break
         case 'negative':
           if (data >= 0) {
             ctx.addIssue(IssueKind.InvalidNumber, { ...check, received: data }, check.message)
-            if (ctx.common.abortEarly) return ctx.abort()
+            if (ctx.common.abortEarly) {
+              return ctx.abort()
+            }
           }
 
           break
         case 'nonnegative':
           if (data < 0) {
             ctx.addIssue(IssueKind.InvalidNumber, { ...check, received: data }, check.message)
-            if (ctx.common.abortEarly) return ctx.abort()
+            if (ctx.common.abortEarly) {
+              return ctx.abort()
+            }
           }
 
           break
         case 'finite':
           if (!Number.isFinite(data)) {
             ctx.addIssue(IssueKind.InvalidNumber, { ...check, received: data }, check.message)
-            if (ctx.common.abortEarly) return ctx.abort()
+            if (ctx.common.abortEarly) {
+              return ctx.abort()
+            }
           }
 
           break
         case 'port':
           if (data < 0 || data > 65535) {
             ctx.addIssue(IssueKind.InvalidNumber, { ...check, received: data }, check.message)
-            if (ctx.common.abortEarly) return ctx.abort()
+            if (ctx.common.abortEarly) {
+              return ctx.abort()
+            }
           }
 
           break
         case 'multiple':
           if (TNumber._internals.floatSafeRemainder(data, check.expected) !== 0) {
             ctx.addIssue(IssueKind.InvalidNumber, { ...check, received: data }, check.message)
-            if (ctx.common.abortEarly) return ctx.abort()
+            if (ctx.common.abortEarly) {
+              return ctx.abort()
+            }
           }
 
           break
@@ -1413,15 +1460,27 @@ export class TBigInt<C extends boolean = true> extends TType<bigint, TBigIntDef<
       switch (check.check) {
         case 'min':
           if (check.expected.inclusive ? data < check.expected.value : data <= check.expected.value) {
-            ctx.addIssue(IssueKind.InvalidBigInt, { ...check, received: data }, check.message)
-            if (ctx.common.abortEarly) return ctx.abort()
+            ctx.addIssue(
+              IssueKind.InvalidBigInt,
+              { check: check.check, expected: check.expected, received: data },
+              check.message
+            )
+            if (ctx.common.abortEarly) {
+              return ctx.abort()
+            }
           }
 
           break
         case 'max':
           if (check.expected.inclusive ? data > check.expected.value : data >= check.expected.value) {
-            ctx.addIssue(IssueKind.InvalidBigInt, { ...check, received: data }, check.message)
-            if (ctx.common.abortEarly) return ctx.abort()
+            ctx.addIssue(
+              IssueKind.InvalidBigInt,
+              { check: check.check, expected: check.expected, received: data },
+              check.message
+            )
+            if (ctx.common.abortEarly) {
+              return ctx.abort()
+            }
           }
 
           break
@@ -1430,43 +1489,63 @@ export class TBigInt<C extends boolean = true> extends TType<bigint, TBigIntDef<
             (check.expected.min.inclusive ? data < check.expected.min.value : data <= check.expected.min.value) ||
             (check.expected.max.inclusive ? data > check.expected.max.value : data >= check.expected.max.value)
           ) {
-            ctx.addIssue(IssueKind.InvalidBigInt, { ...check, received: data }, check.message)
-            if (ctx.common.abortEarly) return ctx.abort()
+            ctx.addIssue(
+              IssueKind.InvalidBigInt,
+              { check: check.check, expected: check.expected, received: data },
+              check.message
+            )
+            if (ctx.common.abortEarly) {
+              return ctx.abort()
+            }
           }
 
           break
         case 'positive':
           if (data <= BigInt(0)) {
-            ctx.addIssue(IssueKind.InvalidBigInt, { ...check, received: data }, check.message)
-            if (ctx.common.abortEarly) return ctx.abort()
+            ctx.addIssue(IssueKind.InvalidBigInt, { check: check.check, received: data }, check.message)
+            if (ctx.common.abortEarly) {
+              return ctx.abort()
+            }
           }
 
           break
         case 'nonpositive':
           if (data > BigInt(0)) {
-            ctx.addIssue(IssueKind.InvalidBigInt, { ...check, received: data }, check.message)
-            if (ctx.common.abortEarly) return ctx.abort()
+            ctx.addIssue(IssueKind.InvalidBigInt, { check: check.check, received: data }, check.message)
+            if (ctx.common.abortEarly) {
+              return ctx.abort()
+            }
           }
 
           break
         case 'negative':
           if (data >= BigInt(0)) {
-            ctx.addIssue(IssueKind.InvalidBigInt, { ...check, received: data }, check.message)
-            if (ctx.common.abortEarly) return ctx.abort()
+            ctx.addIssue(IssueKind.InvalidBigInt, { check: check.check, received: data }, check.message)
+            if (ctx.common.abortEarly) {
+              return ctx.abort()
+            }
           }
 
           break
         case 'nonnegative':
           if (data < BigInt(0)) {
-            ctx.addIssue(IssueKind.InvalidBigInt, { ...check, received: data }, check.message)
-            if (ctx.common.abortEarly) return ctx.abort()
+            ctx.addIssue(IssueKind.InvalidBigInt, { check: check.check, received: data }, check.message)
+            if (ctx.common.abortEarly) {
+              return ctx.abort()
+            }
           }
 
           break
         case 'multiple':
           if (data % check.expected !== BigInt(0)) {
-            ctx.addIssue(IssueKind.InvalidBigInt, { ...check, received: data }, check.message)
-            if (ctx.common.abortEarly) return ctx.abort()
+            ctx.addIssue(
+              IssueKind.InvalidBigInt,
+              { check: check.check, expected: check.expected, received: data },
+              check.message
+            )
+            if (ctx.common.abortEarly) {
+              return ctx.abort()
+            }
           }
 
           break
@@ -2820,6 +2899,13 @@ export type TSetInput<T extends AnyTType, C extends boolean> =
   | Set<InputOf<T>>
   | (C extends true ? Array<InputOf<T>> : never)
 
+export interface TSetManifest<T extends AnyTType> extends TManifest<Set<OutputOf<T>>> {
+  readonly element: ManifestOf<T>
+  readonly minItems?: number
+  readonly maxItems?: number
+  readonly coerce: boolean
+}
+
 export interface TSetDef<T extends AnyTType, C extends boolean> extends TDef {
   readonly typeName: TTypeName.Set
   readonly element: T
@@ -2834,8 +2920,15 @@ export class TSet<T extends AnyTType, C extends boolean = false> extends TType<
   TSetDef<T, C>,
   TSetInput<T, C>
 > {
-  get _manifest(): TManifest<number> {
-    return { ...TManifest.default(TParsedType.NaN) }
+  get _manifest(): TSetManifest<T> {
+    const { element, coerce, minItems, maxItems, size } = this._def
+    return {
+      ...TManifest.default(TParsedType.Array),
+      element: element.manifest(),
+      minItems: size?.value ?? (minItems && (minItems.inclusive ? minItems.value : minItems.value + 1)),
+      maxItems: size?.value ?? (maxItems && (maxItems.inclusive ? maxItems.value : maxItems.value - 1)),
+      coerce,
+    }
   }
 
   _parse(ctx: ParseContextOf<this>): ParseResultOf<this> {
@@ -3256,6 +3349,13 @@ const handleRecordEntry = <T>([k, v]: readonly [PropertyKey, T]): readonly [Prop
   v,
 ]
 
+export interface TRecordManifest<K extends AnyTType<PropertyKey, PropertyKey>, V extends AnyTType>
+  extends TManifest<Record<OutputOf<K>, OutputOf<V>>> {
+  readonly keys: ManifestOf<K>
+  readonly values: ManifestOf<V>
+  readonly coerce: boolean
+}
+
 export interface TRecordDef<K extends AnyTType<PropertyKey, PropertyKey>, V extends AnyTType, C extends boolean>
   extends TDef {
   readonly typeName: TTypeName.Record
@@ -3269,8 +3369,13 @@ export class TRecord<
   V extends AnyTType,
   C extends boolean = false
 > extends TType<Record<OutputOf<K>, OutputOf<V>>, TRecordDef<K, V, C>, TRecordInput<K, V, C>> {
-  get _manifest(): TManifest<number> {
-    return { ...TManifest.default(TParsedType.NaN) }
+  get _manifest(): TRecordManifest<K, V> {
+    return {
+      ...TManifest.default(TParsedType.Object),
+      keys: this.keys.manifest(),
+      values: this.values.manifest(),
+      coerce: this._def.coerce,
+    }
   }
 
   _parse(ctx: ParseContextOf<this>): ParseResultOf<this> {
@@ -3412,6 +3517,11 @@ export type AnyTRecord = TRecord<AnyTType<PropertyKey, PropertyKey>, AnyTType, b
 /*                                                        TMap                                                        */
 /* ------------------------------------------------------------------------------------------------------------------ */
 
+export interface TMapManifest<K extends AnyTType, V extends AnyTType> extends TManifest<Map<OutputOf<K>, OutputOf<V>>> {
+  readonly keys: ManifestOf<K>
+  readonly values: ManifestOf<V>
+}
+
 export interface TMapDef<K extends AnyTType, V extends AnyTType> extends TDef {
   readonly typeName: TTypeName.Map
   readonly keys: K
@@ -3423,8 +3533,12 @@ export class TMap<K extends AnyTType, V extends AnyTType> extends TType<
   TMapDef<K, V>,
   Map<InputOf<K>, InputOf<V>>
 > {
-  get _manifest(): TManifest<number> {
-    return { ...TManifest.default(TParsedType.NaN) }
+  get _manifest(): TMapManifest<K, V> {
+    return {
+      ...TManifest.default(TParsedType.Map),
+      keys: this.keys.manifest(),
+      values: this.values.manifest(),
+    }
   }
 
   _parse(ctx: ParseContextOf<this>): ParseResultOf<this> {
@@ -3626,8 +3740,8 @@ export class TObject<
   UK extends TObjectUnknownKeys | undefined = 'strip',
   C extends TObjectCatchall | undefined = undefined
 > extends TType<TObjectIO<S, UK, C>, TObjectDef<S, UK, C>, TObjectIO<S, UK, C, '$I'>> {
-  get _manifest(): TManifest<number> {
-    return { ...TManifest.default(TParsedType.NaN) }
+  get _manifest(): TManifest<TObjectIO<S, UK, C>> {
+    return { ...TManifest.default(TParsedType.Object) }
   }
 
   _parse(ctx: ParseContextOf<this>): ParseResultOf<this> {
@@ -4575,8 +4689,8 @@ export class TBrand<T extends AnyTType, B extends PropertyKey> extends TType<
   TBrandDef<T, B>,
   InputOf<T>
 > {
-  get _manifest(): TManifest<number> {
-    return { ...TManifest.default(TParsedType.NaN) }
+  get _manifest(): TManifest<BRANDED<OutputOf<T>, B>> {
+    return { ...(this.underlying.manifest() as TManifest<BRANDED<OutputOf<T>, B>>) }
   }
 
   _parse(ctx: ParseContextOf<this>): ParseResultOf<this> {
@@ -4632,8 +4746,12 @@ export class TDefault<T extends AnyTType, D extends Defined<OutputOf<T>>> extend
   TDefaultDef<T, D>,
   InputOf<T> | undefined
 > {
-  get _manifest(): TManifest<number> {
-    return { ...TManifest.default(TParsedType.NaN) }
+  get _manifest(): TManifest<Defined<OutputOf<T>>> {
+    const underlyingManifest = this.underlying.manifest()
+    return {
+      ...underlyingManifest,
+      examples: underlyingManifest.examples?.filter((ex): ex is Defined<OutputOf<T>> => ex !== undefined),
+    }
   }
 
   _parse(ctx: ParseContextOf<this>): ParseResultOf<this> {
@@ -4690,9 +4808,6 @@ export class TDefault<T extends AnyTType, D extends Defined<OutputOf<T>>> extend
       underlying,
       getDefault: isFunction(defaultValueOrGetter) ? defaultValueOrGetter : (): D => defaultValueOrGetter,
       options: { ...options },
-      isOptional: true,
-      isNullable: underlying._def.isNullable,
-      isReadonly: underlying._def.isReadonly,
     })
   }
 }
@@ -4713,8 +4828,8 @@ export class TCatch<T extends AnyTType, C extends OutputOf<T>>
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   extends TType<OutputOf<T> | C, TCatchDef<T, C>, any>
 {
-  get _manifest(): TManifest<number> {
-    return { ...TManifest.default(TParsedType.NaN) }
+  get _manifest(): TManifest<OutputOf<T> | C> {
+    return { ...this.underlying.manifest() }
   }
 
   _parse(ctx: ParseContextOf<this>): ParseResultOf<this> {
@@ -4772,9 +4887,6 @@ export class TCatch<T extends AnyTType, C extends OutputOf<T>>
       underlying,
       getCatch: isFunction(catchValueOrGetter) ? catchValueOrGetter : (): C => catchValueOrGetter,
       options: { ...options },
-      isOptional: true,
-      isNullable: true,
-      isReadonly: underlying._def.isReadonly,
     })
   }
 }
@@ -4791,8 +4903,8 @@ export interface TLazyDef<T extends AnyTType> extends TDef {
 }
 
 export class TLazy<T extends AnyTType> extends TType<OutputOf<T>, TLazyDef<T>, InputOf<T>> {
-  get _manifest(): TManifest<number> {
-    return { ...TManifest.default(TParsedType.NaN) }
+  get _manifest(): ManifestOf<T> {
+    return { ...this.underlying.manifest() }
   }
 
   _parse(ctx: ParseContextOf<this>): ParseResultOf<this> {
@@ -4816,23 +4928,7 @@ export class TLazy<T extends AnyTType> extends TType<OutputOf<T>, TLazyDef<T>, I
   }
 
   static create<T extends AnyTType>(factory: () => T, options?: typeUtils.SimplifyFlat<TOptions>): TLazy<T> {
-    return new TLazy({
-      typeName: TTypeName.Lazy,
-      getType: factory,
-      options: { ...options },
-      get manifest(): TManifest<OutputOf<T>> {
-        return factory().describe()
-      },
-      get isOptional(): boolean {
-        return factory().isOptional
-      },
-      get isNullable(): boolean {
-        return factory().isNullable
-      },
-      get isReadonly(): boolean {
-        return factory().isReadonly
-      },
-    })
+    return new TLazy({ typeName: TTypeName.Lazy, getType: factory, options: { ...options } })
   }
 }
 
@@ -4928,17 +5024,77 @@ export class TUnion<T extends readonly AnyTType[]> extends TType<
     alternatives: T,
     options?: typeUtils.SimplifyFlat<TUnionOptions>
   ): TUnion<T> {
-    return new TUnion({
-      typeName: TTypeName.Union,
-      members: alternatives,
-      options: { ...options },
-      isOptional: alternatives.some((alt) => alt.isOptional),
-      isNullable: alternatives.some((alt) => alt.isNullable),
-    })
+    return new TUnion({ typeName: TTypeName.Union, members: alternatives, options: { ...options } })
   }
 }
 
 export type AnyTUnion = TUnion<readonly AnyTType[]>
+
+/* ------------------------------------------------------------------------------------------------------------------ */
+/*                                                 TDiscriminatedUnion                                                */
+/* ------------------------------------------------------------------------------------------------------------------ */
+
+export type TDiscriminatedUnionShape<D extends string> = { [K in D]: AnyTLiteral }
+
+export type TDiscriminatedUnionShapes<D extends string> = readonly [
+  TDiscriminatedUnionShape<D>,
+  TDiscriminatedUnionShape<D>,
+  ...Array<TDiscriminatedUnionShape<D>>
+]
+
+export type TDiscriminatedUnionAlternatives<D extends string, S extends TDiscriminatedUnionShapes<D>> = Readonly<{
+  [K in keyof S]: TObject<S[K], TObjectUnknownKeys | undefined, TObjectCatchall | undefined>
+}>
+
+export type GetDiscriminatorValues<D extends string, S extends TDiscriminatedUnionShapes<D>> = readonly [
+  ...{
+    [K in keyof S]: TObject<S[K]> extends TObject<infer S_> ? (S_[D] extends TLiteral<infer V> ? V : never) : never
+  }
+]
+
+export interface TDiscriminatedUnionDef<
+  D extends string,
+  D_ extends readonly Primitive[],
+  T extends TDiscriminatedUnionAlternatives<D, TDiscriminatedUnionShapes<D>>
+> extends TDef {
+  readonly typeName: TTypeName.DiscriminatedUnion
+  readonly discriminator: D
+  readonly validDiscriminatorValues: D_
+  readonly alternatives: T
+  readonly discriminationMap: Map<D_[number], T[number]>
+}
+
+export class TDiscriminatedUnion<
+  D extends string,
+  D_ extends readonly Primitive[],
+  T extends TDiscriminatedUnionAlternatives<D, TDiscriminatedUnionShapes<D>>
+> extends TType<OutputOf<T[number]>, TDiscriminatedUnionDef<D, D_, T>, InputOf<T[number]>> {
+  static create<D extends string, S extends TDiscriminatedUnionShapes<D>>(
+    discriminator: D,
+    alternatives: TDiscriminatedUnionAlternatives<D, S>,
+    options?: TOptions
+  ): TDiscriminatedUnion<D, GetDiscriminatorValues<D, S>, TDiscriminatedUnionAlternatives<D, S>> {
+    type DValues = GetDiscriminatorValues<D, S>
+    type DAlternatives = TDiscriminatedUnionAlternatives<D, S>
+
+    const discriminationMap = new Map<DValues[number], DAlternatives[number]>()
+
+    return new TDiscriminatedUnion({
+      typeName: TTypeName.DiscriminatedUnion,
+      discriminator,
+      validDiscriminatorValues: [...discriminationMap.keys()] as DValues,
+      alternatives,
+      discriminationMap,
+      options: { ...options },
+    })
+  }
+}
+
+export type AnyTDiscriminatedUnion = TDiscriminatedUnion<
+  string,
+  readonly Primitive[],
+  TDiscriminatedUnionAlternatives<string, TDiscriminatedUnionShapes<string>>
+>
 
 /* ------------------------------------------------------------------------------------------------------------------ */
 /*                                                    TIntersection                                                   */
@@ -5532,6 +5688,10 @@ export interface TCustomDef<O, I> extends TDef {
 }
 
 export class TCustom<O, I> extends TType<O, TCustomDef<O, I>, I> {
+  get _manifest(): TManifest<OutputOf<this>> {
+    return { ...TManifest.default(TParsedType.Unknown) }
+  }
+
   _parse(ctx: ParseContextOf<this>): ParseResultOf<this> {
     return this._def.parser(ctx)
   }
@@ -5550,6 +5710,44 @@ export class TCustom<O, I> extends TType<O, TCustomDef<O, I>, I> {
     })
   }
 }
+
+/* ------------------------------------------------------------------------------------------------------------------ */
+/*                                                     TExtension                                                     */
+/* ------------------------------------------------------------------------------------------------------------------ */
+
+// export const extend = <
+//   T extends AnyTType,
+//   T_ extends { new (...args: readonly any[]): T; create(...args: readonly any[]): T },
+//   E extends Record<string, (this: InstanceType<T_>, ...args: readonly any[]) => unknown>
+// >(
+//   type: T_,
+//   extension: E
+// ) => {
+//   type E_ = {
+//     [K in keyof E]: E[K] extends (...args: readonly any[]) => InstanceType<T_>
+//       ? SetReturnType<E[K], InstanceType<T_> & E_>
+//       : E[K]
+//   }
+
+//   type M = {
+//     [K in keyof InstanceType<T_>]: InstanceType<T_>[K] extends (...args: readonly any[]) => InstanceType<T_>
+//       ? SetReturnType<InstanceType<T_>[K], InstanceType<T_> & E_>
+//       : InstanceType<T_>[K]
+//   }
+
+//   interface Extended extends E_, M {}
+
+//   class Extended extends type {
+//     static override create: SetReturnType<T_['create'], InstanceType<T_> & E_> = (...args: readonly any[]) => {
+//       const _super = type.create(...args)
+//       return new Extended({ ..._super._def })
+//     }
+//   }
+
+//   Object.assign(Extended.prototype, extension)
+
+//   return Extended
+// }
 
 /* ------------------------------------------------------------------------------------------------------------------ */
 /*                                                        TRef                                                        */
@@ -5623,6 +5821,10 @@ export class TRef<R extends string, Ctx extends TRefContext | undefined> extends
   TRefDef<R, Ctx>,
   InputOf<ReachSchema<R, NonNullable<Ctx>>>
 > {
+  get _manifest(): TManifest<OutputOf<this>> {
+    return { ...TManifest.default(TParsedType.Unknown) }
+  }
+
   _parse(ctx: ParseContextOf<this>): ParseResultOf<this> {
     const underlying = this._resolve()
     return underlying._parse(ctx.child(underlying, ctx.data))
@@ -5748,6 +5950,7 @@ export const catchType = TCatch.create
 export const customType = TCustom.create
 export const dateType = TDate.create
 export const defaultType = TDefault.create
+export const discriminatedUnionType = TDiscriminatedUnion.create
 export const enumType = TEnum.create
 export const falseType = TFalse.create
 export const falsyType = TFalsy.create
@@ -5799,6 +6002,8 @@ export {
   catchType as catch,
   customType as custom,
   dateType as date,
+  discriminatedUnionType as discriminatedUnion,
+  discriminatedUnionType as taggedUnion,
   enumType as enum,
   falseType as false,
   falsyType as falsy,

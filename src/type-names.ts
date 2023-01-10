@@ -7,6 +7,7 @@ import type {
   AnyTDate,
   AnyTDefault,
   AnyTDefined,
+  AnyTDiscriminatedUnion,
   AnyTEffects,
   AnyTEnum,
   AnyTFunction,
@@ -62,6 +63,7 @@ export enum TTypeName {
   Date = 'TDate',
   Default = 'TDefault',
   Defined = 'TDefined',
+  DiscriminatedUnion = 'TDiscriminatedUnion',
   Effects = 'TEffects',
   Enum = 'TEnum',
   False = 'TFalse',
@@ -110,6 +112,7 @@ export type TTypeNameMap<T extends TTypeName = TTypeName> = {
   [TTypeName.Date]: AnyTDate
   [TTypeName.Default]: AnyTDefault
   [TTypeName.Defined]: AnyTDefined
+  [TTypeName.DiscriminatedUnion]: AnyTDiscriminatedUnion
   [TTypeName.Effects]: AnyTEffects
   [TTypeName.Enum]: AnyTEnum
   [TTypeName.False]: TFalse

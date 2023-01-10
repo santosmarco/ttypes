@@ -1,4 +1,4 @@
-import type { AnyTType, TParsedType, objectUtils, typeUtils } from './_internal'
+import type { AnyTType, TParsedType, objectUtils } from './_internal'
 
 /* ------------------------------------------------------------------------------------------------------------------ */
 /*                                                      TManifest                                                     */
@@ -30,6 +30,4 @@ export namespace TManifest {
   export type Public<T extends AnyTType> = Pick<T['_manifest'], objectUtils.OptionalKeysOf<TManifest>> extends infer X
     ? { [K in keyof X]: X[K] }
     : never
-
-  export type Final<T extends AnyTType> = typeUtils.SimplifyFlat<T['_manifest'] & { readonly typeName: T['typeName'] }>
 }

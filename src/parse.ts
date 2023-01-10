@@ -23,6 +23,7 @@ export enum TParsedType {
   BigInt = 'bigint',
   Boolean = 'boolean',
   Buffer = 'Buffer',
+  Class = 'class',
   Date = 'Date',
   False = 'false',
   Falsy = 'false | 0 | "" | null | undefined',
