@@ -438,19 +438,22 @@ export type TStringTransform =
 
 export type TStringTransformKind = TStringTransform['kind']
 
-export type TStringOutput<Transforms extends readonly TStringTransformKind[]> = Transforms extends readonly []
-  ? string
+export type TStringOutput<
+  Transforms extends readonly TStringTransformKind[],
+  Format extends string
+> = Transforms extends readonly []
+  ? Format
   : Transforms extends readonly [
       infer H extends TStringTransformKind,
       ...infer R extends readonly TStringTransformKind[]
     ]
   ? {
-      lowercase: Lowercase<TStringOutput<R>>
-      uppercase: Uppercase<TStringOutput<R>>
-      capitalize: Capitalize<TStringOutput<R>>
-      uncapitalize: Uncapitalize<TStringOutput<R>>
-      trim: TStringOutput<R>
-      replace: TStringOutput<R>
+      lowercase: Lowercase<TStringOutput<R, Format>>
+      uppercase: Uppercase<TStringOutput<R, Format>>
+      capitalize: Capitalize<TStringOutput<R, Format>>
+      uncapitalize: Uncapitalize<TStringOutput<R, Format>>
+      trim: TStringOutput<R, Format>
+      replace: TStringOutput<R, Format>
     }[H]
   : never
 
@@ -472,8 +475,9 @@ export interface TStringDef<Coerce extends boolean> extends TDef {
 
 export class TString<
   Transforms extends readonly TStringTransformKind[] = [],
+  OutputFormat extends string = string,
   Coerce extends boolean = false
-> extends TType<TStringOutput<Transforms>, TStringDef<Coerce>, TStringInput<Coerce>> {
+> extends TType<TStringOutput<Transforms, OutputFormat>, TStringDef<Coerce>, TStringInput<Coerce>> {
   get _manifest(): TStringManifest<OutputOf<this>> {
     const { transforms, checks, coerce } = this._def
     return { ...TManifest.default(TParsedType.String), transforms, checks, coerce }
@@ -615,6 +619,15 @@ export class TString<
           }
 
           break
+        case 'numeric':
+          if (!validator.isNumeric(data, objectUtils.snakeCaseProperties(check.options))) {
+            ctx.addIssue(IssueKind.InvalidString, { check: check.check, options: check.options }, check.message)
+            if (ctx.common.abortEarly) {
+              return ctx.abort()
+            }
+          }
+
+          break
         case 'base64':
           if (
             !TString._internals.re[check.check][
@@ -678,7 +691,7 @@ export class TString<
 
   /* --------------------------------------------------- Coercion --------------------------------------------------- */
 
-  coerce<C extends boolean = true>(value = true as C): TString<Transforms, C> {
+  coerce<C extends boolean = true>(value = true as C): TString<Transforms, OutputFormat, C> {
     return new TString({ ...this._def, coerce: value })
   }
 
@@ -929,18 +942,47 @@ export class TString<
     return this._checks.has('base64')
   }
 
+  numeric(options?: {
+    readonly noSymbols?: boolean
+    readonly message?: string
+  }): TString<Transforms, `${number}`, Coerce> {
+    return this._checks.add({
+      check: 'numeric',
+      options: { noSymbols: options?.noSymbols ?? false },
+      message: options?.message,
+    }) as TString<Transforms, `${number}`, Coerce>
+  }
+
+  get isNumeric(): boolean {
+    return this._checks.has('numeric')
+  }
+
   /* ---------------------------------------------------------------------------------------------------------------- */
 
-  startsWith(prefix: string, options?: { readonly message?: string }): this {
-    return this._checks.add({ check: 'starts_with', prefix, message: options?.message })
+  startsWith<T extends string>(
+    prefix: T,
+    options?: { readonly message?: string }
+  ): TString<Transforms, `${T}${OutputFormat}`, Coerce> {
+    return this._checks.add({ check: 'starts_with', prefix, message: options?.message }) as TString<
+      Transforms,
+      `${T}${OutputFormat}`,
+      Coerce
+    >
   }
 
   get prefix(): string | undefined {
     return this._checks.get('starts_with')?.prefix
   }
 
-  endsWith(suffix: string, options?: { readonly message?: string }): this {
-    return this._checks.add({ check: 'ends_with', suffix, message: options?.message })
+  endsWith<T extends string>(
+    suffix: T,
+    options?: { readonly message?: string }
+  ): TString<Transforms, `${OutputFormat}${T}`, Coerce> {
+    return this._checks.add({ check: 'ends_with', suffix, message: options?.message }) as TString<
+      Transforms,
+      `${OutputFormat}${T}`,
+      Coerce
+    >
   }
 
   get suffix(): string | undefined {
@@ -958,7 +1000,7 @@ export class TString<
    *
    * @returns {TString} A new instance of `TString` with the transform added.
    */
-  trim(): TString<[...Transforms, 'trim'], Coerce> {
+  trim(): TString<[...Transforms, 'trim'], OutputFormat, Coerce> {
     return this._addTransform({ kind: 'trim' })
   }
 
@@ -967,7 +1009,7 @@ export class TString<
    *
    * @returns {TString} A new instance of `TString` with the transform added.
    */
-  lowercase(): TString<[...Transforms, 'lowercase'], Coerce> {
+  lowercase(): TString<[...Transforms, 'lowercase'], OutputFormat, Coerce> {
     return this._addTransform({ kind: 'lowercase' })
   }
 
@@ -976,7 +1018,7 @@ export class TString<
    *
    * @returns {TString} A new instance of `TString` with the transform added.
    */
-  uppercase(): TString<[...Transforms, 'uppercase'], Coerce> {
+  uppercase(): TString<[...Transforms, 'uppercase'], OutputFormat, Coerce> {
     return this._addTransform({ kind: 'uppercase' })
   }
 
@@ -985,7 +1027,7 @@ export class TString<
    *
    * @returns {TString} A new instance of `TString` with the transform added.
    */
-  capitalize(): TString<[...Transforms, 'capitalize'], Coerce> {
+  capitalize(): TString<[...Transforms, 'capitalize'], OutputFormat, Coerce> {
     return this._addTransform({ kind: 'capitalize' })
   }
 
@@ -994,7 +1036,7 @@ export class TString<
    *
    * @returns {TString} A new instance of `TString` with the transform added.
    */
-  uncapitalize(): TString<[...Transforms, 'uncapitalize'], Coerce> {
+  uncapitalize(): TString<[...Transforms, 'uncapitalize'], OutputFormat, Coerce> {
     return this._addTransform({ kind: 'uncapitalize' })
   }
 
@@ -1012,7 +1054,7 @@ export class TString<
     search: RegExp | string,
     replace: string,
     options?: { readonly all?: boolean }
-  ): TString<[...Transforms, 'replace'], Coerce> {
+  ): TString<[...Transforms, 'replace'], OutputFormat, Coerce> {
     return this._addTransform({ kind: 'replace', search, replace, all: options?.all ?? true })
   }
 
@@ -1022,7 +1064,7 @@ export class TString<
 
   private _addTransform<K extends TStringTransformKind>(
     transform: Extract<TStringTransform, { readonly kind: K }>
-  ): TString<[...Transforms, K], Coerce> {
+  ): TString<[...Transforms, K], OutputFormat, Coerce> {
     return new TString({ ...this._def, transforms: [...this._def.transforms, transform] })
   }
 
@@ -1089,7 +1131,7 @@ export class TString<
   }
 }
 
-export type AnyTString = TString<TStringTransformKind[], boolean>
+export type AnyTString = TString<TStringTransformKind[], string, boolean>
 
 /* ------------------------------------------------------------------------------------------------------------------ */
 /*                                                       TNumber                                                      */
