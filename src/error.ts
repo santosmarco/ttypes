@@ -1,6 +1,5 @@
 import util from 'util'
 import type validator from 'validator'
-import safeJsonStringify from 'safe-json-stringify'
 import {
   getGlobal,
   stringUtils,
