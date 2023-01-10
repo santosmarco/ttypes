@@ -1,5 +1,7 @@
 import type {
   AnyTArray,
+  AnyTBigInt,
+  AnyTBoolean,
   AnyTBrand,
   AnyTCatch,
   AnyTDate,
@@ -27,8 +29,6 @@ import type {
   AnyTUnion,
   SomeTObject,
   TAny,
-  TBigInt,
-  TBoolean,
   TBuffer,
   TFalse,
   TFalsy,
@@ -95,8 +95,8 @@ export enum TTypeName {
 export type TTypeNameMap<T extends TTypeName> = {
   [TTypeName.Any]: TAny
   [TTypeName.Array]: AnyTArray
-  [TTypeName.BigInt]: TBigInt
-  [TTypeName.Boolean]: TBoolean
+  [TTypeName.BigInt]: AnyTBigInt
+  [TTypeName.Boolean]: AnyTBoolean
   [TTypeName.Brand]: AnyTBrand
   [TTypeName.Buffer]: TBuffer
   [TTypeName.Catch]: AnyTCatch

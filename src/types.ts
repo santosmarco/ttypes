@@ -1206,7 +1206,7 @@ export interface TBigIntDef<C extends boolean> extends TDef {
   readonly coerce: C
 }
 
-export class TBigInt<C extends boolean = boolean> extends TType<bigint, TBigIntDef<C>, TBigIntInput<C>> {
+export class TBigInt<C extends boolean = true> extends TType<bigint, TBigIntDef<C>, TBigIntInput<C>> {
   _parse(ctx: ParseContextOf<this>): ParseResultOf<this> {
     const { coerce, checks } = this._def
 
@@ -1409,6 +1409,8 @@ export class TBigInt<C extends boolean = boolean> extends TType<bigint, TBigIntD
   }
 }
 
+export type AnyTBigInt = TBigInt<boolean>
+
 /* ------------------------------------------------------------------------------------------------------------------ */
 /*                                                      TBoolean                                                      */
 /* ------------------------------------------------------------------------------------------------------------------ */
@@ -1433,11 +1435,7 @@ export interface TBooleanDef<C extends TBooleanCoercion> extends TDef {
   readonly coerce: C
 }
 
-export class TBoolean<C extends TBooleanCoercion = TBooleanCoercion> extends TType<
-  boolean,
-  TBooleanDef<C>,
-  TBooleanInput<C>
-> {
+export class TBoolean<C extends TBooleanCoercion = false> extends TType<boolean, TBooleanDef<C>, TBooleanInput<C>> {
   _parse(ctx: ParseContextOf<this>): ParseResultOf<this> {
     const { coerce } = this._def
 
@@ -1494,10 +1492,12 @@ export class TBoolean<C extends TBooleanCoercion = TBooleanCoercion> extends TTy
 
   /* ---------------------------------------------------------------------------------------------------------------- */
 
-  static create(options?: SimplifyFlat<TOptions>): TBoolean<false> {
+  static create(options?: SimplifyFlat<TOptions>): TBoolean {
     return new TBoolean({ typeName: TTypeName.Boolean, coerce: false, options: { ...options } })
   }
 }
+
+export type AnyTBoolean = TBoolean<TBooleanCoercion>
 
 /* ------------------------------------------------------ TTrue ----------------------------------------------------- */
 
@@ -2076,10 +2076,6 @@ export type AnyTStringLiteral = TStringLiteral<string>
 
 export type TEnumValues = readonly [string | number, ...Array<string | number>]
 
-export const isValidEnumType = (expectedParsedTypes: readonly TParsedType[], data: unknown): data is string | number =>
-  (expectedParsedTypes.includes(TParsedType.String) && typeof data === 'string') ||
-  (expectedParsedTypes.includes(TParsedType.Number) && typeof data === 'number')
-
 export type TEnumOptions = TOptions<{
   additionalIssueKind: EIssueKind['InvalidEnumValue']
 }>
@@ -2097,7 +2093,11 @@ export class TEnum<T extends TEnumValues> extends TType<T[number], TEnumDef<T>> 
 
     const expectedParsedTypes = [...new Set(values.map(TParsedType.Literal))]
 
-    if (!isValidEnumType(expectedParsedTypes, data)) {
+    if (
+      !((data: unknown): data is string | number =>
+        (expectedParsedTypes.includes(TParsedType.String) && typeof data === 'string') ||
+        (expectedParsedTypes.includes(TParsedType.Number) && typeof data === 'number'))(data)
+    ) {
       return ctx
         .invalidType({
           expected: expectedParsedTypes.length === 2 ? TParsedType.StringOrNumber : expectedParsedTypes[0],
@@ -2170,7 +2170,11 @@ export class TNativeEnum<T extends EnumLike> extends TType<T[keyof T], TNativeEn
 
     const expectedParsedTypes = [...new Set(values.map(TParsedType.Literal))]
 
-    if (!isValidEnumType(expectedParsedTypes, data)) {
+    if (
+      !((data: unknown): data is string | number =>
+        (expectedParsedTypes.includes(TParsedType.String) && typeof data === 'string') ||
+        (expectedParsedTypes.includes(TParsedType.Number) && typeof data === 'number'))(data)
+    ) {
       return ctx
         .invalidType({
           expected: expectedParsedTypes.length === 2 ? TParsedType.StringOrNumber : expectedParsedTypes[0],
@@ -4861,7 +4865,7 @@ export const coerce: {
   string(...args: Parameters<typeof TString.create>): TString<[], true>
   // Number & BigInt
   number(...args: Parameters<typeof TNumber.create>): TNumber<true>
-  bigint(...args: Parameters<typeof TBigInt.create>): TBigInt<true>
+  bigint(...args: Parameters<typeof TBigInt.create>): TBigInt
   // Array & Set
   array<T extends AnyTType>(...args: Parameters<typeof TArray.create<T>>): TArray<T, 'many', true>
   set<T extends AnyTType>(...args: Parameters<typeof TSet.create<T>>): TSet<T, true>
