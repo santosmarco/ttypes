@@ -28,6 +28,7 @@ module.exports = {
     '@typescript-eslint/no-namespace': 'off',
     '@typescript-eslint/no-redeclare': 'off',
     '@typescript-eslint/no-unused-vars': ['error', { argsIgnorePattern: '^_', varsIgnorePattern: '^_' }],
+    'capitalized-comments': 'off',
     'new-cap': 'off',
     'no-case-declarations': 'off',
     complexity: 'off',

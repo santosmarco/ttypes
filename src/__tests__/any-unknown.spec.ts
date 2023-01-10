@@ -34,11 +34,11 @@ describe('TAny', () => {
   })
 
   test('is', () => {
-    expect(t.any().isOptional()).toStrictEqual(true)
-    expect(t.any().isNullable()).toStrictEqual(true)
-    expect(t.any().isNullish()).toStrictEqual(true)
-    expect(t.any().isRequired()).toStrictEqual(false)
-    expect(t.any().isReadonly()).toStrictEqual(false)
+    expect(t.any().isOptional).toStrictEqual(true)
+    expect(t.any().isNullable).toStrictEqual(true)
+    expect(t.any().isNullish).toStrictEqual(true)
+    expect(t.any().isRequired).toStrictEqual(false)
+    expect(t.any().isReadonly).toStrictEqual(false)
   })
 
   test('inference', () => {
@@ -79,11 +79,11 @@ describe('TUnknown', () => {
   })
 
   test('is', () => {
-    expect(t.unknown().isOptional()).toStrictEqual(true)
-    expect(t.unknown().isNullable()).toStrictEqual(true)
-    expect(t.unknown().isNullish()).toStrictEqual(true)
-    expect(t.unknown().isRequired()).toStrictEqual(false)
-    expect(t.unknown().isReadonly()).toStrictEqual(false)
+    expect(t.unknown().isOptional).toStrictEqual(true)
+    expect(t.unknown().isNullable).toStrictEqual(true)
+    expect(t.unknown().isNullish).toStrictEqual(true)
+    expect(t.unknown().isRequired).toStrictEqual(false)
+    expect(t.unknown().isReadonly).toStrictEqual(false)
   })
 
   test('inference', () => {

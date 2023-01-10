@@ -1,4 +1,4 @@
-import type { ETIssueKind, TErrorMap, TIssueKind, stringUtils } from './_internal'
+import type { EIssueKind, IssueKind, TErrorMap, stringUtils } from './_internal'
 
 /* ------------------------------------------------------------------------------------------------------------------ */
 /*                                                      TOptions                                                      */
@@ -64,7 +64,7 @@ export interface ParseOptions {
  */
 export interface TOptions<
   T extends
-    | { readonly additionalIssueKind?: Exclude<TIssueKind, ETIssueKind['Required'] | ETIssueKind['InvalidType']> }
+    | { readonly additionalIssueKind?: Exclude<IssueKind, EIssueKind['Required'] | EIssueKind['InvalidType']> }
     | undefined = undefined
 > extends SchemaColorOptions,
     GlobalOptions,
@@ -72,8 +72,8 @@ export interface TOptions<
   readonly schemaErrorMap?: TErrorMap
   readonly messages?: {
     readonly [K in
-      | ETIssueKind['Required']
-      | ETIssueKind['InvalidType']
+      | EIssueKind['Required']
+      | EIssueKind['InvalidType']
       | ('additionalIssueKind' extends keyof T
           ? T['additionalIssueKind'] & string
           : never) as stringUtils.CamelCase<K>]?: string

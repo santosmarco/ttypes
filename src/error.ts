@@ -10,36 +10,78 @@ import {
   type TEnumValues,
   type TParsedType,
   type ValueOf,
+  type objectUtils,
+  type stringUtils,
 } from './_internal'
 
 /* ------------------------------------------------------------------------------------------------------------------ */
 /*                                                       TIssue                                                       */
 /* ------------------------------------------------------------------------------------------------------------------ */
 
-export const TIssueKind = {
+/* ------------------------------------------------------ Kind ------------------------------------------------------ */
+
+export const IssueKind = {
   Required: 'required',
   InvalidType: 'invalid_type',
   InvalidLiteral: 'invalid_literal',
   InvalidEnumValue: 'invalid_enum_value',
-  InvalidString: 'invalid_string',
-  InvalidNumber: 'invalid_number',
-  InvalidBigInt: 'invalid_bigint',
-  InvalidBuffer: 'invalid_buffer',
-  InvalidDate: 'invalid_date',
-  InvalidArray: 'invalid_array',
-  InvalidTuple: 'invalid_tuple',
-  InvalidSet: 'invalid_set',
+  InvalidThisType: 'invalid_this_type',
+  InvalidArguments: 'invalid_arguments',
+  InvalidReturnType: 'invalid_return_type',
   InvalidInstance: 'invalid_instance',
   UnrecognizedKeys: 'unrecognized_keys',
   InvalidUnion: 'invalid_union',
   InvalidIntersection: 'invalid_intersection',
+  InvalidString: 'invalid_string',
+  InvalidNumber: 'invalid_number',
+  InvalidBigInt: 'invalid_bigint',
+  InvalidDate: 'invalid_date',
+  InvalidArray: 'invalid_array',
+  InvalidSet: 'invalid_set',
+  InvalidTuple: 'invalid_tuple',
+  InvalidBuffer: 'invalid_buffer',
   Forbidden: 'forbidden',
 } as const
 
-export type ETIssueKind = typeof TIssueKind
-export type TIssueKind = ValueOf<ETIssueKind>
+export type EIssueKind = typeof IssueKind
 
-export type TIssueBase<K extends TIssueKind, P extends Record<string, unknown> | undefined> = SimplifyDeep<
+export type IssueKind = ValueOf<EIssueKind>
+
+/* ----------------------------------------------------- Checks ----------------------------------------------------- */
+
+export interface MinCheck<V = number, RV = V> {
+  readonly check: 'min'
+  readonly expected: { readonly value: V; readonly inclusive: boolean }
+  readonly received: RV
+}
+
+export interface MaxCheck<V = number, RV = V> {
+  readonly check: 'max'
+  readonly expected: { readonly value: V; readonly inclusive: boolean }
+  readonly received: RV
+}
+
+export interface RangeCheck<V = number, RV = V> {
+  readonly check: 'range'
+  readonly expected: {
+    readonly min: { readonly value: V; readonly inclusive: boolean }
+    readonly max: { readonly value: V; readonly inclusive: boolean }
+  }
+  readonly received: RV
+}
+
+export interface LengthCheck {
+  readonly check: 'length'
+  readonly expected: number
+  readonly received: number
+}
+
+/* ----------------------------------------------------- Issues ----------------------------------------------------- */
+
+export type IssueBase<
+  K extends IssueKind,
+  P extends objectUtils.OmitIndexSignature<objectUtils.AnyRecord> | undefined = undefined
+> = SimplifyDeep<
   {
     readonly kind: K
     readonly path: ParsePath
@@ -47,36 +89,48 @@ export type TIssueBase<K extends TIssueKind, P extends Record<string, unknown> |
   } & (P extends undefined ? { readonly payload?: never } : { readonly payload: Readonly<P> })
 >
 
-export type TRequiredIssue = TIssueBase<ETIssueKind['Required'], undefined>
+export type RequiredIssue = IssueBase<EIssueKind['Required']>
 
-export type TInvalidTypeIssue = TIssueBase<
-  ETIssueKind['InvalidType'],
+export type InvalidTypeIssue = IssueBase<
+  EIssueKind['InvalidType'],
   { readonly expected: TParsedType; readonly received: TParsedType }
 >
 
-export type TInvalidLiteralIssue = TIssueBase<
-  ETIssueKind['InvalidLiteral'],
+export type InvalidLiteralIssue = IssueBase<
+  EIssueKind['InvalidLiteral'],
   { readonly expected: Primitive; readonly received: Primitive }
 >
 
-export type TInvalidEnumValueIssue = TIssueBase<
-  ETIssueKind['InvalidEnumValue'],
-  { readonly expected: TEnumValues; readonly received: string }
+export type InvalidEnumValueIssue = IssueBase<
+  EIssueKind['InvalidEnumValue'],
+  {
+    readonly expected: {
+      readonly values: TEnumValues
+      readonly formatted: ReadonlyArray<stringUtils.Literalize<string> | stringUtils.Literalize<number>>
+    }
+    readonly received: {
+      readonly value: string | number
+      readonly formatted: stringUtils.Literalize<string> | stringUtils.Literalize<number>
+    }
+  }
 >
 
-export type TInvalidStringIssue = TIssueBase<
-  ETIssueKind['InvalidString'],
-  | {
-      readonly check: 'min'
-      readonly expected: { readonly value: number; readonly inclusive: boolean }
-      readonly received: number
-    }
-  | {
-      readonly check: 'max'
-      readonly expected: { readonly value: number; readonly inclusive: boolean }
-      readonly received: number
-    }
-  | { readonly check: 'length'; readonly expected: number; readonly received: number }
+export type InvalidThisTypeIssue = IssueBase<EIssueKind['InvalidThisType'], { readonly issues: readonly TIssue[] }>
+export type InvalidArgumentsIssue = IssueBase<EIssueKind['InvalidArguments'], { readonly issues: readonly TIssue[] }>
+export type InvalidReturnTypeIssue = IssueBase<EIssueKind['InvalidReturnType'], { readonly issues: readonly TIssue[] }>
+
+export type InvalidInstanceIssue = IssueBase<EIssueKind['InvalidInstance'], { readonly expected: string }>
+
+export type UnrecognizedKeysIssue = IssueBase<EIssueKind['UnrecognizedKeys'], { readonly keys: readonly PropertyKey[] }>
+
+export type InvalidUnionIssue = IssueBase<EIssueKind['InvalidUnion'], { readonly issues: readonly TIssue[] }>
+export type InvalidIntersectionIssue = IssueBase<EIssueKind['InvalidIntersection']>
+
+export type InvalidStringIssue = IssueBase<
+  EIssueKind['InvalidString'],
+  | MinCheck
+  | MaxCheck
+  | LengthCheck
   | {
       readonly check: 'pattern'
       readonly expected: { readonly pattern: RegExp; readonly type: 'enforce' | 'disallow'; readonly name: string }
@@ -96,33 +150,14 @@ export type TInvalidStringIssue = TIssueBase<
     }
   | { readonly check: 'starts_with'; readonly expected: string; readonly received: string }
   | { readonly check: 'ends_with'; readonly expected: string; readonly received: string }
-  | {
-      readonly check: 'contains'
-      readonly expected: string
-      readonly received: string
-    }
+  | { readonly check: 'contains'; readonly expected: string; readonly received: string }
 >
 
-export type TInvalidNumberIssue = TIssueBase<
-  ETIssueKind['InvalidNumber'],
-  | {
-      readonly check: 'min'
-      readonly expected: { readonly value: number; readonly inclusive: boolean }
-      readonly received: number
-    }
-  | {
-      readonly check: 'max'
-      readonly expected: { readonly value: number; readonly inclusive: boolean }
-      readonly received: number
-    }
-  | {
-      readonly check: 'range'
-      readonly expected: {
-        readonly min: { readonly value: number; readonly inclusive: boolean }
-        readonly max: { readonly value: number; readonly inclusive: boolean }
-      }
-      readonly received: number
-    }
+export type InvalidNumberIssue = IssueBase<
+  EIssueKind['InvalidNumber'],
+  | MinCheck
+  | MaxCheck
+  | RangeCheck
   | { readonly check: 'integer'; readonly received: number }
   | { readonly check: 'positive'; readonly received: number }
   | { readonly check: 'nonpositive'; readonly received: number }
@@ -133,26 +168,11 @@ export type TInvalidNumberIssue = TIssueBase<
   | { readonly check: 'multiple'; readonly expected: number; readonly received: number }
 >
 
-export type TInvalidBigIntIssue = TIssueBase<
-  ETIssueKind['InvalidBigInt'],
-  | {
-      readonly check: 'min'
-      readonly expected: { readonly value: bigint; readonly inclusive: boolean }
-      readonly received: bigint
-    }
-  | {
-      readonly check: 'max'
-      readonly expected: { readonly value: bigint; readonly inclusive: boolean }
-      readonly received: bigint
-    }
-  | {
-      readonly check: 'range'
-      readonly expected: {
-        readonly min: { readonly value: bigint; readonly inclusive: boolean }
-        readonly max: { readonly value: bigint; readonly inclusive: boolean }
-      }
-      readonly received: bigint
-    }
+export type InvalidBigIntIssue = IssueBase<
+  EIssueKind['InvalidBigInt'],
+  | MinCheck<bigint>
+  | MaxCheck<bigint>
+  | RangeCheck<bigint>
   | { readonly check: 'positive'; readonly received: bigint }
   | { readonly check: 'nonpositive'; readonly received: bigint }
   | { readonly check: 'negative'; readonly received: bigint }
@@ -160,108 +180,48 @@ export type TInvalidBigIntIssue = TIssueBase<
   | { readonly check: 'multiple'; readonly expected: bigint; readonly received: bigint }
 >
 
-export type TInvalidBufferIssue = TIssueBase<
-  ETIssueKind['InvalidBuffer'],
-  | {
-      readonly check: 'min'
-      readonly expected: { readonly value: number; readonly inclusive: boolean }
-      readonly received: number
-    }
-  | {
-      readonly check: 'max'
-      readonly expected: { readonly value: number; readonly inclusive: boolean }
-      readonly received: number
-    }
-  | { readonly check: 'length'; readonly expected: number; readonly received: number }
+export type InvalidDateIssue = IssueBase<
+  EIssueKind['InvalidDate'],
+  MinCheck<Date | 'now', Date> | MaxCheck<Date | 'now', Date> | RangeCheck<Date | 'now', Date>
 >
 
-export type TInvalidDateIssue = TIssueBase<
-  ETIssueKind['InvalidDate'],
-  | {
-      readonly check: 'min'
-      readonly expected: { readonly value: Date | 'now'; readonly inclusive: boolean }
-      readonly received: Date
-    }
-  | {
-      readonly check: 'max'
-      readonly expected: { readonly value: Date | 'now'; readonly inclusive: boolean }
-      readonly received: Date
-    }
-  | {
-      readonly check: 'range'
-      readonly expected: {
-        readonly min: { readonly value: Date | 'now'; readonly inclusive: boolean }
-        readonly max: { readonly value: Date | 'now'; readonly inclusive: boolean }
-      }
-      readonly received: Date
-    }
+export type InvalidArrayIssue = IssueBase<
+  EIssueKind['InvalidArray'],
+  MinCheck | MaxCheck | LengthCheck | { readonly check: 'unique' } | { readonly check: 'ordered' }
 >
 
-export type TInvalidArrayIssue = TIssueBase<
-  ETIssueKind['InvalidArray'],
-  | {
-      readonly check: 'min'
-      readonly expected: { readonly value: number; readonly inclusive: boolean }
-      readonly received: number
-    }
-  | {
-      readonly check: 'max'
-      readonly expected: { readonly value: number; readonly inclusive: boolean }
-      readonly received: number
-    }
-  | { readonly check: 'length'; readonly expected: number; readonly received: number }
-  | { readonly check: 'unique' }
-  | { readonly check: 'ordered' }
+export type InvalidSetIssue = IssueBase<
+  EIssueKind['InvalidSet'],
+  MinCheck | MaxCheck | { readonly check: 'size'; readonly expected: number; readonly received: number }
 >
 
-export type TInvalidTupleIssue = TIssueBase<
-  ETIssueKind['InvalidTuple'],
-  { readonly check: 'length'; readonly expected: number; readonly received: number }
->
+export type InvalidTupleIssue = IssueBase<EIssueKind['InvalidTuple'], LengthCheck>
 
-export type TInvalidSetIssue = TIssueBase<
-  ETIssueKind['InvalidSet'],
-  | {
-      readonly check: 'min'
-      readonly expected: { readonly value: number; readonly inclusive: boolean }
-      readonly received: number
-    }
-  | {
-      readonly check: 'max'
-      readonly expected: { readonly value: number; readonly inclusive: boolean }
-      readonly received: number
-    }
-  | { readonly check: 'size'; readonly expected: number; readonly received: number }
->
+export type InvalidBufferIssue = IssueBase<EIssueKind['InvalidBuffer'], MinCheck | MaxCheck | LengthCheck>
 
-export type TInvalidInstanceIssue = TIssueBase<ETIssueKind['InvalidInstance'], { readonly expected: string }>
+export type ForbiddenIssue = IssueBase<EIssueKind['Forbidden']>
 
-export type TUrecognizedKeysIssue = TIssueBase<ETIssueKind['UnrecognizedKeys'], { readonly keys: readonly string[] }>
-
-export type TInvalidUnionIssue = TIssueBase<ETIssueKind['InvalidUnion'], { readonly issues: readonly TIssue[] }>
-
-export type TInvalidIntersectionIssue = TIssueBase<ETIssueKind['InvalidIntersection'], undefined>
-
-export type TForbiddenIssue = TIssueBase<ETIssueKind['Forbidden'], undefined>
-
-export type TIssue<K extends TIssueKind = TIssueKind> = {
-  [TIssueKind.Required]: TRequiredIssue
-  [TIssueKind.InvalidType]: TInvalidTypeIssue
-  [TIssueKind.InvalidLiteral]: TInvalidLiteralIssue
-  [TIssueKind.InvalidEnumValue]: TInvalidEnumValueIssue
-  [TIssueKind.InvalidString]: TInvalidStringIssue
-  [TIssueKind.InvalidNumber]: TInvalidNumberIssue
-  [TIssueKind.InvalidBigInt]: TInvalidBigIntIssue
-  [TIssueKind.InvalidBuffer]: TInvalidBufferIssue
-  [TIssueKind.InvalidDate]: TInvalidDateIssue
-  [TIssueKind.InvalidArray]: TInvalidArrayIssue
-  [TIssueKind.InvalidTuple]: TInvalidTupleIssue
-  [TIssueKind.InvalidSet]: TInvalidSetIssue
-  [TIssueKind.InvalidInstance]: TInvalidInstanceIssue
-  [TIssueKind.UnrecognizedKeys]: TUrecognizedKeysIssue
-  [TIssueKind.InvalidUnion]: TInvalidUnionIssue
-  [TIssueKind.InvalidIntersection]: TInvalidIntersectionIssue
-  [TIssueKind.Forbidden]: TForbiddenIssue
+export type TIssue<K extends IssueKind = IssueKind> = {
+  [IssueKind.Required]: RequiredIssue
+  [IssueKind.InvalidType]: InvalidTypeIssue
+  [IssueKind.InvalidLiteral]: InvalidLiteralIssue
+  [IssueKind.InvalidEnumValue]: InvalidEnumValueIssue
+  [IssueKind.InvalidThisType]: InvalidThisTypeIssue
+  [IssueKind.InvalidArguments]: InvalidArgumentsIssue
+  [IssueKind.InvalidReturnType]: InvalidReturnTypeIssue
+  [IssueKind.InvalidInstance]: InvalidInstanceIssue
+  [IssueKind.UnrecognizedKeys]: UnrecognizedKeysIssue
+  [IssueKind.InvalidUnion]: InvalidUnionIssue
+  [IssueKind.InvalidIntersection]: InvalidIntersectionIssue
+  [IssueKind.InvalidString]: InvalidStringIssue
+  [IssueKind.InvalidNumber]: InvalidNumberIssue
+  [IssueKind.InvalidBigInt]: InvalidBigIntIssue
+  [IssueKind.InvalidDate]: InvalidDateIssue
+  [IssueKind.InvalidArray]: InvalidArrayIssue
+  [IssueKind.InvalidSet]: InvalidSetIssue
+  [IssueKind.InvalidTuple]: InvalidTupleIssue
+  [IssueKind.InvalidBuffer]: InvalidBufferIssue
+  [IssueKind.Forbidden]: ForbiddenIssue
 }[K]
 
 /* ------------------------------------------------------------------------------------------------------------------ */
@@ -291,18 +251,18 @@ export const DEFAULT_ERROR_FORMATTER: TErrorFormatter = (issues) =>
 export type ErrorMapIssueInput = StripKey<TIssue, 'message'>
 export type TErrorMapFn = (issue: ErrorMapIssueInput) => string
 export type GenericTErrorMapFn = unknown extends unknown ? (issue: ErrorMapIssueInput) => string : never
-export type TErrorMapDict = { readonly [K in TIssueKind]?: (issue: Extract<ErrorMapIssueInput, { kind: K }>) => string }
+export type TErrorMapDict = { readonly [K in IssueKind]?: (issue: Extract<ErrorMapIssueInput, { kind: K }>) => string }
 export type TErrorMap = TErrorMapFn | TErrorMapDict
 
 export const DEFAULT_ERROR_MAP: TErrorMapFn = (issue) => {
   switch (issue.kind) {
-    case TIssueKind.Required:
+    case IssueKind.Required:
       return 'Required'
-    case TIssueKind.InvalidType:
+    case IssueKind.InvalidType:
       return `Expected ${issue.payload.expected}, got ${issue.payload.received}`
-    case TIssueKind.InvalidLiteral:
+    case IssueKind.InvalidLiteral:
       return `Expected ${String(issue.payload.expected)}, got ${String(issue.payload.received)}`
-    case TIssueKind.InvalidArray:
+    case IssueKind.InvalidArray:
       if (issue.payload.check === 'min') {
         return `Array must contain ${issue.payload.expected.inclusive ? 'at least' : 'over'} ${
           issue.payload.expected.value
@@ -328,7 +288,7 @@ export const DEFAULT_ERROR_MAP: TErrorMapFn = (issue) => {
       }
 
       break
-    case TIssueKind.InvalidSet:
+    case IssueKind.InvalidSet:
       if (issue.payload.check === 'min') {
         return `Set must contain ${issue.payload.expected.inclusive ? 'at least' : 'over'} ${
           issue.payload.expected.value
@@ -346,11 +306,11 @@ export const DEFAULT_ERROR_MAP: TErrorMapFn = (issue) => {
       }
 
       break
-    case TIssueKind.InvalidUnion:
+    case IssueKind.InvalidUnion:
       return 'Invalid union'
-    case TIssueKind.InvalidIntersection:
+    case IssueKind.InvalidIntersection:
       return 'Invalid intersection'
-    case TIssueKind.Forbidden:
+    case IssueKind.Forbidden:
       return 'Forbidden'
 
     default:

@@ -2,6 +2,7 @@ import type {
   AnyTArray,
   AnyTBrand,
   AnyTCatch,
+  AnyTDate,
   AnyTDefault,
   AnyTDefined,
   AnyTEnum,
@@ -13,6 +14,7 @@ import type {
   AnyTMap,
   AnyTNativeEnum,
   AnyTNullable,
+  AnyTNumber,
   AnyTOptional,
   AnyTPipeline,
   AnyTPromise,
@@ -20,6 +22,7 @@ import type {
   AnyTRecord,
   AnyTRef,
   AnyTSet,
+  AnyTString,
   AnyTTuple,
   AnyTUnion,
   SomeTObject,
@@ -27,24 +30,19 @@ import type {
   TBigInt,
   TBoolean,
   TBuffer,
-  TDate,
   TFalse,
   TFalsy,
   TNaN,
   TNever,
   TNull,
-  TNumber,
   TPrimitive,
   TPropertyKey,
-  TString,
   TSymbol,
   TTrue,
   TUndefined,
   TUnknown,
   TVoid,
 } from './_internal'
-
-/* ------------------------------------------------------------------------------------------------------------------ */
 /*                                                      TTypeName                                                     */
 /* ------------------------------------------------------------------------------------------------------------------ */
 
@@ -102,7 +100,7 @@ export type TTypeNameMap<T extends TTypeName> = {
   [TTypeName.Brand]: AnyTBrand
   [TTypeName.Buffer]: TBuffer
   [TTypeName.Catch]: AnyTCatch
-  [TTypeName.Date]: TDate
+  [TTypeName.Date]: AnyTDate
   [TTypeName.Default]: AnyTDefault
   [TTypeName.Defined]: AnyTDefined
   [TTypeName.Enum]: AnyTEnum
@@ -119,7 +117,7 @@ export type TTypeNameMap<T extends TTypeName> = {
   [TTypeName.Never]: TNever
   [TTypeName.Null]: TNull
   [TTypeName.Nullable]: AnyTNullable
-  [TTypeName.Number]: TNumber
+  [TTypeName.Number]: AnyTNumber
   [TTypeName.Object]: SomeTObject
   [TTypeName.Optional]: AnyTOptional
   [TTypeName.Pipeline]: AnyTPipeline
@@ -130,7 +128,7 @@ export type TTypeNameMap<T extends TTypeName> = {
   [TTypeName.Record]: AnyTRecord
   [TTypeName.Ref]: AnyTRef
   [TTypeName.Set]: AnyTSet
-  [TTypeName.String]: TString
+  [TTypeName.String]: AnyTString
   [TTypeName.Symbol]: TSymbol
   [TTypeName.True]: TTrue
   [TTypeName.Tuple]: AnyTTuple

@@ -1,8 +1,7 @@
 import { type OptionalKeysOf } from 'type-fest'
 import {
+  IssueKind,
   TError,
-  TIssueKind,
-  cloneDeep,
   getGlobal,
   isArray,
   isAsync,
@@ -11,6 +10,7 @@ import {
   type InputOf,
   type OutputOf,
   type ParseOptions,
+  type Primitive,
   type StripKey,
   type TIssue,
 } from './_internal'
@@ -48,37 +48,67 @@ export enum TParsedType {
   Void = 'void',
 }
 
-export const getParsedType = (x: unknown): TParsedType => {
-  switch (typeof x) {
-    case 'string':
-      return TParsedType.String
-    case 'number':
-      if (Number.isNaN(x)) return TParsedType.NaN
-      return TParsedType.Number
-    case 'bigint':
-      return TParsedType.BigInt
-    case 'boolean':
-      return TParsedType.Boolean
-    case 'symbol':
-      return TParsedType.Symbol
-    case 'undefined':
-      return TParsedType.Undefined
-    case 'function':
-      return TParsedType.Function
-    case 'object':
-      if (x === null) return TParsedType.Null
-      if (isArray(x)) return TParsedType.Array
-      if (isAsync(x)) return TParsedType.Promise
-      if (x instanceof Buffer) return TParsedType.Buffer
-      if (x instanceof Date) return TParsedType.Date
-      if (x instanceof Map) return TParsedType.Map
-      if (x instanceof RegExp) return TParsedType.RegExp
-      if (x instanceof Set) return TParsedType.Set
-      return TParsedType.Object
+export namespace TParsedType {
+  /* eslint-disable @typescript-eslint/no-unnecessary-qualifier */
 
-    default:
-      return TParsedType.Unknown
+  export const get = (x: unknown): TParsedType => {
+    switch (typeof x) {
+      case 'string':
+        return TParsedType.String
+      case 'number':
+        if (Number.isNaN(x)) return TParsedType.NaN
+        return TParsedType.Number
+      case 'bigint':
+        return TParsedType.BigInt
+      case 'boolean':
+        return TParsedType.Boolean
+      case 'symbol':
+        return TParsedType.Symbol
+      case 'undefined':
+        return TParsedType.Undefined
+      case 'function':
+        return TParsedType.Function
+      case 'object':
+        if (x === null) return TParsedType.Null
+        if (isArray(x)) return TParsedType.Array
+        if (isAsync(x)) return TParsedType.Promise
+        if (x instanceof Buffer) return TParsedType.Buffer
+        if (x instanceof Date) return TParsedType.Date
+        if (x instanceof Map) return TParsedType.Map
+        if (x instanceof RegExp) return TParsedType.RegExp
+        if (x instanceof Set) return TParsedType.Set
+        return TParsedType.Object
+
+      default:
+        return TParsedType.Unknown
+    }
   }
+
+  export const Literal = (x: Primitive): TParsedType => {
+    if (x === null) {
+      return TParsedType.Null
+    }
+
+    switch (typeof x) {
+      case 'string':
+        return TParsedType.String
+      case 'number':
+        return TParsedType.Number
+      case 'bigint':
+        return TParsedType.BigInt
+      case 'boolean':
+        return TParsedType.Boolean
+      case 'symbol':
+        return TParsedType.Symbol
+      case 'undefined':
+        return TParsedType.Undefined
+
+      default:
+        return TParsedType.Unknown
+    }
+  }
+
+  /* eslint-enable @typescript-eslint/no-unnecessary-qualifier */
 }
 
 /* --------------------------------------------------- ParseResult -------------------------------------------------- */
@@ -155,10 +185,13 @@ export interface ParseContext<O, I = O> {
   isValid(): boolean
   isInvalid(): boolean
   setInvalid(): this
-  isAsync(): boolean
-  child<O_, I_>(schema: AnyTTypeBase<O_, I_>, data: unknown, path?: ParsePath): ParseContext<O_, I_>
+  child<O_, I_>(
+    schema: AnyTTypeBase<O_, I_>,
+    data: unknown,
+    path?: ReadonlyArray<ParsePath[number] | symbol>
+  ): ParseContext<O_, I_>
   clone<O_, I_>(schema: AnyTTypeBase<O_, I_>, data: unknown): ParseContext<O_, I_>
-  addIssue<K extends TIssueKind>(
+  addIssue<K extends IssueKind>(
     kind: K,
     ...args: 'payload' extends OptionalKeysOf<TIssue<K>>
       ? [message: string | undefined]
@@ -182,7 +215,7 @@ export const ParseContext = <T extends AnyTTypeBase>({
 }: ParseContextDef<T>): ParseContextOf<T> => {
   const _internals: ParseContextInternals = {
     status: ParseStatus.Valid,
-    data: cloneDeep(data),
+    data,
     ownChildren: [],
     ownIssues: [],
   }
@@ -202,7 +235,7 @@ export const ParseContext = <T extends AnyTTypeBase>({
     },
 
     get parsedType() {
-      return getParsedType(this.data)
+      return TParsedType.get(this.data)
     },
 
     get schema() {
@@ -255,15 +288,11 @@ export const ParseContext = <T extends AnyTTypeBase>({
       return this
     },
 
-    isAsync() {
-      return this.common.async
-    },
-
     child(schema, data, path) {
       const child = ParseContext({
         schema,
         data,
-        path: this.path.concat(path ?? []),
+        path: this.path.concat((path ?? []).map((p) => (typeof p === 'symbol' ? String(p) : p))),
         parent: this,
         common: this.common,
       })
@@ -307,11 +336,11 @@ export const ParseContext = <T extends AnyTTypeBase>({
 
     invalidType(payload) {
       if (this.data === undefined) {
-        return this.addIssue(TIssueKind.Required, this.schema._def.options.messages?.required)
+        return this.addIssue(IssueKind.Required, this.schema._def.options.messages?.required)
       }
 
       return this.addIssue(
-        TIssueKind.InvalidType,
+        IssueKind.InvalidType,
         { expected: payload.expected, received: this.parsedType },
         this.schema._def.options.messages?.invalidType
       )

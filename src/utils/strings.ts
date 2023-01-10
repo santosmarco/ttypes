@@ -1,5 +1,5 @@
 import type { Add, Subtract } from 'ts-arithmetic'
-import type { AssertArray, Includes, NumericRange, Try } from './types'
+import type { AssertArray, Includes, NumericRange, Primitive, Try } from './types'
 
 export namespace stringUtils {
   export const words = (str: string): string[] => str.split(_internals.wordSeparatorsRegex)
@@ -70,6 +70,23 @@ export namespace stringUtils {
 
   export const titleCase = <T extends string>(str: T): TitleCase<T> =>
     words(str).map(capitalize).join(' ') as TitleCase<T>
+
+  export const literalize = <T extends Primitive>(value: T): Literalize<T> =>
+    ((): string => {
+      if (typeof value === 'string') {
+        return `"${value}"`
+      }
+
+      if (typeof value === 'bigint') {
+        return `${value}n`
+      }
+
+      if (typeof value === 'symbol') {
+        return `Symbol(${value.description ?? ''})`
+      }
+
+      return String(value)
+    })() as Literalize<T>
 
   /* ----------------------------------------------------- Types ---------------------------------------------------- */
 
@@ -213,6 +230,16 @@ export namespace stringUtils {
    */
   export type TitleCase<T extends string> = Split<SnakeCase<T>, '_'> extends infer X
     ? Join<AssertArray<{ [K in keyof X]: Capitalize<X[K] & string> }, string | number>, ' '>
+    : never
+
+  export type Literalize<T extends Primitive> = T extends string
+    ? `"${T}"`
+    : T extends bigint
+    ? `${T}n`
+    : T extends symbol
+    ? `Symbol(${string})`
+    : T extends number | boolean | null | undefined
+    ? `${T}`
     : never
 
   /* ---------------------------------------------------- Helpers --------------------------------------------------- */

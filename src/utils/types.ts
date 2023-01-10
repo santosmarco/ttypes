@@ -1,4 +1,4 @@
-import { type Subtract, type Add } from 'ts-arithmetic'
+import type { Add, Subtract } from 'ts-arithmetic'
 
 export type Fn = (...args: readonly unknown[]) => unknown
 export type Ctor = abstract new (...args: readonly unknown[]) => unknown
@@ -25,10 +25,6 @@ export type Equals<A, B> = (<X>() => X extends A ? 1 : 0) extends <Y>() => Y ext
 
 export type Merge<A, B> = Omit<A, keyof B> & B
 
-export type Intersect<A, B> = Pick<A, Extract<keyof A, keyof B>>
-
-export type Diff<A, B> = Pick<A, Exclude<keyof A, keyof B>>
-
 export type SimplifyFlat<T> = { 0: T extends BuiltIn ? T : { [K in keyof T]: T[K] }; 1: T }[Equals<T, unknown>]
 export type SimplifyDeep<T> = { 0: T extends BuiltIn ? T : { [K in keyof T]: SimplifyDeep<T[K]> }; 1: T }[Equals<
   T,
@@ -43,11 +39,6 @@ export type LooseStripKey<T, K extends PropertyKey> = T extends unknown ? Omit<T
 export type Try<A, B, Catch = never> = A extends B ? A : Catch
 
 export type ValueOf<T> = T[keyof T]
-
-export type OmitIndexSignature<T> = { [K in keyof T as {} extends Record<K, unknown> ? never : K]: T[K] }
-
-export type ConditionalKeys<T, Condition> = NonNullable<{ [K in keyof T]: T[K] extends Condition ? K : never }[keyof T]>
-export type ConditionalOmit<T, Condition> = StrictOmit<T, ConditionalKeys<T, Condition>>
 
 export type LiteralUnion<T, U extends Primitive> = T | (U & Record<never, never>)
 
