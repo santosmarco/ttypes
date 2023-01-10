@@ -71,7 +71,7 @@ export namespace stringUtils {
   export const titleCase = <T extends string>(str: T): TitleCase<T> =>
     words(str).map(capitalize).join(' ') as TitleCase<T>
 
-  export const literalize = <T extends Primitive>(value: T): Literalize<T> =>
+  export const literalize = <T extends Primitive>(value: T): Literalized<T> =>
     ((): string => {
       if (typeof value === 'string') {
         return `"${value}"`
@@ -86,7 +86,7 @@ export namespace stringUtils {
       }
 
       return String(value)
-    })() as Literalize<T>
+    })() as Literalized<T>
 
   /* ----------------------------------------------------- Types ---------------------------------------------------- */
 
@@ -232,7 +232,7 @@ export namespace stringUtils {
     ? Join<AssertArray<{ [K in keyof X]: Capitalize<X[K] & string> }, string | number>, ' '>
     : never
 
-  export type Literalize<T extends Primitive> = T extends string
+  export type Literalized<T extends Primitive = Primitive> = T extends string
     ? `"${T}"`
     : T extends bigint
     ? `${T}n`

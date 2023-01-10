@@ -9,6 +9,7 @@ module.exports = {
     'plugin:@typescript-eslint/recommended',
     'xo',
     'xo-typescript',
+    'plugin:jsdoc/recommended',
     'plugin:prettier/recommended',
   ],
   parserOptions: {
@@ -16,7 +17,7 @@ module.exports = {
     sourceType: 'module',
     project: './tsconfig.json',
   },
-  plugins: ['prettier'],
+  plugins: ['jsdoc', 'prettier'],
   rules: {
     '@typescript-eslint/ban-types': 'off',
     '@typescript-eslint/consistent-type-assertions': 'off',

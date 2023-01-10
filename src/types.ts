@@ -691,6 +691,12 @@ export class TString<T extends readonly TStringTransformKind[] = [], C extends b
 
   /**
    * Alias for {@link TString.pattern|_`TString.pattern`_}.
+   *
+   * @param pattern
+   * @param options
+   * @param options.type
+   * @param options.name
+   * @param options.message
    */
   regex(
     pattern: RegExp,
@@ -703,6 +709,11 @@ export class TString<T extends readonly TStringTransformKind[] = [], C extends b
    * Specifies a regular expression that the string must **not** match.
    *
    * This is a shorthand for {@link TString.pattern|_`TString.pattern`_} with the `type` option set to `'disallow'`.
+   *
+   * @param pattern
+   * @param options
+   * @param options.name
+   * @param options.message
    */
   disallow(pattern: RegExp, options?: { readonly name?: string; readonly message?: string }): this {
     return this.pattern(pattern, { ...options, type: 'disallow' })
@@ -1686,6 +1697,10 @@ export class TDate<C extends boolean = false> extends TType<Date, TDateDef<C>, T
     return this.min(value, { inclusive: true, message: options?.message })
   }
 
+  future(options?: { readonly message?: string }): this {
+    return this.min('now', { inclusive: false, message: options?.message })
+  }
+
   max(value: TDateCheckInput, options?: { readonly inclusive?: boolean; readonly message?: string }): this {
     return this._checks.add(
       {
@@ -1703,6 +1718,10 @@ export class TDate<C extends boolean = false> extends TType<Date, TDateDef<C>, T
 
   sameOrBefore(value: TDateCheckInput, options?: { readonly message?: string }): this {
     return this.max(value, { inclusive: true, message: options?.message })
+  }
+
+  past(options?: { readonly message?: string }): this {
+    return this.max('now', { inclusive: false, message: options?.message })
   }
 
   range(
@@ -1883,7 +1902,10 @@ export class TLiteral<T extends Primitive> extends TType<T, TLiteralDef<T>> {
       return ctx
         .addIssue(
           IssueKind.InvalidLiteral,
-          { expected: value, received: data as Primitive },
+          {
+            expected: { value, formatted: stringUtils.literalize(value) },
+            received: { value: data as Primitive, formatted: stringUtils.literalize(data as Primitive) },
+          },
           this._def.options.messages?.invalidLiteral
         )
         .abort()
@@ -2951,9 +2973,6 @@ export type TRecordInput<K extends AnyTType<PropertyKey, PropertyKey>, V extends
   | Record<InputOf<K>, InputOf<V>>
   | (C extends true ? Map<InputOf<K>, InputOf<V>> : never)
 
-/**
- * Transforms numeric keys into numbers so they can be parsed appropriately.
- */
 const handleRecordEntry = <T>([k, v]: readonly [PropertyKey, T]): readonly [PropertyKey, T] => [
   typeof k === 'symbol' ? k : Number.isNaN(Number(k)) ? k : Number(k),
   v,
@@ -4868,18 +4887,18 @@ export class TEffects<T extends AnyTType, O = OutputOf<T>, I = InputOf<T>>
       if (ctx.common.async) {
         return underlying._parseAsync(ctx.child(underlying, data)).then(async (awaitedRes) => {
           if (!awaitedRes.ok) {
-            return awaitedRes
+            return ctx.abort()
           }
 
           const refinementResult = await effect.handler(awaitedRes.data, effectCtx)
 
-          return (refinementResult && ctx.isValid() ? OK(awaitedRes.data) : ctx.abort()) as SyncParseResultOf<this>
+          return refinementResult && ctx.isValid() ? OK(awaitedRes.data as OutputOf<this>) : ctx.abort()
         })
       }
 
       const res = underlying._parseSync(ctx.child(underlying, data))
       if (!res.ok) {
-        return res
+        return ctx.abort()
       }
 
       const refinementResult = effect.handler(res.data, effectCtx)
@@ -4893,7 +4912,7 @@ export class TEffects<T extends AnyTType, O = OutputOf<T>, I = InputOf<T>>
     if (ctx.common.async) {
       return underlying._parseAsync(ctx.child(underlying, data)).then(async (baseRes) => {
         if (!baseRes.ok) {
-          return baseRes
+          return ctx.abort()
         }
 
         const transformed = await effect.handler(baseRes.data, effectCtx)
@@ -4904,7 +4923,7 @@ export class TEffects<T extends AnyTType, O = OutputOf<T>, I = InputOf<T>>
 
     const baseRes = underlying._parseSync(ctx.child(underlying, data))
     if (!baseRes.ok) {
-      return baseRes
+      return ctx.abort()
     }
 
     const transformed = effect.handler(baseRes.data, effectCtx)

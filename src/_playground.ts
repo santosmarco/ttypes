@@ -72,4 +72,27 @@ const asd = t.object({
 
 console.log(t.string().preprocess(String).transform(Number).parse(true))
 
-console.log(t.lazy(() => t.string().optional()).isNullable)
+console.log(
+  t
+    .lazy(() =>
+      t
+        .object({
+          a: t.coerce.string(),
+          b: t.coerce.number(),
+          c: t.coerce.bigint(),
+          d: t.boolean(),
+          e: t.null(),
+          f: t.undefined(),
+          g: t.buffer().nullish(),
+          h: t.unknown(),
+          i: t.any(),
+          j: t.record(t.string(), t.number()),
+          k: t.array(t.number()).nonempty(),
+          l: t.tuple([t.string(), t.number()]).rest(t.string()),
+          m: t.tuple([t.string(), t.bigint()]).tail(),
+          n: t.set(t.date()),
+        })
+        .partial()
+    )
+    .parse({ a: 1, b: '2', c: 3 })
+)

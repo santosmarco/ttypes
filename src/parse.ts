@@ -324,6 +324,8 @@ export const ParseContext = <T extends AnyTTypeBase>({
 
       const issueWithPath = { ...issue, path: this.path.concat(issue.path ?? []) }
 
+      console.log(issueWithPath)
+
       const issueMsg =
         issue.message ??
         resolveErrorMaps([
@@ -339,7 +341,7 @@ export const ParseContext = <T extends AnyTTypeBase>({
     addIssue(kind, ...args) {
       const [payload, message] = args.length === 2 ? args : [undefined, args[0]]
 
-      this._addIssue({ kind, payload, message: message ?? '' } as TIssue)
+      this._addIssue({ kind, payload, message } as TIssue)
 
       return this
     },

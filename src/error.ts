@@ -1,15 +1,16 @@
 import safeJsonStringify from 'safe-json-stringify'
 import {
   getGlobal,
-  type AnyParseContext,
-  type AnyTTypeBase,
+  type AnyTType,
+  type InputOf,
+  type ParseContextOf,
   type ParsePath,
   type Primitive,
   type SimplifyDeep,
   type StripKey,
   type TParsedType,
   type objectUtils,
-  type stringUtils,
+  stringUtils,
 } from './_internal'
 
 /* ------------------------------------------------------------------------------------------------------------------ */
@@ -97,7 +98,10 @@ export type InvalidTypeIssue = IssueBase<
 
 export type InvalidLiteralIssue = IssueBase<
   EIssueKind['InvalidLiteral'],
-  { readonly expected: Primitive; readonly received: Primitive }
+  {
+    readonly expected: { readonly value: Primitive; readonly formatted: stringUtils.Literalized }
+    readonly received: { readonly value: Primitive; readonly formatted: stringUtils.Literalized }
+  }
 >
 
 export type InvalidEnumValueIssue = IssueBase<
@@ -105,11 +109,11 @@ export type InvalidEnumValueIssue = IssueBase<
   {
     readonly expected: {
       readonly values: ReadonlyArray<string | number>
-      readonly formatted: ReadonlyArray<stringUtils.Literalize<string> | stringUtils.Literalize<number>>
+      readonly formatted: ReadonlyArray<stringUtils.Literalized<string> | stringUtils.Literalized<number>>
     }
     readonly received: {
       readonly value: string | number
-      readonly formatted: stringUtils.Literalize<string> | stringUtils.Literalize<number>
+      readonly formatted: stringUtils.Literalized<string> | stringUtils.Literalized<number>
     }
   }
 >
@@ -256,7 +260,6 @@ export const DEFAULT_ERROR_FORMATTER: TErrorFormatter = (issues) =>
 
 export type ErrorMapIssueInput = StripKey<TIssue, 'message'>
 export type TErrorMapFn = (issue: ErrorMapIssueInput) => string
-export type GenericTErrorMapFn = unknown extends unknown ? (issue: ErrorMapIssueInput) => string : never
 export type TErrorMapDict = { readonly [K in IssueKind]?: (issue: Extract<ErrorMapIssueInput, { kind: K }>) => string }
 export type TErrorMap = TErrorMapFn | TErrorMapDict
 
@@ -267,63 +270,161 @@ export const DEFAULT_ERROR_MAP: TErrorMapFn = (issue) => {
     case IssueKind.InvalidType:
       return `Expected ${issue.payload.expected}, got ${issue.payload.received}`
     case IssueKind.InvalidLiteral:
-      return `Expected ${String(issue.payload.expected)}, got ${String(issue.payload.received)}`
-    case IssueKind.InvalidArray:
-      if (issue.payload.check === 'min') {
-        return `Array must contain ${issue.payload.expected.inclusive ? 'at least' : 'over'} ${
-          issue.payload.expected.value
-        } item(s)`
-      }
-
-      if (issue.payload.check === 'max') {
-        return `Array must contain ${issue.payload.expected.inclusive ? 'at most' : 'under'} ${
-          issue.payload.expected.value
-        } item(s)`
-      }
-
-      if (issue.payload.check === 'length') {
-        return `Array must contain exactly ${issue.payload.expected} item(s)`
-      }
-
-      if (issue.payload.check === 'unique') {
-        return 'Array must contain unique items'
-      }
-
-      if (issue.payload.check === 'ordered') {
-        return 'Array must be ordered'
-      }
-
-      break
-    case IssueKind.InvalidSet:
-      if (issue.payload.check === 'min') {
-        return `Set must contain ${issue.payload.expected.inclusive ? 'at least' : 'over'} ${
-          issue.payload.expected.value
-        } item(s)`
-      }
-
-      if (issue.payload.check === 'max') {
-        return `Set must contain ${issue.payload.expected.inclusive ? 'at most' : 'under'} ${
-          issue.payload.expected.value
-        } item(s)`
-      }
-
-      if (issue.payload.check === 'size') {
-        return `Set must contain exactly ${issue.payload.expected} item(s)`
-      }
-
-      break
+      return `Expected the literal value ${String(issue.payload.expected.formatted)}, got ${String(
+        issue.payload.received.formatted
+      )}`
+    case IssueKind.InvalidEnumValue:
+      return `Expected one of ${issue.payload.expected.formatted.join(' | ')}, got ${issue.payload.received.formatted}`
+    case IssueKind.InvalidThisType:
+      return 'Invalid `this` context type'
+    case IssueKind.InvalidArguments:
+      return 'Invalid arguments'
+    case IssueKind.InvalidReturnType:
+      return 'Invalid return type'
+    case IssueKind.InvalidInstance:
+      return `Expected an instance of ${issue.payload.expected}`
+    case IssueKind.UnrecognizedKeys:
+      return `Unrecognized key(s) found in object: ${issue.payload.keys.map(stringUtils.literalize).join(', ')}`
     case IssueKind.InvalidUnion:
       return 'Invalid union'
     case IssueKind.InvalidIntersection:
       return 'Invalid intersection'
+    case IssueKind.InvalidString:
+      if (issue.payload.check === 'min')
+        return `String must contain ${issue.payload.expected.inclusive ? 'at least' : 'over'} ${
+          issue.payload.expected.value
+        } character(s)`
+      if (issue.payload.check === 'max')
+        return `String must contain ${issue.payload.expected.inclusive ? 'at most' : 'under'} ${
+          issue.payload.expected.value
+        } character(s)`
+      if (issue.payload.check === 'length') return `String must contain exactly ${issue.payload.expected} character(s)`
+      if (issue.payload.check === 'pattern')
+        return `String must ${issue.payload.expected.type === 'enforce' ? 'match' : 'not match'} the pattern: ${
+          issue.payload.expected.name
+        }`
+      if (issue.payload.check === 'alphanum') return 'String must contain only alphanumeric characters'
+      if (issue.payload.check === 'email') return 'String must be a valid email address'
+      if (issue.payload.check === 'url') return 'String must be a valid URL'
+      if (issue.payload.check === 'cuid') return 'String must be a valid CUID'
+      if (issue.payload.check === 'uuid') return 'String must be a valid UUID'
+      if (issue.payload.check === 'iso_date') return 'String must be a valid ISO date'
+      if (issue.payload.check === 'iso_duration') return 'String must be a valid ISO duration'
+      if (issue.payload.check === 'base64') return 'String must be a valid base64 string'
+      if (issue.payload.check === 'starts_with') return `String must start with "${issue.payload.expected}"`
+      if (issue.payload.check === 'ends_with') return `String must end with "${issue.payload.expected}"`
+      if (issue.payload.check === 'contains') return `String must contain the substring "${issue.payload.expected}"`
+      return TError.assertNever(issue.payload)
+    case IssueKind.InvalidNumber:
+      if (issue.payload.check === 'min')
+        return `Number must be ${issue.payload.expected.inclusive ? 'greater than or equal to' : 'greater than'} ${
+          issue.payload.expected.value
+        }`
+      if (issue.payload.check === 'max')
+        return `Number must be ${issue.payload.expected.inclusive ? 'less than or equal to' : 'less than'} ${
+          issue.payload.expected.value
+        }`
+      if (issue.payload.check === 'range')
+        return `Number must be between ${issue.payload.expected.min.value} (${
+          issue.payload.expected.min.inclusive ? 'inclusive' : 'exclusive'
+        }) and ${issue.payload.expected.max.value} (${
+          issue.payload.expected.max.inclusive ? 'inclusive' : 'exclusive'
+        })`
+      if (issue.payload.check === 'integer') return 'Number must be an integer'
+      if (issue.payload.check === 'positive') return 'Number must be positive'
+      if (issue.payload.check === 'nonpositive') return 'Number must be non-positive'
+      if (issue.payload.check === 'negative') return 'Number must be negative'
+      if (issue.payload.check === 'nonnegative') return 'Number must be non-negative'
+      if (issue.payload.check === 'finite') return 'Number must be finite'
+      if (issue.payload.check === 'port') return 'Number must be a valid port number'
+      if (issue.payload.check === 'multiple') return `Number must be a multiple of ${issue.payload.expected}`
+      return TError.assertNever(issue.payload)
+    case IssueKind.InvalidBigInt:
+      if (issue.payload.check === 'min')
+        return `BigInt must be ${issue.payload.expected.inclusive ? 'greater than or equal to' : 'greater than'} ${
+          issue.payload.expected.value
+        }n`
+      if (issue.payload.check === 'max')
+        return `BigInt must be ${issue.payload.expected.inclusive ? 'less than or equal to' : 'less than'} ${
+          issue.payload.expected.value
+        }n`
+      if (issue.payload.check === 'range')
+        return `BigInt must be between ${issue.payload.expected.min.value}n (${
+          issue.payload.expected.min.inclusive ? 'inclusive' : 'exclusive'
+        }) and ${issue.payload.expected.max.value}n (${
+          issue.payload.expected.max.inclusive ? 'inclusive' : 'exclusive'
+        })`
+      if (issue.payload.check === 'positive') return 'Number must be positive'
+      if (issue.payload.check === 'nonpositive') return 'Number must be non-positive'
+      if (issue.payload.check === 'negative') return 'Number must be negative'
+      if (issue.payload.check === 'nonnegative') return 'Number must be non-negative'
+      if (issue.payload.check === 'multiple') return `Number must be a multiple of ${issue.payload.expected}`
+      return TError.assertNever(issue.payload)
+    case IssueKind.InvalidDate:
+      if (issue.payload.check === 'min')
+        return `Date must be ${issue.payload.expected.inclusive ? 'greater than or equal to' : 'greater than'} ${
+          issue.payload.expected.value === 'now' ? 'the current time' : issue.payload.expected.value.toISOString()
+        }`
+      if (issue.payload.check === 'max')
+        return `Date must be ${issue.payload.expected.inclusive ? 'less than or equal to' : 'less than'} ${
+          issue.payload.expected.value === 'now' ? 'the current time' : issue.payload.expected.value.toISOString()
+        }`
+      if (issue.payload.check === 'range')
+        return `Date must be between ${
+          issue.payload.expected.min.value === 'now'
+            ? 'the current time'
+            : issue.payload.expected.min.value.toISOString()
+        } (${issue.payload.expected.min.inclusive ? 'inclusive' : 'exclusive'}) and ${
+          issue.payload.expected.max.value === 'now'
+            ? 'the current time'
+            : issue.payload.expected.max.value.toISOString()
+        } (${issue.payload.expected.max.inclusive ? 'inclusive' : 'exclusive'})`
+      return TError.assertNever(issue.payload)
+    case IssueKind.InvalidArray:
+      if (issue.payload.check === 'min')
+        return `Array must contain ${issue.payload.expected.inclusive ? 'at least' : 'over'} ${
+          issue.payload.expected.value
+        } item(s)`
+      if (issue.payload.check === 'max')
+        return `Array must contain ${issue.payload.expected.inclusive ? 'at most' : 'under'} ${
+          issue.payload.expected.value
+        } item(s)`
+      if (issue.payload.check === 'length') return `Array must contain exactly ${issue.payload.expected} item(s)`
+      if (issue.payload.check === 'unique') return 'Array must contain unique items'
+      if (issue.payload.check === 'ordered') return 'Array must be ordered'
+      return TError.assertNever(issue.payload)
+    case IssueKind.InvalidSet:
+      if (issue.payload.check === 'min')
+        return `Set must contain ${issue.payload.expected.inclusive ? 'at least' : 'over'} ${
+          issue.payload.expected.value
+        } item(s)`
+      if (issue.payload.check === 'max')
+        return `Set must contain ${issue.payload.expected.inclusive ? 'at most' : 'under'} ${
+          issue.payload.expected.value
+        } item(s)`
+      if (issue.payload.check === 'size') return `Set must contain exactly ${issue.payload.expected} item(s)`
+      return TError.assertNever(issue.payload)
+    case IssueKind.InvalidTuple:
+      return 'Invalid tuple'
+    case IssueKind.InvalidBuffer:
+      if (issue.payload.check === 'min')
+        return `Buffer must contain ${issue.payload.expected.inclusive ? 'at least' : 'over'} ${
+          issue.payload.expected.value
+        } byte(s)`
+      if (issue.payload.check === 'max')
+        return `Buffer must contain ${issue.payload.expected.inclusive ? 'at most' : 'under'} ${
+          issue.payload.expected.value
+        } byte(s)`
+      if (issue.payload.check === 'length') return `Buffer must contain exactly ${issue.payload.expected} byte(s)`
+      return TError.assertNever(issue.payload)
     case IssueKind.Forbidden:
       return 'Forbidden'
+    case IssueKind.Custom:
+      return 'message' in issue && typeof issue.message === 'string' ? issue.message : 'Custom error'
 
     default:
-      return 'Unknown issue'
+      return TError.assertNever(issue)
   }
-
-  return 'Unknown issue'
 }
 
 export const resolveErrorMaps = (maps: ReadonlyArray<TErrorMap | undefined>): TErrorMapFn => {
@@ -343,11 +444,11 @@ export const resolveErrorMaps = (maps: ReadonlyArray<TErrorMap | undefined>): TE
   }
 }
 
-export class TError<I> extends Error {
-  private readonly _schema: AnyTTypeBase<unknown, I>
+export class TError<I, T extends AnyTType<unknown, I> = AnyTType<unknown, I>> extends Error {
+  private readonly _schema: T
   private readonly _issues: readonly TIssue[]
 
-  constructor(schema: AnyTTypeBase<unknown, I>, issues: readonly TIssue[]) {
+  constructor(schema: T, issues: readonly TIssue[]) {
     super()
     this._schema = schema
     this._issues = issues
@@ -361,11 +462,11 @@ export class TError<I> extends Error {
     return getGlobal().getErrorFormatter()(this.issues)
   }
 
-  get schema(): AnyTTypeBase<unknown, I> {
+  get schema(): T {
     return this._schema
   }
 
-  get origin(): AnyTTypeBase<unknown, I> {
+  get origin(): T {
     return this.schema
   }
 
@@ -373,16 +474,16 @@ export class TError<I> extends Error {
     return this._issues
   }
 
-  static fromContext(ctx: AnyParseContext): AnyTError {
-    return new TError(ctx.root.schema, ctx.allIssues)
+  static fromContext<T extends AnyTType>(ctx: ParseContextOf<T>): TError<InputOf<T>, T> {
+    return new TError(ctx.root.schema as T, ctx.allIssues)
   }
-
-  static readonly defaultFormatter: TErrorFormatter = DEFAULT_ERROR_FORMATTER
-  static readonly defaultIssueMap: TErrorMap = DEFAULT_ERROR_MAP
 
   static assertNever(_x: never): never {
     throw new Error('Impossible')
   }
+
+  static readonly defaultFormatter: TErrorFormatter = DEFAULT_ERROR_FORMATTER
+  static readonly defaultIssueMap: TErrorMap = DEFAULT_ERROR_MAP
 }
 
 export type AnyTError = TError<unknown>
