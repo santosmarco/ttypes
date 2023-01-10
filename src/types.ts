@@ -2639,13 +2639,13 @@ export type AnyTNativeEnum = TNativeEnum<EnumLike>
 
 export type TArrayCardinality = 'many' | 'atleastone'
 
-export type TArrayIO<T extends AnyTType, C extends TArrayCardinality, IO extends '$I' | '$O' = '$O'> = {
+export type TArrayIO<T extends AnyTType, Card extends TArrayCardinality, IO extends '$I' | '$O' = '$O'> = {
   many: Array<T[IO]>
   atleastone: [T[IO], ...Array<T[IO]>]
-}[C]
+}[Card]
 
-export type TArrayInput<T extends AnyTType, C extends TArrayCardinality, Coerce extends boolean> =
-  | TArrayIO<T, C, '$I'>
+export type TArrayInput<T extends AnyTType, Card extends TArrayCardinality, Coerce extends boolean> =
+  | TArrayIO<T, Card, '$I'>
   | (Coerce extends true ? Set<InputOf<T>> : never)
 
 export type FlattenTArray<T extends AnyTArray> = T['element'] extends TArray<infer U, infer C, infer Coerce>
@@ -2662,32 +2662,38 @@ export const flattenTArray = <T extends AnyTArray>(array: T): FlattenTArray<T> =
 export const flattenTArrayDeep = <T extends AnyTArray>(array: T): FlattenTArrayDeep<T> =>
   (array.element instanceof TArray ? flattenTArrayDeep(array.element) : array) as FlattenTArrayDeep<T>
 
-export interface TArrayManifest<T extends AnyTType, C extends TArrayCardinality> extends TManifest<TArrayIO<T, C>> {
+export interface TArrayManifest<T extends AnyTType, Card extends TArrayCardinality>
+  extends TManifest<TArrayIO<T, Card>> {
   readonly element: ManifestOf<T>
-  readonly cardinality: C
+  readonly cardinality: Card
   readonly minItems?: number
   readonly maxItems?: number
   readonly unique: boolean
   readonly coerce: boolean
 }
 
-export interface TArrayDef<T extends AnyTType, C extends TArrayCardinality, Coerce extends boolean> extends TDef {
+export interface TArrayDef<T extends AnyTType, Card extends TArrayCardinality, Coerce extends boolean> extends TDef {
   readonly typeName: TTypeName.Array
   readonly element: T
-  readonly cardinality: C
+  readonly cardinality: Card
   readonly coerce: Coerce
   readonly minItems?: { readonly value: number; readonly inclusive: boolean; readonly message: string | undefined }
   readonly maxItems?: { readonly value: number; readonly inclusive: boolean; readonly message: string | undefined }
   readonly length?: { readonly value: number; readonly message: string | undefined }
   readonly unique?: { readonly message: string | undefined }
+  readonly sorted?: {
+    readonly sortFn: ((a: unknown, b: unknown) => number) | undefined
+    readonly convert: boolean
+    readonly message: string | undefined
+  }
 }
 
 export class TArray<
   T extends AnyTType,
-  C extends TArrayCardinality = 'many',
+  Card extends TArrayCardinality = 'many',
   Coerce extends boolean = false
-> extends TType<TArrayIO<T, C>, TArrayDef<T, C, Coerce>, TArrayInput<T, C, Coerce>> {
-  get _manifest(): TArrayManifest<T, C> {
+> extends TType<TArrayIO<T, Card>, TArrayDef<T, Card, Coerce>, TArrayInput<T, Card, Coerce>> {
+  get _manifest(): TArrayManifest<T, Card> {
     const { element, cardinality, coerce, minItems, maxItems, length, unique } = this._def
     return {
       ...TManifest.default(TParsedType.Array),
@@ -2711,7 +2717,7 @@ export class TArray<
       return ctx.invalidType({ expected: TParsedType.Array }).abort()
     }
 
-    const { element, minItems, maxItems, length, unique } = this._def
+    const { element, minItems, maxItems, length, unique, sorted } = this._def
     const { data } = ctx
 
     if (length && data.length !== length.value) {
@@ -2748,6 +2754,29 @@ export class TArray<
 
     const result: Array<OutputOf<T>> = []
 
+    const finalize = (): ParseResultOf<this> => {
+      if (sorted) {
+        const { sortFn, convert, message } = sorted
+        const sortedRes = [...result].sort(sortFn)
+        if (convert) {
+          return ctx.isValid() ? OK(sortedRes as OutputOf<this>) : ctx.abort()
+        }
+
+        for (const [i, v] of sortedRes.entries()) {
+          if (v !== result[i]) {
+            ctx.child(element, v, [i]).addIssue(IssueKind.InvalidArray, { check: 'sorted' }, message)
+            if (ctx.common.abortEarly) {
+              return ctx.abort()
+            }
+          }
+        }
+
+        return ctx.isValid() ? OK(sortedRes as OutputOf<this>) : ctx.abort()
+      }
+
+      return ctx.isValid() ? OK(result as OutputOf<this>) : ctx.abort()
+    }
+
     if (ctx.common.async) {
       return Promise.all(data.map(async (v, i) => element._parseAsync(ctx.child(element, v, [i])))).then((results) => {
         for (const res of results) {
@@ -2762,7 +2791,7 @@ export class TArray<
           result.push(res.data)
         }
 
-        return ctx.isValid() ? OK(result as OutputOf<this>) : ctx.abort()
+        return finalize()
       })
     }
 
@@ -2778,7 +2807,7 @@ export class TArray<
       result.push(res.data)
     }
 
-    return ctx.isValid() ? OK(result as OutputOf<this>) : ctx.abort()
+    return finalize()
   }
 
   /* ---------------------------------------------------------------------------------------------------------------- */
@@ -2807,7 +2836,7 @@ export class TArray<
 
   /* --------------------------------------------------- Coercion --------------------------------------------------- */
 
-  coerce<C_ extends boolean = true>(value = true as C_): TArray<T, C, C_> {
+  coerce<C extends boolean = true>(value = true as C): TArray<T, Card, C> {
     return new TArray({ ...this._def, coerce: value })
   }
 
@@ -2830,7 +2859,7 @@ export class TArray<
   min<V extends number>(
     value: NonNegativeInteger<V>,
     options?: { readonly inclusive?: boolean; readonly message?: string }
-  ): TArray<T, C, Coerce> {
+  ): TArray<T, Card, Coerce> {
     return new TArray({
       ...this._def,
       length: undefined,
@@ -2859,7 +2888,7 @@ export class TArray<
   max<V extends number>(
     value: NonNegativeInteger<V>,
     options?: { readonly inclusive?: boolean; readonly message?: string }
-  ): TArray<T, C, Coerce> {
+  ): TArray<T, Card, Coerce> {
     return new TArray({
       ...this._def,
       length: undefined,
@@ -2885,7 +2914,7 @@ export class TArray<
   length<L extends number>(
     length: NonNegativeInteger<L>,
     options?: { readonly message?: string }
-  ): TArray<T, C, Coerce> {
+  ): TArray<T, Card, Coerce> {
     return new TArray({
       ...this._def,
       minItems: undefined,
@@ -2918,26 +2947,45 @@ export class TArray<
     })
   }
 
-  sparse(enabled?: true): TArray<TOptional<T>, C, Coerce>
-  sparse(enabled: false): TArray<TDefined<T>, C, Coerce>
-  sparse(enabled = true): TArray<TOptional<T> | TDefined<T>, C, Coerce> {
-    return new TArray({ ...this._def, element: this.element[enabled ? 'optional' : 'defined']() })
-  }
-
-  partial(): TArray<TOptional<T>, C, Coerce> {
-    return this.sparse(true)
-  }
-
-  required(): TArray<TDefined<T>, C, Coerce> {
-    return this.sparse(false)
-  }
-
-  unique(options?: { readonly message?: string }): TArray<T, C, Coerce> {
+  unique(options?: { readonly message?: string }): TArray<T, Card, Coerce> {
     return new TArray({ ...this._def, unique: { message: options?.message } })
   }
 
   get isUnique(): boolean {
     return Boolean(this._def.unique)
+  }
+
+  sorted(options?: { readonly convert?: boolean; readonly message?: string }): TArray<T, Card, Coerce>
+  sorted(
+    sortFn: (a: OutputOf<T>, b: OutputOf<T>) => number,
+    options?: { readonly convert?: boolean; readonly message?: string }
+  ): TArray<T, Card, Coerce>
+  sorted(
+    sortFnOrOptions?:
+      | ((a: OutputOf<T>, b: OutputOf<T>) => number)
+      | { readonly convert?: boolean; readonly message?: string },
+    maybeOptions?: { readonly convert?: boolean; readonly message?: string }
+  ): TArray<T, Card, Coerce> {
+    const sortFn = typeof sortFnOrOptions === 'function' ? sortFnOrOptions : undefined
+    const options = typeof sortFnOrOptions === 'function' ? maybeOptions : sortFnOrOptions
+    return new TArray({
+      ...this._def,
+      sorted: { sortFn, convert: options?.convert ?? false, message: options?.message },
+    })
+  }
+
+  sparse(enabled?: true): TArray<TOptional<T>, Card, Coerce>
+  sparse(enabled: false): TArray<TDefined<T>, Card, Coerce>
+  sparse(enabled = true): TArray<TOptional<T> | TDefined<T>, Card, Coerce> {
+    return new TArray({ ...this._def, element: this.element[enabled ? 'optional' : 'defined']() })
+  }
+
+  partial(): TArray<TOptional<T>, Card, Coerce> {
+    return this.sparse(true)
+  }
+
+  required(): TArray<TDefined<T>, Card, Coerce> {
+    return this.sparse(false)
   }
 
   flatten(): FlattenTArray<this> {
