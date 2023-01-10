@@ -156,6 +156,7 @@ export type InvalidStringIssue = IssueBase<
   | { readonly check: 'uuid' }
   | { readonly check: 'iso_date' }
   | { readonly check: 'iso_duration' }
+  | { readonly check: 'numeric'; readonly options: { readonly noSymbols: boolean } }
   | { readonly check: 'base64'; readonly options: { readonly paddingRequired: boolean; readonly urlSafe: boolean } }
   | { readonly check: 'starts_with'; readonly prefix: string }
   | { readonly check: 'ends_with'; readonly suffix: string }
@@ -167,14 +168,14 @@ export type InvalidNumberIssue = IssueBase<
   | MinCheck
   | MaxCheck
   | RangeCheck
-  | { readonly check: 'integer'; readonly received: number }
-  | { readonly check: 'positive'; readonly received: number }
-  | { readonly check: 'nonpositive'; readonly received: number }
-  | { readonly check: 'negative'; readonly received: number }
-  | { readonly check: 'nonnegative'; readonly received: number }
-  | { readonly check: 'finite'; readonly received: number }
-  | { readonly check: 'port'; readonly received: number }
-  | { readonly check: 'multiple'; readonly expected: number; readonly received: number }
+  | { readonly check: 'integer' }
+  | { readonly check: 'positive' }
+  | { readonly check: 'nonpositive' }
+  | { readonly check: 'negative' }
+  | { readonly check: 'nonnegative' }
+  | { readonly check: 'finite' }
+  | { readonly check: 'port' }
+  | { readonly check: 'multiple'; readonly expected: number }
 >
 
 export type InvalidBigIntIssue = IssueBase<
@@ -196,7 +197,7 @@ export type InvalidDateIssue = IssueBase<
 
 export type InvalidArrayIssue = IssueBase<
   EIssueKind['InvalidArray'],
-  MinCheck | MaxCheck | LengthCheck | { readonly check: 'unique' } | { readonly check: 'ordered' }
+  MinCheck | MaxCheck | LengthCheck | { readonly check: 'unique' } | { readonly check: 'sorted' }
 >
 
 export type InvalidSetIssue = IssueBase<
@@ -308,6 +309,7 @@ export const DEFAULT_ERROR_MAP: TErrorMapFn = (issue) => {
       if (issue.payload.check === 'iso_date') return 'String must be a valid ISO date'
       if (issue.payload.check === 'iso_duration') return 'String must be a valid ISO duration'
       if (issue.payload.check === 'base64') return 'String must be a valid base64 string'
+      if (issue.payload.check === 'numeric') return 'String must be numeric'
       if (issue.payload.check === 'starts_with') return `String must start with "${issue.payload.prefix}"`
       if (issue.payload.check === 'ends_with') return `String must end with "${issue.payload.suffix}"`
       if (issue.payload.check === 'contains') return `String must contain the substring "${issue.payload.substring}"`
@@ -388,7 +390,7 @@ export const DEFAULT_ERROR_MAP: TErrorMapFn = (issue) => {
         } item(s)`
       if (issue.payload.check === 'length') return `Array must contain exactly ${issue.payload.expected} item(s)`
       if (issue.payload.check === 'unique') return 'Array must contain unique items'
-      if (issue.payload.check === 'ordered') return 'Array must be ordered'
+      if (issue.payload.check === 'sorted') return 'Array must be sorted'
       return TError.assertNever(issue.payload)
     case IssueKind.InvalidSet:
       if (issue.payload.check === 'min')

@@ -1174,7 +1174,11 @@ export class TNumber<Coerce extends boolean = false> extends TType<number, TNumb
       switch (check.check) {
         case 'min':
           if (check.expected.inclusive ? data < check.expected.value : data <= check.expected.value) {
-            ctx.addIssue(IssueKind.InvalidNumber, { ...check, received: data }, check.message)
+            ctx.addIssue(
+              IssueKind.InvalidNumber,
+              { check: check.check, expected: check.expected, received: data },
+              check.message
+            )
             if (ctx.common.abortEarly) {
               return ctx.abort()
             }
@@ -1183,7 +1187,11 @@ export class TNumber<Coerce extends boolean = false> extends TType<number, TNumb
           break
         case 'max':
           if (check.expected.inclusive ? data > check.expected.value : data >= check.expected.value) {
-            ctx.addIssue(IssueKind.InvalidNumber, { ...check, received: data }, check.message)
+            ctx.addIssue(
+              IssueKind.InvalidNumber,
+              { check: check.check, expected: check.expected, received: data },
+              check.message
+            )
             if (ctx.common.abortEarly) {
               return ctx.abort()
             }
@@ -1195,7 +1203,11 @@ export class TNumber<Coerce extends boolean = false> extends TType<number, TNumb
             (check.expected.min.inclusive ? data < check.expected.min.value : data <= check.expected.min.value) ||
             (check.expected.max.inclusive ? data > check.expected.max.value : data >= check.expected.max.value)
           ) {
-            ctx.addIssue(IssueKind.InvalidNumber, { ...check, received: data }, check.message)
+            ctx.addIssue(
+              IssueKind.InvalidNumber,
+              { check: check.check, expected: check.expected, received: data },
+              check.message
+            )
             if (ctx.common.abortEarly) {
               return ctx.abort()
             }
@@ -1204,7 +1216,7 @@ export class TNumber<Coerce extends boolean = false> extends TType<number, TNumb
           break
         case 'integer':
           if (!Number.isInteger(data)) {
-            ctx.addIssue(IssueKind.InvalidNumber, { ...check, received: data }, check.message)
+            ctx.addIssue(IssueKind.InvalidNumber, { check: check.check }, check.message)
             if (ctx.common.abortEarly) {
               return ctx.abort()
             }
@@ -1213,7 +1225,7 @@ export class TNumber<Coerce extends boolean = false> extends TType<number, TNumb
           break
         case 'positive':
           if (data <= 0) {
-            ctx.addIssue(IssueKind.InvalidNumber, { ...check, received: data }, check.message)
+            ctx.addIssue(IssueKind.InvalidNumber, { check: check.check }, check.message)
             if (ctx.common.abortEarly) {
               return ctx.abort()
             }
@@ -1222,7 +1234,7 @@ export class TNumber<Coerce extends boolean = false> extends TType<number, TNumb
           break
         case 'nonpositive':
           if (data > 0) {
-            ctx.addIssue(IssueKind.InvalidNumber, { ...check, received: data }, check.message)
+            ctx.addIssue(IssueKind.InvalidNumber, { check: check.check }, check.message)
             if (ctx.common.abortEarly) {
               return ctx.abort()
             }
@@ -1231,7 +1243,7 @@ export class TNumber<Coerce extends boolean = false> extends TType<number, TNumb
           break
         case 'negative':
           if (data >= 0) {
-            ctx.addIssue(IssueKind.InvalidNumber, { ...check, received: data }, check.message)
+            ctx.addIssue(IssueKind.InvalidNumber, { check: check.check }, check.message)
             if (ctx.common.abortEarly) {
               return ctx.abort()
             }
@@ -1240,7 +1252,7 @@ export class TNumber<Coerce extends boolean = false> extends TType<number, TNumb
           break
         case 'nonnegative':
           if (data < 0) {
-            ctx.addIssue(IssueKind.InvalidNumber, { ...check, received: data }, check.message)
+            ctx.addIssue(IssueKind.InvalidNumber, { check: check.check }, check.message)
             if (ctx.common.abortEarly) {
               return ctx.abort()
             }
@@ -1249,7 +1261,7 @@ export class TNumber<Coerce extends boolean = false> extends TType<number, TNumb
           break
         case 'finite':
           if (!Number.isFinite(data)) {
-            ctx.addIssue(IssueKind.InvalidNumber, { ...check, received: data }, check.message)
+            ctx.addIssue(IssueKind.InvalidNumber, { check: check.check }, check.message)
             if (ctx.common.abortEarly) {
               return ctx.abort()
             }
@@ -1258,7 +1270,7 @@ export class TNumber<Coerce extends boolean = false> extends TType<number, TNumb
           break
         case 'port':
           if (data < 0 || data > 65535) {
-            ctx.addIssue(IssueKind.InvalidNumber, { ...check, received: data }, check.message)
+            ctx.addIssue(IssueKind.InvalidNumber, { check: check.check }, check.message)
             if (ctx.common.abortEarly) {
               return ctx.abort()
             }
@@ -1267,7 +1279,7 @@ export class TNumber<Coerce extends boolean = false> extends TType<number, TNumb
           break
         case 'multiple':
           if (TNumber._internals.floatSafeRemainder(data, check.expected) !== 0) {
-            ctx.addIssue(IssueKind.InvalidNumber, { ...check, received: data }, check.message)
+            ctx.addIssue(IssueKind.InvalidNumber, { check: check.check, expected: check.expected }, check.message)
             if (ctx.common.abortEarly) {
               return ctx.abort()
             }

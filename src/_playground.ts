@@ -153,5 +153,10 @@ const myobj = t.object({
 })
 
 type c = t.infer<typeof myobj>
+const asd = t.if(t.string(), t.string().uuid(), t.number())
+type asd = t.infer<typeof asd>
+console.log(t.string().array().sorted().parse(['a', 'b', 'a']))
 
-console.log(myobj.nullish().nonnullable().parse(null))
+const mystring = t.string().uppercase().endsWith('2').numeric()
+
+type mystring = t.infer<typeof mystring>
