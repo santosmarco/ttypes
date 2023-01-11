@@ -45,6 +45,7 @@ import {
   type InvalidBufferIssue,
   type InvalidDateIssue,
   type InvalidNumberIssue,
+  type InvalidRecordIssue,
   type InvalidStringIssue,
   type LiteralUnion,
   type Narrow,
@@ -3838,6 +3839,7 @@ export interface TRecordDef<K extends AnyTType<PropertyKey, PropertyKey>, V exte
   readonly typeName: TTypeName.Record
   readonly keys: K
   readonly values: V
+  readonly checks: ToChecks<InvalidRecordIssue>
   readonly coerce: Coerce
 }
 
@@ -3856,7 +3858,7 @@ export class TRecord<
   }
 
   _parse(ctx: ParseContextOf<this>): ParseResultOf<this> {
-    const { coerce, keys, values } = this._def
+    const { coerce, keys, values, checks } = this._def
 
     if (coerce && ctx.data instanceof Map) {
       ctx.setData(objectUtils.fromEntries([...ctx.data.entries()]))
@@ -3869,10 +3871,49 @@ export class TRecord<
     const { data } = ctx
     const result = {} as Record<OutputOf<K>, OutputOf<V>>
 
+    const entries = objectUtils.entries(data)
+
+    for (const check of checks) {
+      if (
+        check.check === 'min_keys' &&
+        (check.expected.inclusive ? entries.length < check.expected.value : entries.length <= check.expected.value)
+      ) {
+        ctx.addIssue(
+          IssueKind.InvalidRecord,
+          {
+            check: check.check,
+            expected: check.expected,
+            received: entries.length,
+          },
+          check.message
+        )
+        if (ctx.common.abortEarly) {
+          return ctx.abort()
+        }
+      }
+
+      if (
+        check.check === 'max_keys' &&
+        (check.expected.inclusive ? entries.length > check.expected.value : entries.length >= check.expected.value)
+      ) {
+        ctx.addIssue(
+          IssueKind.InvalidRecord,
+          {
+            check: check.check,
+            expected: check.expected,
+            received: entries.length,
+          },
+          check.message
+        )
+        if (ctx.common.abortEarly) {
+          return ctx.abort()
+        }
+      }
+    }
+
     if (ctx.common.async) {
       return Promise.all(
-        objectUtils
-          .entries(data)
+        entries
           .map(handleRecordEntry)
           .map(async ([k, v]) =>
             Promise.all([
@@ -3897,8 +3938,7 @@ export class TRecord<
       })
     }
 
-    for (const [keyRes, valueRes] of objectUtils
-      .entries(data)
+    for (const [keyRes, valueRes] of entries
       .map(handleRecordEntry)
       .map(
         ([k, v]) =>
@@ -3943,6 +3983,30 @@ export class TRecord<
 
   /* ---------------------------------------------------------------------------------------------------------------- */
 
+  minKeys<V extends number>(
+    value: NonNegativeInteger<V>,
+    options?: { readonly inclusive?: boolean; readonly message?: string }
+  ): this {
+    return this.addCheck({
+      check: 'min_keys',
+      expected: { value, inclusive: options?.inclusive ?? true },
+      message: options?.message,
+    })
+  }
+
+  maxKeys<V extends number>(
+    value: NonNegativeInteger<V>,
+    options?: { readonly inclusive?: boolean; readonly message?: string }
+  ): this {
+    return this.addCheck({
+      check: 'max_keys',
+      expected: { value, inclusive: options?.inclusive ?? true },
+      message: options?.message,
+    })
+  }
+
+  /* ---------------------------------------------------------------------------------------------------------------- */
+
   partial(): TRecord<K, TOptional<V>, Coerce> {
     return new TRecord({ ...this._def, values: this.values.optional() })
   }
@@ -3973,6 +4037,7 @@ export class TRecord<
         typeName: TTypeName.Record,
         keys: first,
         values: second,
+        checks: [],
         coerce: false,
         options: { ...third },
       })
@@ -3982,6 +4047,7 @@ export class TRecord<
       typeName: TTypeName.Record,
       keys: TString.create(),
       values: first,
+      checks: [],
       coerce: false,
       options: { ...second },
     })
@@ -4585,7 +4651,7 @@ export class TUndefined extends TType<undefined, TUndefinedDef> {
   }
 
   _parse(ctx: ParseContextOf<this>): ParseResultOf<this> {
-    return ctx.data === emptyMarker || ctx.data !== undefined
+    return ctx.data !== undefined || ctx.data === emptyMarker
       ? ctx.invalidType({ expected: TParsedType.Undefined }).abort()
       : OK(ctx.data)
   }

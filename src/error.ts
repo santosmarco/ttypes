@@ -42,6 +42,7 @@ export const IssueKind = {
   InvalidArray: 'invalid_array',
   InvalidSet: 'invalid_set',
   InvalidTuple: 'invalid_tuple',
+  InvalidRecord: 'invalid_record',
   InvalidBuffer: 'invalid_buffer',
   Forbidden: 'forbidden',
   Custom: 'custom',
@@ -219,6 +220,20 @@ export type InvalidSetIssue = IssueBase<
 
 export type InvalidTupleIssue = IssueBase<EIssueKind['InvalidTuple'], LengthCheck>
 
+export type InvalidRecordIssue = IssueBase<
+  EIssueKind['InvalidRecord'],
+  | {
+      readonly check: 'min_keys'
+      readonly expected: { readonly value: number; readonly inclusive: boolean }
+      readonly received: number
+    }
+  | {
+      readonly check: 'max_keys'
+      readonly expected: { readonly value: number; readonly inclusive: boolean }
+      readonly received: number
+    }
+>
+
 export type InvalidBufferIssue = IssueBase<EIssueKind['InvalidBuffer'], MinCheck | MaxCheck | LengthCheck>
 
 export type ForbiddenIssue = IssueBase<EIssueKind['Forbidden']>
@@ -250,6 +265,7 @@ export type TIssue<K extends IssueKind = IssueKind> = {
   [IssueKind.InvalidArray]: InvalidArrayIssue
   [IssueKind.InvalidSet]: InvalidSetIssue
   [IssueKind.InvalidTuple]: InvalidTupleIssue
+  [IssueKind.InvalidRecord]: InvalidRecordIssue
   [IssueKind.InvalidBuffer]: InvalidBufferIssue
   [IssueKind.Forbidden]: ForbiddenIssue
   [IssueKind.Custom]: CustomIssue & { readonly kind: EIssueKind['Custom'] }
