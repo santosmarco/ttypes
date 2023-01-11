@@ -30,19 +30,19 @@ describe('TString', () => {
     expect(() => withoutCoercion[1].parse(123)).toThrow()
 
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    assertEqual<t.input<typeof withCoercion[0]>, any>(true)
-    assertEqual<t.output<typeof withCoercion[0]>, string>(true)
+    assertEqual<t.input<(typeof withCoercion)[0]>, any>(true)
+    assertEqual<t.output<(typeof withCoercion)[0]>, string>(true)
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    assertEqual<t.input<typeof withCoercion[1]>, any>(true)
-    assertEqual<t.output<typeof withCoercion[1]>, string>(true)
+    assertEqual<t.input<(typeof withCoercion)[1]>, any>(true)
+    assertEqual<t.output<(typeof withCoercion)[1]>, string>(true)
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    assertEqual<t.input<typeof withCoercion[2]>, any>(true)
-    assertEqual<t.output<typeof withCoercion[2]>, string>(true)
+    assertEqual<t.input<(typeof withCoercion)[2]>, any>(true)
+    assertEqual<t.output<(typeof withCoercion)[2]>, string>(true)
     // ----
-    assertEqual<t.input<typeof withoutCoercion[0]>, string>(true)
-    assertEqual<t.output<typeof withoutCoercion[0]>, string>(true)
-    assertEqual<t.input<typeof withoutCoercion[1]>, string>(true)
-    assertEqual<t.output<typeof withoutCoercion[1]>, string>(true)
+    assertEqual<t.input<(typeof withoutCoercion)[0]>, string>(true)
+    assertEqual<t.output<(typeof withoutCoercion)[0]>, string>(true)
+    assertEqual<t.input<(typeof withoutCoercion)[1]>, string>(true)
+    assertEqual<t.output<(typeof withoutCoercion)[1]>, string>(true)
   })
 
   test('min/max/length', () => {

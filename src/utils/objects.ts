@@ -3,7 +3,7 @@ import { arrayUtils } from './arrays'
 import { stringUtils } from './strings'
 
 export interface ObjectUtils {
-  isPlainObject(obj: unknown): obj is objectUtils.AnyRecord
+  isObject(obj: unknown): obj is objectUtils.AnyRecord
   keys<T extends objectUtils.AnyRecord>(obj: T): ReadonlyArray<keyof T>
   keys(obj: object): readonly PropertyKey[]
   values<T extends objectUtils.AnyRecord>(obj: T): ReadonlyArray<T[keyof T]>
@@ -19,7 +19,7 @@ export interface ObjectUtils {
 }
 
 export const objectUtils: ObjectUtils = {
-  isPlainObject(obj: unknown): obj is objectUtils.AnyRecord {
+  isObject(obj: unknown): obj is objectUtils.AnyRecord {
     return obj !== null && typeof obj === 'object' && TParsedType.get(obj) === TParsedType.Object
   },
 

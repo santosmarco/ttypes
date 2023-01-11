@@ -30,8 +30,10 @@ export const IssueKind = {
   InvalidArguments: 'invalid_arguments',
   InvalidReturnType: 'invalid_return_type',
   InvalidInstance: 'invalid_instance',
+  MissingKeys: 'missing_keys',
   UnrecognizedKeys: 'unrecognized_keys',
   InvalidUnion: 'invalid_union',
+  InvalidDiscriminator: 'invalid_discriminator',
   InvalidIntersection: 'invalid_intersection',
   InvalidString: 'invalid_string',
   InvalidNumber: 'invalid_number',
@@ -131,9 +133,19 @@ export type InvalidReturnTypeIssue = IssueBase<EIssueKind['InvalidReturnType'], 
 
 export type InvalidInstanceIssue = IssueBase<EIssueKind['InvalidInstance'], { readonly expected: string }>
 
+export type MissingKeysIssue = IssueBase<EIssueKind['MissingKeys'], { readonly keys: readonly PropertyKey[] }>
 export type UnrecognizedKeysIssue = IssueBase<EIssueKind['UnrecognizedKeys'], { readonly keys: readonly PropertyKey[] }>
 
 export type InvalidUnionIssue = IssueBase<EIssueKind['InvalidUnion'], { readonly issues: readonly TIssue[] }>
+
+export type InvalidDiscriminatorIssue = IssueBase<
+  EIssueKind['InvalidDiscriminator'],
+  {
+    readonly expected: { readonly values: readonly Primitive[]; readonly formatted: readonly stringUtils.Literalized[] }
+    readonly received: { readonly value: Primitive; readonly formatted: stringUtils.Literalized }
+  }
+>
+
 export type InvalidIntersectionIssue = IssueBase<EIssueKind['InvalidIntersection']>
 
 export type InvalidStringIssue = IssueBase<
@@ -226,8 +238,10 @@ export type TIssue<K extends IssueKind = IssueKind> = {
   [IssueKind.InvalidArguments]: InvalidArgumentsIssue
   [IssueKind.InvalidReturnType]: InvalidReturnTypeIssue
   [IssueKind.InvalidInstance]: InvalidInstanceIssue
+  [IssueKind.MissingKeys]: MissingKeysIssue
   [IssueKind.UnrecognizedKeys]: UnrecognizedKeysIssue
   [IssueKind.InvalidUnion]: InvalidUnionIssue
+  [IssueKind.InvalidDiscriminator]: InvalidDiscriminatorIssue
   [IssueKind.InvalidIntersection]: InvalidIntersectionIssue
   [IssueKind.InvalidString]: InvalidStringIssue
   [IssueKind.InvalidNumber]: InvalidNumberIssue
@@ -266,7 +280,7 @@ export const DEFAULT_ERROR_MAP: TErrorMapFn = (issue) => {
     case IssueKind.Required:
       return 'Required'
     case IssueKind.InvalidType:
-      return `Expected ${issue.payload.expected}, got ${issue.payload.received}`
+      return `Expected ${issue.payload.expected}, received ${issue.payload.received}`
     case IssueKind.InvalidLiteral:
       return `Expected the literal value ${String(issue.payload.expected.formatted)}, got ${String(
         issue.payload.received.formatted
@@ -281,6 +295,8 @@ export const DEFAULT_ERROR_MAP: TErrorMapFn = (issue) => {
       return 'Invalid return type'
     case IssueKind.InvalidInstance:
       return `Expected an instance of ${issue.payload.expected}`
+    case IssueKind.MissingKeys:
+      return `Missing key(s) in object: ${issue.payload.keys.map(stringUtils.literalize).join(', ')}`
     case IssueKind.UnrecognizedKeys:
       return `Unrecognized key(s) found in object: ${issue.payload.keys.map(stringUtils.literalize).join(', ')}`
     case IssueKind.InvalidUnion:

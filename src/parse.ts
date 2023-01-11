@@ -13,6 +13,7 @@ import {
   type TIssue,
   type objectUtils,
   cloneUtils,
+  emptyMarker,
 } from './_internal'
 
 /* --------------------------------------------------- TParsedType -------------------------------------------------- */
@@ -29,9 +30,11 @@ export enum TParsedType {
   Falsy = 'false | 0 | "" | null | undefined',
   Function = 'function',
   Integer = 'integer',
+  Intersection = 'Intersection',
   Map = 'Map',
   NaN = 'NaN',
   Never = 'never',
+  NoData = 'no data',
   Null = 'null',
   Number = 'number',
   Object = 'object',
@@ -46,6 +49,7 @@ export enum TParsedType {
   True = 'true',
   Tuple = 'Tuple',
   Undefined = 'undefined',
+  Union = 'Union',
   Unknown = 'unknown',
   Void = 'void',
 }
@@ -54,6 +58,8 @@ export namespace TParsedType {
   /* eslint-disable @typescript-eslint/no-unnecessary-qualifier */
 
   export const get = (x: unknown): TParsedType => {
+    if (x === emptyMarker) return TParsedType.NoData
+
     switch (typeof x) {
       case 'string':
         return TParsedType.String
@@ -178,7 +184,6 @@ export interface ParseContextInternals {
 export interface ParseContext<O, I = O> {
   readonly status: ParseStatus
   readonly data: unknown
-  setData(data: unknown): this
   readonly parsedType: TParsedType
   readonly schema: AnyTType<O, I>
   readonly path: ParsePath
@@ -189,6 +194,7 @@ export interface ParseContext<O, I = O> {
   readonly allChildren: readonly AnyParseContext[]
   readonly ownIssues: readonly TIssue[]
   readonly allIssues: readonly TIssue[]
+  setData(data: unknown): this
   isValid(): boolean
   isInvalid(): boolean
   setInvalid(): this
@@ -197,6 +203,7 @@ export interface ParseContext<O, I = O> {
     data: unknown,
     path?: ReadonlyArray<ParsePath[number] | symbol>
   ): ParseContext<O_, I_>
+  variant(data: unknown, path?: ParsePath): ParseContext<O, I>
   clone<O_, I_>(schema: AnyTType<O_, I_>, data: unknown): ParseContext<O_, I_>
   _addIssue<K extends IssueKind>(
     issue: objectUtils.LooseStripKey<TIssue<K>, 'path' | 'data'> & {
@@ -242,11 +249,6 @@ export const ParseContext = <T extends AnyTType>({
       return _internals.data
     },
 
-    setData(data: unknown) {
-      _internals.data = data
-      return this
-    },
-
     get parsedType() {
       return TParsedType.get(this.data)
     },
@@ -287,6 +289,11 @@ export const ParseContext = <T extends AnyTType>({
       return this.ownIssues.concat(this.ownChildren.flatMap((child) => child.allIssues))
     },
 
+    setData(data: unknown) {
+      _internals.data = data
+      return this
+    },
+
     isValid() {
       return this.status === ParseStatus.Valid && this.allChildren.every((child) => child.isValid())
     },
@@ -311,6 +318,10 @@ export const ParseContext = <T extends AnyTType>({
       })
       _internals.ownChildren.push(child)
       return child
+    },
+
+    variant(data, path) {
+      return this.child(this.schema, data, path)
     },
 
     clone(schema, data) {
@@ -383,10 +394,10 @@ ParseContext.of = <T extends AnyTType>(schema: T, data: unknown, common: ParseCo
 
 export const SyncParseContext = {
   of: <T extends AnyTType>(schema: T, data: unknown, options: ParseOptions | undefined): ParseContextOf<T> =>
-    ParseContext.of(schema, data, { ...schema.options, ...options, async: false }),
+    ParseContext.of(schema, data, { ...getGlobal().getOptions(), ...schema.options(), ...options, async: false }),
 }
 
 export const AsyncParseContext = {
   of: <T extends AnyTType>(schema: T, data: unknown, options: ParseOptions | undefined): ParseContextOf<T> =>
-    ParseContext.of(schema, data, { ...schema.options, ...options, async: true }),
+    ParseContext.of(schema, data, { ...getGlobal().getOptions(), ...schema.options(), ...options, async: true }),
 }

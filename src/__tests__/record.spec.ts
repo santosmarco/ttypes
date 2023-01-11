@@ -152,43 +152,43 @@ describe('TRecord', () => {
 
   test('inference', () => {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    assertEqual<t.infer<typeof stringRecords[0]>, Record<string, any>>(true)
-    assertEqual<t.infer<typeof stringRecords[1]>, Record<string, string[]>>(true)
-    assertEqual<t.infer<typeof stringRecords[2]>, Record<string, bigint>>(true)
-    assertEqual<t.infer<typeof stringRecords[3]>, Record<string, boolean>>(true)
-    assertEqual<t.infer<typeof stringRecords[4]>, Record<string, 'foo'>>(true)
-    assertEqual<t.infer<typeof stringRecords[5]>, Record<string, never>>(true)
-    assertEqual<t.infer<typeof stringRecords[6]>, Record<string, null>>(true)
-    assertEqual<t.infer<typeof stringRecords[7]>, Record<string, number>>(true)
-    assertEqual<t.infer<typeof stringRecords[8]>, Record<string, Record<string, string>>>(true)
-    assertEqual<t.infer<typeof stringRecords[9]>, Record<string, string>>(true)
-    assertEqual<t.infer<typeof stringRecords[10]>, Record<string, symbol>>(true)
-    assertEqual<t.infer<typeof stringRecords[11]>, Record<string, [string, number]>>(true)
-    assertEqual<t.infer<typeof stringRecords[12]>, Record<string, undefined>>(true)
-    assertEqual<t.infer<typeof stringRecords[13]>, Record<string, string | number>>(true)
-    assertEqual<t.infer<typeof stringRecords[14]>, Record<string, unknown>>(true)
-    assertEqual<t.infer<typeof stringRecords[15]>, Record<string, void>>(true)
+    assertEqual<t.infer<(typeof stringRecords)[0]>, Record<string, any>>(true)
+    assertEqual<t.infer<(typeof stringRecords)[1]>, Record<string, string[]>>(true)
+    assertEqual<t.infer<(typeof stringRecords)[2]>, Record<string, bigint>>(true)
+    assertEqual<t.infer<(typeof stringRecords)[3]>, Record<string, boolean>>(true)
+    assertEqual<t.infer<(typeof stringRecords)[4]>, Record<string, 'foo'>>(true)
+    assertEqual<t.infer<(typeof stringRecords)[5]>, Record<string, never>>(true)
+    assertEqual<t.infer<(typeof stringRecords)[6]>, Record<string, null>>(true)
+    assertEqual<t.infer<(typeof stringRecords)[7]>, Record<string, number>>(true)
+    assertEqual<t.infer<(typeof stringRecords)[8]>, Record<string, Record<string, string>>>(true)
+    assertEqual<t.infer<(typeof stringRecords)[9]>, Record<string, string>>(true)
+    assertEqual<t.infer<(typeof stringRecords)[10]>, Record<string, symbol>>(true)
+    assertEqual<t.infer<(typeof stringRecords)[11]>, Record<string, [string, number]>>(true)
+    assertEqual<t.infer<(typeof stringRecords)[12]>, Record<string, undefined>>(true)
+    assertEqual<t.infer<(typeof stringRecords)[13]>, Record<string, string | number>>(true)
+    assertEqual<t.infer<(typeof stringRecords)[14]>, Record<string, unknown>>(true)
+    assertEqual<t.infer<(typeof stringRecords)[15]>, Record<string, void>>(true)
 
-    assertEqual<t.infer<typeof numericRecords[0]>, Record<number, Buffer>>(true)
-    assertEqual<t.infer<typeof numericRecords[1]>, Record<number, Date>>(true)
-    assertEqual<t.infer<typeof numericRecords[2]>, Record<number, 'foo' | undefined>>(true)
-    assertEqual<t.infer<typeof numericRecords[3]>, Record<number, 'foo' | null>>(true)
+    assertEqual<t.infer<(typeof numericRecords)[0]>, Record<number, Buffer>>(true)
+    assertEqual<t.infer<(typeof numericRecords)[1]>, Record<number, Date>>(true)
+    assertEqual<t.infer<(typeof numericRecords)[2]>, Record<number, 'foo' | undefined>>(true)
+    assertEqual<t.infer<(typeof numericRecords)[3]>, Record<number, 'foo' | null>>(true)
 
-    assertEqual<t.infer<typeof symbolicRecords[0]>, Record<symbol, number>>(true)
+    assertEqual<t.infer<(typeof symbolicRecords)[0]>, Record<symbol, number>>(true)
     assertEqual<
-      t.infer<typeof symbolicRecords[1]>,
+      t.infer<(typeof symbolicRecords)[1]>,
       Record<symbol, string | number | bigint | boolean | symbol | null | undefined>
     >(true)
-    assertEqual<t.infer<typeof symbolicRecords[2]>, Record<symbol, string | number | symbol>>(true)
+    assertEqual<t.infer<(typeof symbolicRecords)[2]>, Record<symbol, string | number | symbol>>(true)
 
-    assertEqual<t.infer<typeof stringEnumRecords[0]>, Record<'foo' | 'bar', t.BRANDED<string, 'myStringEnumRecord'>>>(
+    assertEqual<t.infer<(typeof stringEnumRecords)[0]>, Record<'foo' | 'bar', t.BRANDED<string, 'myStringEnumRecord'>>>(
       true
     )
-    assertEqual<t.infer<typeof stringEnumRecords[1]>, Record<'baz' | 'qux', string>>(true)
-    assertEqual<t.infer<typeof stringEnumRecords[2]>, Record<'foo' | 'bar' | 'Baz', string>>(true)
+    assertEqual<t.infer<(typeof stringEnumRecords)[1]>, Record<'baz' | 'qux', string>>(true)
+    assertEqual<t.infer<(typeof stringEnumRecords)[2]>, Record<'foo' | 'bar' | 'Baz', string>>(true)
 
-    assertEqual<t.infer<typeof numericEnumRecords[0]>, Record<1 | 2, t.BRANDED<number, 'myNumericEnumRecord'>>>(true)
-    assertEqual<t.infer<typeof numericEnumRecords[1]>, Record<3 | 4, number>>(true)
-    assertEqual<t.infer<typeof numericEnumRecords[2]>, Record<0 | 1, number>>(true)
+    assertEqual<t.infer<(typeof numericEnumRecords)[0]>, Record<1 | 2, t.BRANDED<number, 'myNumericEnumRecord'>>>(true)
+    assertEqual<t.infer<(typeof numericEnumRecords)[1]>, Record<3 | 4, number>>(true)
+    assertEqual<t.infer<(typeof numericEnumRecords)[2]>, Record<0 | 1, number>>(true)
   })
 })

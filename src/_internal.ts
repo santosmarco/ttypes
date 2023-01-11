@@ -1,4 +1,3 @@
-export * from './checks'
 export * from './def'
 export * from './error'
 export * from './global'

@@ -147,34 +147,63 @@ console.log(
 //     b: t.symbol(),
 //   }),
 // ])
-const myobj = t
-  .object({
-    a: t.enum(['a', 'b', 2]),
+const myobj = t.object({
+  a: t.enum(['a', 'b', 2]).catch('a'),
+  b: t.ref('a'),
+  asd: t.number().or(t.optional(t.bigint())),
+  c: t.object({
+    a: t.enum(['a', 'b', 2]).optional(),
     b: t.ref('a'),
-    c: t.object({
-      a: t.enum(['a', 'b', 2]),
-      b: t.ref('a'),
-    }),
-  })
-  .toSchema(t.number())
+  }),
+  gas: t.any(),
+})
 
 // type c = t.infer<typeof myobj>
 // const asd = t.if(t.string(), t.string().uuid(), t.number())
 // type asd = t.infer<typeof asd>
 // console.log(t.string().array().sorted().parse(['a', 'b', 'a']))
 
-console.log(
-  'a',
-  t
-    .object({
-      a: t.enum(['a', 'b', 2]),
-      b: t.ref('a'),
-      c: t.object({
-        a: t.enum(['a', 'b', 2]),
-        b: t.ref('a'),
-      }),
-    })
-    .toSchema(t.number()).shape
-)
+console.log('a', t.enum(['a', 'b', 2]).exclude(['a', 2]))
 
 type mystring = t.infer<typeof myobj>
+
+const a = t.extend(t.TString).with({
+  data: () => ({ a: 2 }),
+  methods: {
+    b() {
+      return 2
+    },
+    c(a: number) {
+      return this
+    },
+    d() {
+      return this
+    },
+  },
+})
+
+// console.log(myobj.parse({ c: {} }))
+
+// console.log(t.string().b())
+
+const myTuple = t.tuple([t.string(), t.number()]).rest(t.bigint()).reverse()
+
+const arr = myTuple
+
+type arr = t.infer<typeof arr>
+
+type c = undefined extends unknown ? 1 : 0
+console.log(
+  t
+    .string()
+    .min(10)
+    .max(15)
+    .pattern(/marco/)
+    .uppercase()
+    .lowercase()
+    .startsWith('marco')
+    .endsWith('rio')
+    .email()
+    .uuid()
+    .manifest()
+)
