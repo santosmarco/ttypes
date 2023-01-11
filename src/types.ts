@@ -2560,6 +2560,8 @@ export class TEnum<T extends ReadonlyArray<string | number>> extends TType<T[num
     return OK(data)
   }
 
+  /* ---------------------------------------------------------------------------------------------------------------- */
+
   get values(): Readonly<T> {
     return this._def.values
   }
@@ -2567,6 +2569,31 @@ export class TEnum<T extends ReadonlyArray<string | number>> extends TType<T[num
   get enum(): { readonly [K in T[number]]: K } {
     return this.values.reduce((acc, value) => ({ ...acc, [value]: value }), {} as { readonly [K in T[number]]: K })
   }
+
+  /* ---------------------------------------------------------------------------------------------------------------- */
+
+  extract<K extends readonly [T[number], ...Array<T[number]>]>(
+    keys: K
+  ): TEnum<Filter<T, Exclude<T[number], K[number]>>> {
+    return new TEnum({
+      ...this._def,
+      values: this.values.filter((value): value is K[number] => arrayUtils.includes(keys, value)) as Filter<
+        T,
+        Exclude<T[number], K[number]>
+      >,
+    })
+  }
+
+  exclude<K extends readonly [T[number], ...Array<T[number]>]>(keys: K): TEnum<Filter<T, K[number]>> {
+    return new TEnum({
+      ...this._def,
+      values: this.values.filter(
+        (value): value is Exclude<T[number], K[number]> => !arrayUtils.includes(keys, value)
+      ) as Filter<T, K[number]>,
+    })
+  }
+
+  /* ---------------------------------------------------------------------------------------------------------------- */
 
   static create<T extends string | number, U extends readonly [T, ...T[]]>(
     values: U,
@@ -3543,7 +3570,7 @@ export class TTuple<T extends TTupleItems, R extends AnyTType | null = null> ext
   >(
     ...types: U
   ): TTuple<
-    ValueFilter<IdxFilter<T, Extract<U[number], number>>, { readonly typeName: U[number] }>,
+    Filter<IdxFilter<T, Extract<U[number], number>>, { readonly typeName: U[number] }>,
     typeof restMarker extends U[number] ? null : R
   > {
     const filtered = new TTuple({
@@ -3554,11 +3581,11 @@ export class TTuple<T extends TTupleItems, R extends AnyTType | null = null> ext
         )
         .filter(
           (t) => !t.isT(...types.filter((tt): tt is Extract<typeof tt, string> => typeof tt === 'string'))
-        ) as ValueFilter<IdxFilter<T, Extract<U[number], number>>, { readonly typeName: U[number] }>,
+        ) as Filter<IdxFilter<T, Extract<U[number], number>>, { readonly typeName: U[number] }>,
     })
 
     return (arrayUtils.includes(types, restMarker) ? filtered.removeRest() : filtered) as TTuple<
-      ValueFilter<IdxFilter<T, Extract<U[number], number>>, { readonly typeName: U[number] }>,
+      Filter<IdxFilter<T, Extract<U[number], number>>, { readonly typeName: U[number] }>,
       typeof restMarker extends U[number] ? null : R
     >
   }
@@ -3994,7 +4021,7 @@ export type PickRequiredShape<S extends TObjectShape> = {
 export type MakeSchemaShape<S extends TObjectShape, T extends AnyTType, D extends 'flat' | 'deep'> = {
   [K in keyof S]: S[K] extends TObject<infer S_, infer UK, infer C>
     ? D extends 'deep'
-      ? TObject<MakeSchemaShape<S_, T>, UK, C>
+      ? TObject<MakeSchemaShape<S_, T, D>, UK, C>
       : T
     : T
 }
@@ -4784,7 +4811,6 @@ export type AnyTOptional = TOptional<AnyTType>
 
 export interface TNullableDef<T extends AnyTType> extends TDef {
   readonly typeName: TTypeName.Nullable
-
   readonly underlying: T
 }
 
@@ -5074,6 +5100,8 @@ export class TBrand<T extends AnyTType, B extends PropertyKey> extends TType<
     return this.underlying._parse(ctx.child(this.underlying, ctx.data)) as ParseResultOf<this>
   }
 
+  /* ---------------------------------------------------------------------------------------------------------------- */
+
   get underlying(): T {
     return this._def.underlying
   }
@@ -5096,6 +5124,8 @@ export class TBrand<T extends AnyTType, B extends PropertyKey> extends TType<
   removeBrand(): T {
     return this.underlying
   }
+
+  /* ---------------------------------------------------------------------------------------------------------------- */
 
   static create<T extends AnyTType, B extends PropertyKey>(
     underlying: T,
@@ -5989,6 +6019,9 @@ export class TPreprocess<T extends AnyTType, I extends InputOf<T>> extends TEffe
 
 /* --------------------------------------------------- TRefinement -------------------------------------------------- */
 
+const handleStringOrCustomIssue = (strOrCustomIssue: string | CustomIssue): CustomIssue =>
+  typeof strOrCustomIssue === 'string' ? { message: strOrCustomIssue } : strOrCustomIssue
+
 export class TRefinement<T extends AnyTType, O extends OutputOf<T> = OutputOf<T>> extends TEffects<T, O> {
   static create<T extends AnyTType, O extends OutputOf<T>>(
     underlying: T,
@@ -6007,9 +6040,6 @@ export class TRefinement<T extends AnyTType, O extends OutputOf<T> = OutputOf<T>
     refinement: (data: OutputOf<T>, ctx: EffectCtx<T>) => unknown,
     options?: TOptions & { readonly refinementMessage?: RefinementMessage<T> }
   ): TRefinement<T> {
-    const handleStringOrCustomIssue = (strOrCustomIssue: string | CustomIssue): CustomIssue =>
-      typeof strOrCustomIssue === 'string' ? { message: strOrCustomIssue } : strOrCustomIssue
-
     const handler: (data: OutputOf<T>, ctx: EffectCtx<T>) => boolean | Promise<boolean> = (data, ctx) => {
       const setError = (): void => {
         const issue: CustomIssue = options?.refinementMessage
@@ -6555,12 +6585,12 @@ type ToEnumValues<T> = T extends ReadonlyArray<string | number> ? T : never
 
 type UnionToEnumValues<T> = ToEnumValues<UnionToTuple<T>>
 
-type ValueFilter<T extends readonly unknown[], U> = T extends readonly []
+type Filter<T extends readonly unknown[], U> = T extends readonly []
   ? []
   : T extends readonly [infer H, ...infer R]
   ? H extends U
-    ? ValueFilter<R, U>
-    : [H, ...ValueFilter<R, U>]
+    ? Filter<R, U>
+    : [H, ...Filter<R, U>]
   : never
 
 type IdxFilter<
