@@ -174,7 +174,7 @@ console.log(
         b: t.ref('a'),
       }),
     })
-    .toSchema(t.number())
+    .toSchema(t.number()).shape
 )
 
 type mystring = t.infer<typeof myobj>

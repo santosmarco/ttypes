@@ -1,4 +1,3 @@
-import iassign from 'immutable-assign'
 import memoize from 'micro-memoize'
 import { nanoid } from 'nanoid'
 import type {
@@ -53,6 +52,7 @@ import {
   type NonNegative,
   type NonNegativeInteger,
   type Numeric,
+  type NumericRange,
   type ParseContext,
   type ParseContextOf,
   type ParseOptions,
@@ -71,7 +71,6 @@ import {
   type ToNumber,
   type UnionToIntersection,
   type typeUtils,
-  type NumericRange,
 } from './_internal'
 
 /* ------------------------------------------------------------------------------------------------------------------ */
@@ -3992,8 +3991,12 @@ export type PickRequiredShape<S extends TObjectShape> = {
   [K in keyof S as undefined extends OutputOf<S[K]> ? never : K]: S[K]
 }
 
-export type MakeSchemaShape<S extends TObjectShape, T extends AnyTType> = {
-  [K in keyof S]: S[K] extends TObject<infer S_, infer UK, infer C> ? TObject<MakeSchemaShape<S_, T>, UK, C> : T
+export type MakeSchemaShape<S extends TObjectShape, T extends AnyTType, D extends 'flat' | 'deep'> = {
+  [K in keyof S]: S[K] extends TObject<infer S_, infer UK, infer C>
+    ? D extends 'deep'
+      ? TObject<MakeSchemaShape<S_, T>, UK, C>
+      : T
+    : T
 }
 
 export type TObjectOptions = TOptions<{
@@ -4244,8 +4247,40 @@ export class TObject<
     )
   }
 
-  toSchema<T extends AnyTType>(type: T): TObject<MakeSchemaShape<S, T>, UK, C> {
-    return this._setShapeDeep({ onObject: (t) => t.toSchema(type), onOthers: () => type })
+  /**
+   * Create a deep (or flat) version of this `TObject` where all values are (by default) recursively replaced by a given schema.
+   *
+   * @param {AnyTType} type The schema to use to replace the values.
+   * @param {{ deep?: boolean }} [options] The options object.
+   * @param {boolean} [options.deep=true] When `true`, recursively replace all values.
+   * When `false`, only replace the values at the top-level. _Default: `true`_
+   * @returns {TObject} A new instance of `TObject` with the shape updated.
+   */
+  toSchema<T extends AnyTType>(
+    type: T,
+    options?: { readonly deep?: true }
+  ): TObject<MakeSchemaShape<S, T, 'deep'>, UK, C>
+  toSchema<T extends AnyTType>(
+    type: T,
+    options: { readonly deep: false }
+  ): TObject<MakeSchemaShape<S, T, 'flat'>, UK, C>
+  toSchema<T extends AnyTType>(
+    type: T,
+    options?: { readonly deep?: boolean }
+  ): TObject<MakeSchemaShape<S, T, 'flat' | 'deep'>, UK, C> {
+    return this._setShapeDeep({
+      onObject: (t) => (options?.deep === false ? type : t.toSchema(type)),
+      onOthers: () => type,
+    })
+  }
+
+  /**
+   * Updates the shape of the `TObject` so that all values will be parsed as strings.
+   *
+   * @returns {TObject} A new instance of `TObject` with the shape updated.
+   */
+  stringify(): TObject<MakeSchemaShape<S, TString, 'flat'>, UK, C> {
+    return this.toSchema(TString.create(), { deep: false })
   }
 
   /* ---------------------------------------------------------------------------------------------------------------- */
@@ -4261,12 +4296,11 @@ export class TObject<
   }): TObject<T, UK, C> {
     const { onObject, onOthers, onAny } = setters
     return this._setShape(
-      objectUtils.fromEntries(
-        objectUtils
-          .entries(this.shape)
-          .map(([k, v]) => [k, v.isT(TTypeName.Object) ? onObject?.(v) ?? v : onOthers?.(v) ?? v])
-          .map(([k, v]) => [k, onAny?.(v) ?? v])
-      )
+      Object.fromEntries(
+        Object.entries(this.shape)
+          .map(([k, v]) => [k, v.isT(TTypeName.Object) ? onObject?.(v) ?? v : onOthers?.(v) ?? v] as const)
+          .map(([k, v]) => [k, onAny?.(v) ?? v] as const)
+      ) as T
     )
   }
 
