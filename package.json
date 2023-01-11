@@ -25,6 +25,8 @@
     "clone-deep": "^4.0.1",
     "fast-equals": "^4.0.3",
     "immutable": "^4.2.2",
+    "immutable-assign": "^2.1.5",
+    "lodash": "^4.17.21",
     "lodash.clonedeep": "^4.5.0",
     "merge-deep": "^3.0.3",
     "micro-memoize": "^4.0.14",
@@ -36,6 +38,7 @@
   "devDependencies": {
     "@types/clone-deep": "^4.0.1",
     "@types/jest": "^29.2.5",
+    "@types/lodash": "^4.14.191",
     "@types/lodash.clonedeep": "^4.5.7",
     "@types/merge-deep": "^3.0.0",
     "@types/node": "^18.11.18",

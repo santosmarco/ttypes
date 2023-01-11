@@ -1,3 +1,4 @@
+import iassign from 'immutable-assign'
 import memoize from 'micro-memoize'
 import { nanoid } from 'nanoid'
 import type {
@@ -70,6 +71,7 @@ import {
   type ToNumber,
   type UnionToIntersection,
   type typeUtils,
+  type NumericRange,
 } from './_internal'
 
 /* ------------------------------------------------------------------------------------------------------------------ */
@@ -109,6 +111,7 @@ export abstract class TType<Output = unknown, Def extends TDef = TDef, Input = O
     this.array = this.array.bind(this)
     this.record = this.record.bind(this)
     this.promise = this.promise.bind(this)
+    this.promisable = this.promisable.bind(this)
     this.or = this.or.bind(this)
     this.and = this.and.bind(this)
     this.brand = this.brand.bind(this)
@@ -264,6 +267,10 @@ export abstract class TType<Output = unknown, Def extends TDef = TDef, Input = O
     return TPromise.create(this, this._def.options)
   }
 
+  promisable(): TUnion<[TPromise<this>, this]> {
+    return this.promise().or(this)
+  }
+
   or<T extends readonly [AnyTType, ...AnyTType[]]>(
     ...alternatives: T
   ): TUnion<[this, arrayUtils.Head<T>, ...arrayUtils.Tail<T>]> {
@@ -359,7 +366,9 @@ export abstract class TType<Output = unknown, Def extends TDef = TDef, Input = O
 
   /* ---------------------------------------------------------------------------------------------------------------- */
 
-  isT<T extends readonly [TTypeName, ...TTypeName[]]>(...types: T): this is TTypeNameMap<T[number]> {
+  isT<T extends readonly [TTypeName, ...TTypeName[]]>(...types: T): this is TTypeNameMap<T[number]>
+  isT<T extends readonly TTypeName[]>(...types: T): this is TTypeNameMap<T[number]>
+  isT<T extends readonly TTypeName[]>(...types: T): this is TTypeNameMap<T[number]> {
     return types.includes(this.typeName)
   }
 
@@ -3270,29 +3279,97 @@ export type TTupleItems = readonly [AnyTType, ...AnyTType[]] | readonly []
 
 export type AssertTTupleItems<T> = T extends TTupleItems ? T : never
 
+export type TTupleItemsIO<T extends TTupleItems, IO extends '$I' | '$O'> = T extends readonly []
+  ? []
+  : T extends readonly [infer H extends AnyTType, ...infer R extends TTupleItems]
+  ? [...(undefined extends H[IO] ? [H[IO]?] : [H[IO]]), ...TTupleItemsIO<R, IO>]
+  : never
+
 export type TTupleIO<
   T extends TTupleItems,
   R extends AnyTType | null,
   IO extends '$I' | '$O' = '$O'
-> = T extends readonly []
-  ? R extends AnyTType
-    ? [...Array<R[IO]>]
-    : []
-  : T extends readonly [infer Head extends AnyTType, ...infer Rest extends TTupleItems]
-  ? [Head[IO], ...TTupleIO<Rest, R, IO>]
+> = R extends AnyTType
+  ? [...TTupleItemsIO<T, IO>, ...(R[IO] extends undefined ? Partial<Array<R[IO]>> : Array<R[IO]>)]
+  : TTupleItemsIO<T, IO>
+
+export type UpdateTTupleItems<T extends TTupleItems, Fn extends 'partial' | 'required'> = T extends readonly []
+  ? []
+  : T extends readonly [infer H extends AnyTType, ...infer R extends TTupleItems]
+  ? [{ partial: TOptional<H>; required: TDefined<H> }[Fn], ...UpdateTTupleItems<R, Fn>]
   : never
+
+export type UpdateTTupleRest<R extends AnyTType | null, Fn extends 'partial' | 'required'> = R extends AnyTType
+  ? { partial: TOptional<R>; required: TDefined<R> }[Fn]
+  : null
+
+export type UpdateTuple<T extends AnyTTuple, Fn extends 'partial' | 'required'> = TTuple<
+  UpdateTTupleItems<T['items'], Fn>,
+  UpdateTTupleRest<T['restType'], Fn>
+>
 
 export type TTupleHead<T extends TTupleItems> = T extends readonly [infer H, ...unknown[]] ? H : TNever
 export type TTupleTail<T extends TTupleItems> = T extends readonly [unknown, ...infer R extends TTupleItems] ? R : []
-export type TTupleAdd<T extends TTupleItems, U extends TTupleItems> = AssertTTupleItems<[...T, ...U]>
+
+export type TTupleAdd<T extends TTupleItems, U extends TTupleItems> = T extends readonly []
+  ? U extends readonly []
+    ? []
+    : U
+  : T extends readonly [infer H extends AnyTType, ...infer R extends TTupleItems]
+  ? [H, ...TTupleAdd<R, U>]
+  : never
+
+const addTTupleItems = <A extends TTupleItems, B extends TTupleItems>(a: A, b: B): TTupleAdd<A, B> =>
+  (a.length === 0 ? (b.length === 0 ? [] : b) : [...a, ...b]) as TTupleAdd<A, B>
+
+export type ConcatTTupleRest<R0 extends AnyTType | null, R1 extends AnyTType | null> = R0 extends AnyTType
+  ? R1 extends AnyTType
+    ? TUnion<[R0, R1]>
+    : R0
+  : R1
+
+const concatTTupleRestTypes = <R0 extends AnyTType | null, R1 extends AnyTType | null>(
+  r0: R0,
+  r1: R1
+): ConcatTTupleRest<R0, R1> =>
+  (r0 === null ? r1 : r1 === null ? r0 : TUnion.create([r0, r1])) as ConcatTTupleRest<R0, R1>
+
 export type TTupleConcat<T extends AnyTTuple, U extends AnyTTuple> = TTuple<
-  AssertTTupleItems<[...T['items'], ...U['items']]>,
-  T['restType'] extends AnyTType
-    ? U['restType'] extends AnyTType
-      ? TUnion<[T['restType'], U['restType']]>
-      : T['restType']
-    : U['restType']
+  TTupleAdd<T['items'], U['items']>,
+  ConcatTTupleRest<T['restType'], U['restType']>
 >
+
+export type TTupleItemsMapFns<T extends TTupleItems> = T extends readonly []
+  ? []
+  : T extends readonly [infer H extends AnyTType, ...infer Rest extends TTupleItems]
+  ? [(((type: H) => AnyTType) | null | undefined)?, ...TTupleItemsMapFns<Rest>]
+  : never
+
+export type TTupleMapFns<
+  T extends TTupleItems = TTupleItems,
+  R extends AnyTType | null = AnyTType | null
+> = R extends AnyTType ? [...TTupleItemsMapFns<T>, (((rest: R) => AnyTType) | null | undefined)?] : TTupleItemsMapFns<T>
+
+export type MapTTupleItems<T extends TTupleItems, Fns> = Fns extends readonly []
+  ? []
+  : T extends readonly [infer TH extends AnyTType, ...infer TRest]
+  ? Fns extends readonly [infer H, ...infer Rest]
+    ? [
+        H extends (type: TH) => infer Result ? Result : TH,
+        ...(TRest extends readonly [AnyTType, ...AnyTType[]] ? MapTTupleItems<TRest, Rest> : [])
+      ]
+    : never
+  : never
+
+export type MapTTupleRest<
+  T extends TTupleItems,
+  R extends AnyTType | null,
+  Fns extends readonly unknown[]
+> = Fns['length'] extends [...T, unknown]['length']
+  ? Fns[T['length']] extends ((rest: R) => infer Result extends AnyTType)
+    ? Result
+    : null
+  : null
 
 export type TTupleItemsManifest<T extends TTupleItems> = T extends readonly []
   ? []
@@ -3306,7 +3383,9 @@ export type TTupleOptions = TOptions<{
 
 export interface TTupleManifest<T extends TTupleItems, R extends AnyTType | null = null>
   extends TManifest<TTupleIO<T, R>> {
-  readonly items: TTupleItemsManifest<T>
+  readonly items: {
+    [K in keyof T]: ReturnType<T[K]['manifest']>
+  }
   readonly rest: R extends AnyTType ? ManifestOf<R> : null
 }
 
@@ -3323,12 +3402,13 @@ export class TTuple<T extends TTupleItems, R extends AnyTType | null = null> ext
   TTupleIO<T, R, '$I'>
 > {
   get _manifest(): TTupleManifest<T, R> {
-    const { items, rest } = this._def
     return {
       ...TManifest.default(TParsedType.Tuple),
-      items: items.map((t) => t.manifest()) as TTupleItemsManifest<T>,
-      rest: (rest?.manifest() ?? null) as R extends AnyTType ? ManifestOf<R> : null,
-    }
+      items: (this.items.length === 0
+        ? []
+        : this.items.map((item) => item.manifest())) as unknown as TTupleItemsManifest<T>,
+      rest: (this.restType?.manifest() ?? null) as R extends AnyTType ? ManifestOf<R> : null,
+    } as TTupleManifest<T, R>
   }
 
   _parse(ctx: ParseContextOf<this>): ParseResultOf<this> {
@@ -3393,6 +3473,8 @@ export class TTuple<T extends TTupleItems, R extends AnyTType | null = null> ext
     return ctx.isValid() ? OK(result as OutputOf<this>) : ctx.abort()
   }
 
+  /* ---------------------------------------------------------------------------------------------------------------- */
+
   get items(): T {
     return this._def.items
   }
@@ -3400,6 +3482,8 @@ export class TTuple<T extends TTupleItems, R extends AnyTType | null = null> ext
   get restType(): R {
     return this._def.rest
   }
+
+  /* ---------------------------------------------------------------------------------------------------------------- */
 
   rest<R_ extends AnyTType>(rest: R_): TTuple<T, R_> {
     return new TTuple({ ...this._def, rest })
@@ -3410,48 +3494,103 @@ export class TTuple<T extends TTupleItems, R extends AnyTType | null = null> ext
   }
 
   head(): TTupleHead<T> {
-    return (this._def.items[0] ?? TNever.create(this._def.options)) as TTupleHead<T>
+    return (this.items[0] ?? TNever.create(this._def.options)) as TTupleHead<T>
   }
 
   tail(): TTuple<TTupleTail<T>, R> {
-    return new TTuple({ ...this._def, items: this._def.items.slice(1) as TTupleTail<T> })
+    return new TTuple({ ...this._def, items: this.items.slice(1) as TTupleTail<T> })
   }
 
-  push<I extends TTupleItems>(...items: I): TTuple<TTupleAdd<T, I>, R> {
-    return new TTuple({ ...this._def, items: [...this._def.items, ...items] as TTupleAdd<T, I> })
+  push<I extends TTupleItems>(...incoming: I): TTuple<TTupleAdd<T, I>, R> {
+    return new TTuple({ ...this._def, items: addTTupleItems(this.items, incoming) })
   }
 
-  unshift<I extends TTupleItems>(...items: I): TTuple<TTupleAdd<I, T>, R> {
-    return new TTuple({ ...this._def, items: [...items, ...this._def.items] as TTupleAdd<I, T> })
+  unshift<I extends TTupleItems>(...incoming: I): TTuple<TTupleAdd<I, T>, R> {
+    return new TTuple({ ...this._def, items: addTTupleItems(incoming, this.items) })
   }
 
   concat<T_ extends TTupleItems, R_ extends AnyTType | null>(
-    tuple: TTuple<T_, R_>
+    incoming: TTuple<T_, R_>
   ): TTupleConcat<this, TTuple<T_, R_>> {
     return new TTuple({
       ...this._def,
-      items: [...this._def.items, ...tuple._def.items] as AssertTTupleItems<[...T, ...T_]>,
-      rest: this._def.rest ? (tuple._def.rest ? this._def.rest.or(tuple._def.rest) : this._def.rest) : tuple._def.rest,
-    }) as TTupleConcat<this, TTuple<T_, R_>>
-  }
-
-  partial(): TTuple<AssertTTupleItems<{ [K in keyof T]: TOptional<T[K]> }>, R> {
-    return new TTuple({
-      ...this._def,
-      items: this._def.items.map((i) => i.optional()) as unknown as AssertTTupleItems<{
-        [K in keyof T]: TOptional<T[K]>
-      }>,
+      items: addTTupleItems(this.items, incoming.items),
+      rest: concatTTupleRestTypes(this.restType, incoming.restType),
     })
   }
 
-  required(): TTuple<AssertTTupleItems<{ [K in keyof T]: TDefined<T[K]> }>, R> {
+  merge<T_ extends TTupleItems, R_ extends AnyTType | null>(
+    incoming: TTuple<T_, R_>
+  ): TTupleConcat<this, TTuple<T_, R_>> {
+    return this.concat(incoming)
+  }
+
+  map<Fns extends TTupleMapFns<T, R>>(fns: Fns): TTuple<MapTTupleItems<T, Fns>, MapTTupleRest<T, R, Fns>> {
+    const [newRest, ...newItems] = fns
+      .map((fn, i) => fn?.(this.items[i] ?? this.restType))
+      .map((t, i) => (t instanceof TType ? t : this.items[i] ?? this.restType))
+      .reverse()
+
     return new TTuple({
       ...this._def,
-      items: this._def.items.map((i) => i.defined()) as unknown as AssertTTupleItems<{
-        [K in keyof T]: TDefined<T[K]>
-      }>,
+      items: [...newItems].reverse() as MapTTupleItems<T, Fns>,
+      rest: newRest as MapTTupleRest<T, R, Fns>,
     })
   }
+
+  filter<
+    T_ extends T[number]['typeName'] | ToNum<{ [K in keyof T]: K }[number]> | typeof restMarker,
+    U extends readonly [T_, ...T_[]]
+  >(
+    ...types: U
+  ): TTuple<
+    ValueFilter<IdxFilter<T, Extract<U[number], number>>, { readonly typeName: U[number] }>,
+    typeof restMarker extends U[number] ? null : R
+  > {
+    const filtered = new TTuple({
+      ...this._def,
+      items: this.items
+        .filter((_, i) =>
+          types.filter((tt): tt is Extract<typeof tt, number> => typeof tt === 'number').some((tt) => i !== tt)
+        )
+        .filter(
+          (t) => !t.isT(...types.filter((tt): tt is Extract<typeof tt, string> => typeof tt === 'string'))
+        ) as ValueFilter<IdxFilter<T, Extract<U[number], number>>, { readonly typeName: U[number] }>,
+    })
+
+    return (arrayUtils.includes(types, restMarker) ? filtered.removeRest() : filtered) as TTuple<
+      ValueFilter<IdxFilter<T, Extract<U[number], number>>, { readonly typeName: U[number] }>,
+      typeof restMarker extends U[number] ? null : R
+    >
+  }
+
+  setIdx<I extends NumericRange<0, Subtract<T['length'], 1>>, T_ extends AnyTType>(
+    idx: I,
+    type: T_
+  ): TTuple<SetIdx<T, I, T_>, R> {
+    return new TTuple({
+      ...this._def,
+      items: this.items.slice(0, idx).concat(type, this.items.slice(Number(idx) + 1)) as SetIdx<T, I, T_>,
+    })
+  }
+
+  partial(): UpdateTuple<this, 'partial'> {
+    return new TTuple({
+      ...this._def,
+      items: this.items.map((i) => i.optional()) as UpdateTTupleItems<T, 'partial'>,
+      rest: (this.restType?.optional() ?? null) as UpdateTTupleRest<R, 'partial'>,
+    })
+  }
+
+  required(): UpdateTuple<this, 'required'> {
+    return new TTuple({
+      ...this._def,
+      items: this.items.map((i) => i.defined()) as UpdateTTupleItems<T, 'required'>,
+      rest: (this.restType?.defined() ?? null) as UpdateTTupleRest<R, 'required'>,
+    })
+  }
+
+  /* ---------------------------------------------------------------------------------------------------------------- */
 
   static create<T extends TTupleItems>(items: T, options?: typeUtils.SimplifyFlat<TTupleOptions>): TTuple<T>
   static create<T extends TTupleItems, R extends AnyTType>(
@@ -3782,10 +3921,6 @@ export type AnyTMap = TMap<AnyTType, AnyTType>
 /*                                                       TObject                                                      */
 /* ------------------------------------------------------------------------------------------------------------------ */
 
-type OptionalKeys<T extends Record<string, unknown>> = { [K in keyof T]: undefined extends T[K] ? K : never }[keyof T]
-type RequiredKeys<T extends Record<string, unknown>> = { [K in keyof T]: undefined extends T[K] ? never : K }[keyof T]
-type EnforceOptional<T extends Record<string, unknown>> = Pick<T, RequiredKeys<T>> & Partial<Pick<T, OptionalKeys<T>>>
-
 export type TObjectShape = Record<string, AnyTType>
 export type TObjectUnknownKeys = 'passthrough' | 'strict' | 'strip'
 export type TObjectCatchall = AnyTType
@@ -3855,6 +3990,10 @@ export type PickOptionalShape<S extends TObjectShape> = {
 }
 export type PickRequiredShape<S extends TObjectShape> = {
   [K in keyof S as undefined extends OutputOf<S[K]> ? never : K]: S[K]
+}
+
+export type MakeSchemaShape<S extends TObjectShape, T extends AnyTType> = {
+  [K in keyof S]: S[K] extends TObject<infer S_, infer UK, infer C> ? TObject<MakeSchemaShape<S_, T>, UK, C> : T
 }
 
 export type TObjectOptions = TOptions<{
@@ -4073,14 +4212,6 @@ export class TObject<
     )
   }
 
-  deepPartial(): TObject<MakeDeepPartialShape<S>, UK, C> {
-    return this._setShape(
-      objectUtils.fromEntries(
-        objectUtils.entries(this.shape).map(([k, v]) => [k, (v.isT(TTypeName.Object) ? v.deepPartial() : v).optional()])
-      ) as MakeDeepPartialShape<S>
-    )
-  }
-
   required(): TObject<MakeRequiredShape<S>, UK, C>
   required<K extends readonly [keyof S, ...Array<keyof S>]>(keys: K): TObject<MakeRequiredShape<S, K>, UK, C>
   required(keys?: readonly [keyof S, ...Array<keyof S>]): TObject<MakeRequiredShape<S>, UK, C> {
@@ -4093,12 +4224,12 @@ export class TObject<
     )
   }
 
+  deepPartial(): TObject<MakeDeepPartialShape<S>, UK, C> {
+    return this._setShapeDeep({ onObject: (t) => t.deepPartial(), onAny: (t) => t.optional() })
+  }
+
   deepRequired(): TObject<MakeDeepRequiredShape<S>, UK, C> {
-    return this._setShape(
-      objectUtils.fromEntries(
-        objectUtils.entries(this.shape).map(([k, v]) => [k, (v.isT(TTypeName.Object) ? v.deepRequired() : v).defined()])
-      ) as MakeDeepRequiredShape<S>
-    )
+    return this._setShapeDeep({ onObject: (t) => t.deepRequired(), onAny: (t) => t.defined() })
   }
 
   pickOptional(): TObject<PickOptionalShape<S>, UK, C> {
@@ -4113,10 +4244,30 @@ export class TObject<
     )
   }
 
+  toSchema<T extends AnyTType>(type: T): TObject<MakeSchemaShape<S, T>, UK, C> {
+    return this._setShapeDeep({ onObject: (t) => t.toSchema(type), onOthers: () => type })
+  }
+
   /* ---------------------------------------------------------------------------------------------------------------- */
 
   private _setShape<T extends TObjectShape>(shape: T): TObject<T, UK, C> {
     return new TObject({ ...this._def, shape })
+  }
+
+  private _setShapeDeep<T extends TObjectShape>(setters: {
+    readonly onObject?: (t: AnyTObject) => AnyTType
+    readonly onOthers?: (t: Exclude<AnyTType, AnyTObject>) => AnyTType
+    readonly onAny?: (t: AnyTType) => AnyTType
+  }): TObject<T, UK, C> {
+    const { onObject, onOthers, onAny } = setters
+    return this._setShape(
+      objectUtils.fromEntries(
+        objectUtils
+          .entries(this.shape)
+          .map(([k, v]) => [k, v.isT(TTypeName.Object) ? onObject?.(v) ?? v : onOthers?.(v) ?? v])
+          .map(([k, v]) => [k, onAny?.(v) ?? v])
+      )
+    )
   }
 
   private _setUnknownKeys<K extends TObjectUnknownKeys>(unknownKeys: K): TObject<S, K> {
@@ -6182,7 +6333,7 @@ export const coerce: {
     ...args: Parameters<typeof TBoolean.create>
   ): TBoolean<T>
   date(...args: Parameters<typeof TDate.create>): TDate<true>
-  string(...args: Parameters<typeof TString.create>): TString<[], true>
+  string(...args: Parameters<typeof TString.create>): TString<[], string, true>
   // Number & BigInt
   number(...args: Parameters<typeof TNumber.create>): TNumber<true>
   bigint(...args: Parameters<typeof TBigInt.create>): TBigInt<true>
@@ -6225,6 +6376,12 @@ export const coerce: {
     return TRecord.create(args[0], args[1], args[2]).coerce(true) as any
   },
 }
+
+/* ------------------------------------------------------------------------------------------------------------------ */
+/*                                                      TMarkers                                                      */
+/* ------------------------------------------------------------------------------------------------------------------ */
+
+export const restMarker = Symbol('t.restMarker')
 
 /* ---------------------------------------------------- External ---------------------------------------------------- */
 
@@ -6344,18 +6501,94 @@ export type infer<T extends AnyTType> = output<T>
 
 /* ------------------------------------------------------ Utils ----------------------------------------------------- */
 
-export type AssertTTypeArray<T> = T extends readonly AnyTType[] ? T : never
+type ToNum<T> = T extends `${infer N extends number}` ? N : never
 
-export type UnionToIntersectionFn<T> = (T extends unknown ? (x: () => T) => void : never) extends (i: infer I) => void
+type IsAny<T> = 0 extends 1 & T ? true : false
+
+type AssertTTypeArray<T> = T extends readonly AnyTType[] ? T : never
+
+type UnionToIntersectionFn<T> = (T extends unknown ? (x: () => T) => void : never) extends (i: infer I) => void
   ? I
   : never
 
-export type GetUnionLast<T> = UnionToIntersectionFn<T> extends () => infer Last ? Last : never
+type GetUnionLast<T> = UnionToIntersectionFn<T> extends () => infer Last ? Last : never
 
-export type UnionToTuple<T, _Acc extends readonly unknown[] = []> = [T] extends [never]
+type UnionToTuple<T, _Acc extends readonly unknown[] = []> = [T] extends [never]
   ? _Acc
   : UnionToTuple<Exclude<T, GetUnionLast<T>>, [GetUnionLast<T>, ..._Acc]>
 
-export type ToEnumValues<T> = T extends ReadonlyArray<string | number> ? T : never
+type ToEnumValues<T> = T extends ReadonlyArray<string | number> ? T : never
 
-export type UnionToEnumValues<T> = ToEnumValues<UnionToTuple<T>>
+type UnionToEnumValues<T> = ToEnumValues<UnionToTuple<T>>
+
+type ValueFilter<T extends readonly unknown[], U> = T extends readonly []
+  ? []
+  : T extends readonly [infer H, ...infer R]
+  ? H extends U
+    ? ValueFilter<R, U>
+    : [H, ...ValueFilter<R, U>]
+  : never
+
+type IdxFilter<
+  T extends readonly unknown[],
+  U extends number,
+  _Acc extends readonly unknown[] = []
+> = T extends readonly []
+  ? []
+  : T extends [infer H, ...infer R]
+  ? _Acc['length'] extends U
+    ? IdxFilter<R, U, [..._Acc, unknown]>
+    : [H, ...IdxFilter<R, U, [..._Acc, unknown]>]
+  : never
+
+type SetIdx<
+  T extends readonly unknown[],
+  U extends number,
+  V,
+  _Acc extends readonly unknown[] = []
+> = T extends readonly []
+  ? _Acc['length'] extends 0 | U
+    ? [V]
+    : []
+  : T extends readonly [infer H, ...infer R]
+  ? _Acc['length'] extends U
+    ? [V, H, ...SetIdx<R, U, V, [..._Acc, unknown, unknown]>]
+    : [H, ...SetIdx<R, U, V, [..._Acc, unknown]>]
+  : never
+
+type BaseKeyFilter<T, K extends keyof T> = K extends symbol
+  ? never
+  : T[K] extends symbol
+  ? never
+  : [(...args: readonly any[]) => any] extends [T[K]]
+  ? never
+  : K
+type FilterDefinedKeys<T extends object> = Exclude<
+  {
+    [K in keyof T]: IsAny<T[K]> extends true
+      ? K
+      : undefined extends T[K]
+      ? never
+      : T[K] extends undefined
+      ? never
+      : BaseKeyFilter<T, K>
+  }[keyof T],
+  undefined
+>
+type FilterOptionalKeys<T extends object> = Exclude<
+  {
+    [K in keyof T]: IsAny<T[K]> extends true
+      ? never
+      : undefined extends T[K]
+      ? T[K] extends undefined
+        ? never
+        : BaseKeyFilter<T, K>
+      : never
+  }[keyof T],
+  undefined
+>
+type EnforceOptional<T extends Record<string, unknown>> = typeUtils.SimplifyFlat<
+  { [K in keyof Pick<T, FilterDefinedKeys<T>>]: T[K] } & {
+    [K in keyof Pick<T, FilterOptionalKeys<T>>]?: Exclude<T[K], undefined>
+  }
+>

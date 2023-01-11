@@ -92,7 +92,7 @@ export type Narrow<T> = Try<T, [], _Narrow<T>>
 
 export namespace typeUtils {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  export type AnyFunction = (...args: readonly any[]) => unknown
+  export type AnyFunction = (...args: readonly any[]) => any
 
   export type Try<T, U, Catch = never> = T extends U ? T : Catch
 

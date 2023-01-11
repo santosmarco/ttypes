@@ -3,6 +3,7 @@ lockfileVersion: 5.4
 specifiers:
   '@types/clone-deep': ^4.0.1
   '@types/jest': ^29.2.5
+  '@types/lodash': ^4.14.191
   '@types/lodash.clonedeep': ^4.5.7
   '@types/merge-deep': ^3.0.0
   '@types/node': ^18.11.18
@@ -25,7 +26,9 @@ specifiers:
   eslint-plugin-prettier: ^4.2.1
   fast-equals: ^4.0.3
   immutable: ^4.2.2
+  immutable-assign: ^2.1.5
   jest: ^29.3.1
+  lodash: ^4.17.21
   lodash.clonedeep: ^4.5.0
   merge-deep: ^3.0.3
   micro-memoize: ^4.0.14
@@ -52,6 +55,8 @@ dependencies:
   clone-deep: 4.0.1
   fast-equals: 4.0.3
   immutable: 4.2.2
+  immutable-assign: 2.1.5
+  lodash: 4.17.21
   lodash.clonedeep: 4.5.0
   merge-deep: 3.0.3
   micro-memoize: 4.0.14
@@ -63,6 +68,7 @@ dependencies:
 devDependencies:
   '@types/clone-deep': 4.0.1
   '@types/jest': 29.2.5
+  '@types/lodash': 4.14.191
   '@types/lodash.clonedeep': 4.5.7
   '@types/merge-deep': 3.0.0
   '@types/node': 18.11.18
@@ -1588,6 +1594,12 @@ packages:
     resolution: {integrity: sha512-Q6fKUPqnAHAyhiUgFU7BUzLiv0kd8saH9al7tnu5Q/okj6dnupxyTgFIBjVzJATdfIAm9NAsvXNzjaKa+bxVyA==}
     dev: true
 
+  /deep-freeze-strict/1.1.1:
+    resolution: {integrity: sha512-QemROZMM2IvhAcCFvahdX2Vbm4S/txeq5rFYU9fh4mQP79WTMW5c/HkQ2ICl1zuzcDZdPZ6zarDxQeQMsVYoNA==}
+    requiresBuild: true
+    dev: false
+    optional: true
+
   /deep-is/0.1.4:
     resolution: {integrity: sha512-oIPzksmTg4/MriiaYGO+okXDT7ztn/w3Eptv/+gSIdMdKsJo0u4CfYNFJPy+4SKMuCqGw2wxnA+URMg3t8a/bQ==}
     dev: true
@@ -2126,6 +2138,12 @@ packages:
     resolution: {integrity: sha512-MAb38BcSbH0eHNBxn7ql2NH/kX33OkB3lZ1BNdh7ENeRChHTYsTvWrMubiIAMNS2llXEEgZ1MUOBtXChP3kaFQ==}
     engines: {node: '>= 4'}
     dev: true
+
+  /immutable-assign/2.1.5:
+    resolution: {integrity: sha512-gcO8vsAqMINP3vyJq5GKdawIhOA4/tqu4Ke9WJwPWV4K5caNyPP5UkCcGF55SZCIxfB3XcMaly4IW31x80Th0A==}
+    optionalDependencies:
+      deep-freeze-strict: 1.1.1
+    dev: false
 
   /immutable/4.2.2:
     resolution: {integrity: sha512-fTMKDwtbvO5tldky9QZ2fMX7slR0mYpY5nbnFWYp0fOzDhHqhgIw9KoYgxLWsoNTS9ZHGauHj18DTyEw6BK3Og==}
@@ -2830,6 +2848,10 @@ packages:
   /lodash.merge/4.6.2:
     resolution: {integrity: sha512-0KpjqXRVvrYyCsX1swR/XTK0va6VQkQM6MNo7PqW77ByjAhoARA8EfrP1N4+KlKj8YS0ZUCtRT/YUuhyYDujIQ==}
     dev: true
+
+  /lodash/4.17.21:
+    resolution: {integrity: sha512-v2kDEe57lecTulaDIuNTPy3Ry4gLGJ6Z1O3vE1krgXZNrsQ+LFTGHVxVjcXPs17LhbZVGedAJv8XZ1tvj5FvSg==}
+    dev: false
 
   /lru-cache/5.1.1:
     resolution: {integrity: sha512-KpNARQA3Iwv+jTA0utUVVbrh+Jlrr1Fv0e56GGzAFOXN7dk/FviaDW8LHmK52DlcH4WP2n6gI8vN1aesBFgo9w==}

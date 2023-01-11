@@ -1,5 +1,5 @@
 import util from 'util'
-import { t } from './index'
+import { TTypeName, t } from './index'
 
 // // Const a = t
 // //   .object({
@@ -147,16 +147,34 @@ console.log(
 //     b: t.symbol(),
 //   }),
 // ])
-const myobj = t.object({
-  a: t.enum(['a', 'b', 2]),
-  b: t.ref('a'),
-})
+const myobj = t
+  .object({
+    a: t.enum(['a', 'b', 2]),
+    b: t.ref('a'),
+    c: t.object({
+      a: t.enum(['a', 'b', 2]),
+      b: t.ref('a'),
+    }),
+  })
+  .toSchema(t.number())
 
-type c = t.infer<typeof myobj>
-const asd = t.if(t.string(), t.string().uuid(), t.number())
-type asd = t.infer<typeof asd>
-console.log(t.string().array().sorted().parse(['a', 'b', 'a']))
+// type c = t.infer<typeof myobj>
+// const asd = t.if(t.string(), t.string().uuid(), t.number())
+// type asd = t.infer<typeof asd>
+// console.log(t.string().array().sorted().parse(['a', 'b', 'a']))
 
-const mystring = t.string().uppercase().endsWith('2').numeric()
+console.log(
+  'a',
+  t
+    .object({
+      a: t.enum(['a', 'b', 2]),
+      b: t.ref('a'),
+      c: t.object({
+        a: t.enum(['a', 'b', 2]),
+        b: t.ref('a'),
+      }),
+    })
+    .toSchema(t.number())
+)
 
-type mystring = t.infer<typeof mystring>
+type mystring = t.infer<typeof myobj>
