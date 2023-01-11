@@ -6656,3 +6656,7 @@ type EnforceOptional<T extends Record<string, unknown>> = typeUtils.SimplifyFlat
     [K in keyof Pick<T, FilterOptionalKeys<T>>]?: Exclude<T[K], undefined>
   }
 >
+  buffer(...args: Parameters<typeof TBuffer.create>): TBuffer<true>
+  buffer(...args) {
+    return TBuffer.create(...args).coerce(true)
+  },
