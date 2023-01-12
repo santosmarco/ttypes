@@ -96,7 +96,7 @@ export namespace TManifest {
 
   export type StringFormat = 'email' | 'url' | 'cuid' | 'uuid' | 'iso_date' | 'iso_duration' | 'base64' | 'numeric'
 
-  export interface String<T extends string> extends TManifest<T>, Length {
+  export interface String<T> extends TManifest<T>, Length {
     readonly formats?: readonly StringFormat[]
     readonly transforms?: readonly TStringTransformKind[]
     readonly patterns?: ReadonlyArray<RegExp | { readonly regex: RegExp; readonly name: string }>
@@ -113,7 +113,7 @@ export namespace TManifest {
     readonly exclusiveMaximum?: boolean
   }
 
-  export interface Number<T extends number> extends TManifest<T>, MinMax {
+  export interface Number<T> extends TManifest<T>, MinMax {
     readonly multipleOf?: number
     readonly coerce: boolean
     readonly cast: boolean
