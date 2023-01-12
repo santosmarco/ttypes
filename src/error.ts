@@ -52,33 +52,34 @@ export type EIssueKind = typeof IssueKind
 
 export type IssueKind = EIssueKind[keyof EIssueKind]
 
-/* ----------------------------------------------------- Checks ----------------------------------------------------- */
-
-export interface MinCheck<V = number, RV = V> {
-  readonly check: 'min'
-  readonly expected: { readonly value: V; readonly inclusive: boolean }
-  readonly received: RV
-}
-
-export interface MaxCheck<V = number, RV = V> {
-  readonly check: 'max'
-  readonly expected: { readonly value: V; readonly inclusive: boolean }
-  readonly received: RV
-}
-
-export interface RangeCheck<V = number, RV = V> {
-  readonly check: 'range'
-  readonly expected: {
-    readonly min: { readonly value: V; readonly inclusive: boolean }
-    readonly max: { readonly value: V; readonly inclusive: boolean }
+/* ---------------------------------------------------- TChecks --------------------------------------------------- */
+export namespace TChecks {
+  export interface Min<V = number, RV = V> {
+    readonly check: 'min'
+    readonly expected: { readonly value: V; readonly inclusive: boolean }
+    readonly received: RV
   }
-  readonly received: RV
-}
 
-export interface LengthCheck {
-  readonly check: 'length'
-  readonly expected: number
-  readonly received: number
+  export interface Max<V = number, RV = V> {
+    readonly check: 'max'
+    readonly expected: { readonly value: V; readonly inclusive: boolean }
+    readonly received: RV
+  }
+
+  export interface Range<V = number, RV = V> {
+    readonly check: 'range'
+    readonly expected: {
+      readonly min: { readonly value: V; readonly inclusive: boolean }
+      readonly max: { readonly value: V; readonly inclusive: boolean }
+    }
+    readonly received: RV
+  }
+
+  export interface Length {
+    readonly check: 'length'
+    readonly expected: number
+    readonly received: number
+  }
 }
 
 export type ToChecks<T extends TIssue> = ReadonlyArray<
@@ -151,9 +152,9 @@ export type InvalidIntersectionIssue = IssueBase<EIssueKind['InvalidIntersection
 
 export type InvalidStringIssue = IssueBase<
   EIssueKind['InvalidString'],
-  | MinCheck
-  | MaxCheck
-  | LengthCheck
+  | TChecks.Min
+  | TChecks.Max
+  | TChecks.Length
   | {
       readonly check: 'pattern'
       readonly pattern: RegExp
@@ -178,47 +179,46 @@ export type InvalidStringIssue = IssueBase<
 
 export type InvalidNumberIssue = IssueBase<
   EIssueKind['InvalidNumber'],
-  | MinCheck
-  | MaxCheck
-  | RangeCheck
+  | TChecks.Min
+  | TChecks.Max
+  | TChecks.Range
   | { readonly check: 'integer' }
-  | { readonly check: 'positive' }
-  | { readonly check: 'nonpositive' }
-  | { readonly check: 'negative' }
-  | { readonly check: 'nonnegative' }
-  | { readonly check: 'finite' }
+  | {
+      readonly check: 'precision'
+      readonly expected: { readonly value: number; readonly inclusive: boolean }
+      readonly convert: boolean
+      readonly received: number
+    }
   | { readonly check: 'port' }
   | { readonly check: 'multiple'; readonly expected: number }
+  | { readonly check: 'finite'; readonly enabled: boolean }
+  | { readonly check: 'safe'; readonly enabled: boolean }
 >
 
 export type InvalidBigIntIssue = IssueBase<
   EIssueKind['InvalidBigInt'],
-  | MinCheck<bigint>
-  | MaxCheck<bigint>
-  | RangeCheck<bigint>
-  | { readonly check: 'positive'; readonly received: bigint }
-  | { readonly check: 'nonpositive'; readonly received: bigint }
-  | { readonly check: 'negative'; readonly received: bigint }
-  | { readonly check: 'nonnegative'; readonly received: bigint }
+  | TChecks.Min<bigint>
+  | TChecks.Max<bigint>
+  | TChecks.Range<bigint>
   | { readonly check: 'multiple'; readonly expected: bigint; readonly received: bigint }
 >
 
 export type InvalidDateIssue = IssueBase<
   EIssueKind['InvalidDate'],
-  MinCheck<Date | 'now', Date> | MaxCheck<Date | 'now', Date> | RangeCheck<Date | 'now', Date>
+  TChecks.Min<Date | 'now', Date> | TChecks.Max<Date | 'now', Date> | TChecks.Range<Date | 'now', Date>
 >
 
 export type InvalidArrayIssue = IssueBase<
   EIssueKind['InvalidArray'],
-  MinCheck | MaxCheck | LengthCheck | { readonly check: 'unique' } | { readonly check: 'sorted' }
+  TChecks.Min | TChecks.Max | TChecks.Length | { readonly check: 'unique' } | { readonly check: 'sorted' }
 >
 
 export type InvalidSetIssue = IssueBase<
   EIssueKind['InvalidSet'],
-  MinCheck | MaxCheck | { readonly check: 'size'; readonly expected: number; readonly received: number }
+  TChecks.Min | TChecks.Max | { readonly check: 'size'; readonly expected: number; readonly received: number }
 >
 
-export type InvalidTupleIssue = IssueBase<EIssueKind['InvalidTuple'], LengthCheck>
+export type InvalidTupleIssue = IssueBase<EIssueKind['InvalidTuple'], TChecks.Length>
 
 export type InvalidRecordIssue = IssueBase<
   EIssueKind['InvalidRecord'],
@@ -234,7 +234,7 @@ export type InvalidRecordIssue = IssueBase<
     }
 >
 
-export type InvalidBufferIssue = IssueBase<EIssueKind['InvalidBuffer'], MinCheck | MaxCheck | LengthCheck>
+export type InvalidBufferIssue = IssueBase<EIssueKind['InvalidBuffer'], TChecks.Min | TChecks.Max | TChecks.Length>
 
 export type ForbiddenIssue = IssueBase<EIssueKind['Forbidden']>
 
@@ -361,14 +361,15 @@ export const DEFAULT_ERROR_MAP: TErrorMapFn = (issue) => {
         }) and ${issue.payload.expected.max.value} (${
           issue.payload.expected.max.inclusive ? 'inclusive' : 'exclusive'
         })`
-      if (issue.payload.check === 'integer') return 'Number must be an integer'
-      if (issue.payload.check === 'positive') return 'Number must be positive'
-      if (issue.payload.check === 'nonpositive') return 'Number must be non-positive'
-      if (issue.payload.check === 'negative') return 'Number must be negative'
-      if (issue.payload.check === 'nonnegative') return 'Number must be non-negative'
-      if (issue.payload.check === 'finite') return 'Number must be finite'
-      if (issue.payload.check === 'port') return 'Number must be a valid port number'
-      if (issue.payload.check === 'multiple') return `Number must be a multiple of ${issue.payload.expected}`
+      if (issue.payload.check === 'integer') return 'Value must be an integer'
+      if (issue.payload.check === 'port') return 'Value must be a valid port number'
+      if (issue.payload.check === 'multiple') return `Value must be a multiple of ${issue.payload.expected}`
+      if (issue.payload.check === 'finite') return 'Value must be finite'
+      if (issue.payload.check === 'safe') return 'Value must be a safe number'
+      if (issue.payload.check === 'precision')
+        return `Value must contain ${issue.payload.expected.inclusive ? 'less than or equal to' : 'less than'} ${
+          issue.payload.expected.value
+        } decimal places, got ${issue.payload.received}`
       return TError.assertNever(issue.payload)
     case IssueKind.InvalidBigInt:
       if (issue.payload.check === 'min')
@@ -385,10 +386,6 @@ export const DEFAULT_ERROR_MAP: TErrorMapFn = (issue) => {
         }) and ${issue.payload.expected.max.value}n (${
           issue.payload.expected.max.inclusive ? 'inclusive' : 'exclusive'
         })`
-      if (issue.payload.check === 'positive') return 'Number must be positive'
-      if (issue.payload.check === 'nonpositive') return 'Number must be non-positive'
-      if (issue.payload.check === 'negative') return 'Number must be negative'
-      if (issue.payload.check === 'nonnegative') return 'Number must be non-negative'
       if (issue.payload.check === 'multiple') return `Number must be a multiple of ${issue.payload.expected}`
       return TError.assertNever(issue.payload)
     case IssueKind.InvalidDate:

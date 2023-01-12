@@ -25,6 +25,10 @@ export const TManifest = {
     return { type, required: true, nullable: false, readonly: false }
   },
 
+  nullish<T>(type: TParsedType): TManifest.Nullish<T> {
+    return { ...TManifest.base(type), required: false, nullable: true }
+  },
+
   length(
     min: { readonly value: number; readonly inclusive: boolean } | undefined,
     max: { readonly value: number; readonly inclusive: boolean } | undefined,
@@ -110,15 +114,14 @@ export namespace TManifest {
   }
 
   export interface Number<T extends number> extends TManifest<T>, MinMax {
-    readonly minimum?: number
-    readonly exclusiveMinimum?: boolean
-    readonly maximum?: number
-    readonly exclusiveMaximum?: boolean
     readonly multipleOf?: number
     readonly coerce: boolean
+    readonly cast: boolean
   }
 
-  export interface Buffer<T> extends TManifest<T>, Length {}
+  export interface Buffer<T> extends TManifest<T>, Length {
+    readonly coerce: boolean
+  }
 
   export interface Literal<T extends string | number | bigint | boolean | symbol | null | undefined>
     extends TManifest<T> {

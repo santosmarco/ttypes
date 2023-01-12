@@ -102,19 +102,17 @@ export namespace typeUtils {
     unknown
   >]
 
-  export type UnionToTuple<T> = UnionToTupleRaw<T>
-
-  /* ---------------------------------------------------- Helpers --------------------------------------------------- */
-
-  type Prepend<T extends readonly unknown[], U> = [U, ...T]
-
-  type UnionToIntersectionFn<T> = (T extends T ? (x: () => T) => unknown : never) extends (x: infer U) => unknown
-    ? U
+  export type UnionToIntersectionFn<T> = (T extends unknown ? (k: () => T) => void : never) extends (
+    k: infer Intersection
+  ) => void
+    ? Intersection
     : never
 
-  type GetUnionLast<T> = UnionToIntersectionFn<T> extends () => infer U ? U : never
+  export type GetUnionLast<T> = UnionToIntersectionFn<T> extends () => infer Last ? Last : never
 
-  type UnionToTupleRaw<T, Res_ extends unknown[] = [], Last_ = GetUnionLast<T>> = Equals<T, never> extends 1
-    ? Res_
-    : UnionToTupleRaw<Exclude<T, Last_>, Prepend<Res_, Last_>>
+  export type UnionToTuple<T, Tuple extends unknown[] = []> = [T] extends [never]
+    ? Tuple
+    : UnionToTuple<Exclude<T, GetUnionLast<T>>, [GetUnionLast<T>, ...Tuple]>
+
+  /* ---------------------------------------------------- Helpers --------------------------------------------------- */
 }
