@@ -30,7 +30,8 @@
     "strictNullChecks": true,
     "strictPropertyInitialization": true,
     "target": "es2016",
-    "useUnknownInCatchVariables": true
+    "useUnknownInCatchVariables": true,
+    "experimentalDecorators": true
   },
   "exclude": ["node_modules", "src/__tests__", "src/_playground.ts"]
 }

@@ -62,23 +62,31 @@ export interface ParseOptions {
  * The `TOptions` type. This is the official `options` type,
  * extending all others.
  */
-export interface TOptions<
-  T extends
-    | { readonly additionalIssueKind?: Exclude<IssueKind, EIssueKind['Required'] | EIssueKind['InvalidType']> }
-    | undefined = undefined
-> extends SchemaColorOptions,
-    GlobalOptions,
-    ParseOptions {
-  readonly schemaErrorMap?: TErrorMap
+export type TOptions = SchemaColorOptions &
+  GlobalOptions &
+  ParseOptions & {
+    readonly schemaErrorMap?: TErrorMap
+    readonly messages?: {
+      readonly [K in EIssueKind['Required'] | EIssueKind['InvalidType'] as stringUtils.CamelCase<K>]?: string
+    }
+  } extends infer X
+  ? { [K in keyof X]: X[K] }
+  : never
+
+export type ExtendedTOptions<
+  E extends { readonly additionalIssueKind?: Exclude<IssueKind, EIssueKind['Required'] | EIssueKind['InvalidType']> }
+> = Omit<TOptions, 'messages'> & {
   readonly messages?: {
     readonly [K in
       | EIssueKind['Required']
       | EIssueKind['InvalidType']
-      | ('additionalIssueKind' extends keyof T
-          ? T['additionalIssueKind'] & string
+      | ('additionalIssueKind' extends keyof E
+          ? E['additionalIssueKind'] & string
           : never) as stringUtils.CamelCase<K>]?: string
   }
-}
+} extends infer X
+  ? { [K in keyof X]: X[K] }
+  : never
 
 export type RequiredTOptions = { [K in keyof TOptions]-?: TOptions[K] } extends infer X
   ? { [K in keyof X]: X[K] | undefined }

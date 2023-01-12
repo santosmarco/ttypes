@@ -19,6 +19,7 @@ import type {
   AnyTMap,
   AnyTNativeEnum,
   AnyTNonNullable,
+  AnyTNot,
   AnyTNullable,
   AnyTNumber,
   AnyTOptional,
@@ -29,6 +30,7 @@ import type {
   AnyTRef,
   AnyTSet,
   AnyTString,
+  AnyTSuperDefault,
   AnyTTuple,
   AnyTType,
   AnyTUnion,
@@ -81,6 +83,7 @@ export enum TTypeName {
   NativeEnum = 'TNativeEnum',
   Never = 'TNever',
   NonNullable = 'TNonNullable',
+  Not = 'TNot',
   Null = 'TNull',
   Nullable = 'TNullable',
   Number = 'TNumber',
@@ -95,6 +98,7 @@ export enum TTypeName {
   Ref = 'TRef',
   Set = 'TSet',
   String = 'TString',
+  SuperDefault = 'TSuperDefault',
   Symbol = 'TSymbol',
   True = 'TTrue',
   Tuple = 'TTuple',
@@ -132,6 +136,7 @@ export type TTypeNameMap<T extends TTypeName = TTypeName> = {
   [TTypeName.NativeEnum]: AnyTNativeEnum
   [TTypeName.Never]: TNever
   [TTypeName.NonNullable]: AnyTNonNullable
+  [TTypeName.Not]: AnyTNot
   [TTypeName.Null]: TNull
   [TTypeName.Nullable]: AnyTNullable
   [TTypeName.Number]: AnyTNumber
@@ -146,6 +151,7 @@ export type TTypeNameMap<T extends TTypeName = TTypeName> = {
   [TTypeName.Ref]: AnyTRef
   [TTypeName.Set]: AnyTSet
   [TTypeName.String]: AnyTString
+  [TTypeName.SuperDefault]: AnyTSuperDefault
   [TTypeName.Symbol]: TSymbol
   [TTypeName.True]: TTrue
   [TTypeName.Tuple]: AnyTTuple
