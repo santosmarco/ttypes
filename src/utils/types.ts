@@ -26,10 +26,7 @@ export type Equals<A, B> = (<X>() => X extends A ? 1 : 0) extends <Y>() => Y ext
 export type Merge<A, B> = Omit<A, keyof B> & B
 
 export type SimplifyFlat<T> = { 0: T extends BuiltIn ? T : { [K in keyof T]: T[K] }; 1: T }[Equals<T, unknown>]
-export type SimplifyDeep<T> = { 0: T extends BuiltIn ? T : { [K in keyof T]: SimplifyDeep<T[K]> }; 1: T }[Equals<
-  T,
-  unknown
->]
+export type SimplifyDeep<T> = { 0: T extends BuiltIn ? T : { [K in keyof T]: SimplifyDeep<T[K]> }; 1: T }[Equals<T, unknown>]
 
 export type StrictOmit<T, K extends keyof T> = Omit<T, K>
 
@@ -40,17 +37,13 @@ export type Try<A, B, Catch = never> = A extends B ? A : Catch
 
 export type LiteralUnion<T, U extends Primitive> = T | (U & Record<never, never>)
 
-export type UnionToIntersection<T> = (T extends unknown ? (x: T) => void : never) extends (i: infer I) => void
-  ? I
-  : never
+export type UnionToIntersection<T> = (T extends unknown ? (x: T) => void : never) extends (i: infer I) => void ? I : never
 
 /* ----------------------------------------------------- Arrays ----------------------------------------------------- */
 
 export type AssertArray<T, U = unknown> = T extends readonly U[] ? T : never
 
-export type Includes<T extends readonly unknown[], Item> = T extends readonly [T[0], ...infer rest]
-  ? { 0: Includes<rest, Item>; 1: 1 }[Equals<T[0], Item>]
-  : 0
+export type Includes<T extends readonly unknown[], Item> = T extends readonly [T[0], ...infer rest] ? { 0: Includes<rest, Item>; 1: 1 }[Equals<T[0], Item>] : 0
 
 /* ---------------------------------------------------- Numerics ---------------------------------------------------- */
 
@@ -66,12 +59,9 @@ export type NonNegativeInteger<T extends number> = NonNegative<Integer<T>>
  *
  * To make `E` inclusive, pass `{ maxInclusive: true }` as the third argument.
  */
-export type NumericRange<
-  S extends number,
-  E extends number,
-  Opts extends { readonly maxInclusive?: boolean } = {},
-  _Res extends number = S
-> = E extends (Opts['maxInclusive'] extends true ? _Res : Subtract<_Res, 1>)
+export type NumericRange<S extends number, E extends number, Opts extends { readonly maxInclusive?: boolean } = {}, _Res extends number = S> = E extends (
+  Opts['maxInclusive'] extends true ? _Res : Subtract<_Res, 1>
+)
   ? _Res
   : NumericRange<S, E, Opts, _Res | Add<_Res, 1>>
 
@@ -82,37 +72,28 @@ export type ToBoolean<T extends 0 | 1> = T extends 0 ? false : true
 
 /* ---------------------------------------------------- Functions --------------------------------------------------- */
 
-type _Narrow<T> =
-  | (T extends readonly [] ? T : never)
-  | (T extends string | number | bigint | boolean ? T : never)
-  | { [K in keyof T]: T[K] extends Function ? T[K] : _Narrow<T[K]> }
+type _Narrow<T> = (T extends readonly [] ? T : never) | (T extends string | number | bigint | boolean ? T : never) | { [K in keyof T]: T[K] extends Function ? T[K] : _Narrow<T[K]> }
 export type Narrow<T> = Try<T, [], _Narrow<T>>
 
 /* ------------------------------------------------------------------------------------------------------------------ */
 
 export namespace typeUtils {
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   export type AnyFunction = (...args: readonly any[]) => any
 
   export type Try<T, U, Catch = never> = T extends U ? T : Catch
 
   export type SimplifyFlat<T> = { 0: T extends BuiltIn ? T : { [K in keyof T]: T[K] }; 1: T }[Equals<T, unknown>]
-  export type SimplifyDeep<T> = { 0: T extends BuiltIn ? T : { [K in keyof T]: SimplifyDeep<T[K]> }; 1: T }[Equals<
-    T,
-    unknown
-  >]
+  export type SimplifyDeep<T> = { 0: T extends BuiltIn ? T : { [K in keyof T]: SimplifyDeep<T[K]> }; 1: T }[Equals<T, unknown>]
 
-  export type UnionToIntersectionFn<T> = (T extends unknown ? (k: () => T) => void : never) extends (
-    k: infer Intersection
-  ) => void
-    ? Intersection
-    : never
+  export type UnionToIntersectionFn<T> = (T extends unknown ? (k: () => T) => void : never) extends (k: infer Intersection) => void ? Intersection : never
 
   export type GetUnionLast<T> = UnionToIntersectionFn<T> extends () => infer Last ? Last : never
 
-  export type UnionToTuple<T, Tuple extends unknown[] = []> = [T] extends [never]
-    ? Tuple
-    : UnionToTuple<Exclude<T, GetUnionLast<T>>, [GetUnionLast<T>, ...Tuple]>
+  export type UnionToTuple<T, Tuple extends unknown[] = []> = [T] extends [never] ? Tuple : UnionToTuple<Exclude<T, GetUnionLast<T>>, [GetUnionLast<T>, ...Tuple]>
 
   /* ---------------------------------------------------- Helpers --------------------------------------------------- */
 }
+
+/* ------------------------------------------------------------------------------------------------------------------ */
+
+export type AssertTuple<T> = T extends readonly any[] ? T : never
