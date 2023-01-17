@@ -11,10 +11,12 @@ export enum TParsedType {
   Any = 'any',
   Array = 'Array',
   BigInt = 'bigint',
+  BigIntZero = '0n',
   Boolean = 'boolean',
   Buffer = 'Buffer',
   Class = 'class',
   Date = 'Date',
+  EmptyString = '""',
   False = 'false',
   Falsy = 'false | 0 | "" | null | undefined',
   Function = 'function',
@@ -41,6 +43,7 @@ export enum TParsedType {
   Union = 'Union',
   Unknown = 'unknown',
   Void = 'void',
+  Zero = '0',
 }
 
 export namespace TParsedType {

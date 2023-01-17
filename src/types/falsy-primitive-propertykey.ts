@@ -1,5 +1,5 @@
 import type { TDef } from '../def'
-import { TManifest } from '../manifest'
+import { manifest } from '../manifest'
 import type { TOptions } from '../options'
 import { TParsedType, type ParseContextOf, type ParseResultOf } from '../parse'
 import { TTypeName } from '../type-names'
@@ -10,15 +10,26 @@ import { TType } from './_internal'
 /*                                                       TFalsy                                                       */
 /* ------------------------------------------------------------------------------------------------------------------ */
 
-export type TFalsyManifest = TManifest.Nullish<u.Falsy>
-
 export interface TFalsyDef extends TDef {
   readonly typeName: TTypeName.Falsy
 }
 
 export class TFalsy extends TType<false | '' | 0 | 0n | null | undefined, TFalsyDef> {
-  get _manifest(): TFalsyManifest {
-    return TManifest.type<u.Falsy>(TParsedType.Falsy).required(false).nullable().value
+  get _manifest() {
+    return manifest<u.Falsy>()({
+      type: {
+        anyOf: [
+          TParsedType.False,
+          TParsedType.EmptyString,
+          TParsedType.Zero,
+          TParsedType.BigIntZero,
+          TParsedType.Null,
+          TParsedType.Undefined,
+        ],
+      },
+      required: false,
+      nullable: true,
+    })
   }
 
   /* ---------------------------------------------------------------------------------------------------------------- */
@@ -38,27 +49,27 @@ export class TFalsy extends TType<false | '' | 0 | 0n | null | undefined, TFalsy
 /*                                                     TPrimitive                                                     */
 /* ------------------------------------------------------------------------------------------------------------------ */
 
-export type TPrimitiveManifest = TManifest.Nullish<u.Primitive>
-
 export interface TPrimitiveDef extends TDef {
   readonly typeName: TTypeName.Primitive
 }
 
 export class TPrimitive extends TType<string | number | bigint | boolean | symbol | null | undefined, TPrimitiveDef> {
-  get _manifest(): TPrimitiveManifest {
-    return TManifest.type<u.Primitive>({
-      anyOf: [
-        TParsedType.String,
-        TParsedType.Number,
-        TParsedType.BigInt,
-        TParsedType.Boolean,
-        TParsedType.Symbol,
-        TParsedType.Null,
-        TParsedType.Undefined,
-      ],
+  get _manifest() {
+    return manifest<u.Primitive>()({
+      type: {
+        anyOf: [
+          TParsedType.String,
+          TParsedType.Number,
+          TParsedType.BigInt,
+          TParsedType.Boolean,
+          TParsedType.Symbol,
+          TParsedType.Null,
+          TParsedType.Undefined,
+        ],
+      },
+      required: false,
+      nullable: true,
     })
-      .required(false)
-      .nullable().value
   }
 
   /* ---------------------------------------------------------------------------------------------------------------- */
@@ -85,8 +96,10 @@ export interface TPropertyKeyDef extends TDef {
 }
 
 export class TPropertyKey extends TType<string | number | symbol, TPropertyKeyDef> {
-  get _manifest(): TManifest.Base<PropertyKey> {
-    return TManifest.type<PropertyKey>({ anyOf: [TParsedType.String, TParsedType.Number, TParsedType.Symbol] }).value
+  get _manifest() {
+    return manifest<PropertyKey>()({
+      type: { anyOf: [TParsedType.String, TParsedType.Number, TParsedType.Symbol] },
+    })
   }
 
   /* ---------------------------------------------------------------------------------------------------------------- */

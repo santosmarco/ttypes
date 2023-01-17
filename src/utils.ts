@@ -262,6 +262,14 @@ export namespace u {
 
   export type Last<T extends readonly unknown[], Catch = never> = Head<Reverse<T>, Catch>
 
+  export type Filter<T extends readonly unknown[], U> = T extends readonly []
+    ? []
+    : T extends readonly [infer H, ...infer R]
+    ? H extends U
+      ? Filter<R, U>
+      : [H, ...Filter<R, U>]
+    : never
+
   export const head = <T extends readonly unknown[]>(arr: T): Head<T> => arr[0] as Head<T>
   export const tail = <T extends readonly unknown[]>(arr: T): Tail<T> => arr.slice(1) as Tail<T>
   export const reverse = <T extends readonly unknown[]>(arr: T): Reverse<T> => arr.slice().reverse() as Reverse<T>

@@ -6,6 +6,8 @@ import { TParsedType, type ParseContextOf, type ParseResultOf, type SyncParseRes
 import { TTypeName } from '../type-names'
 import { u } from '../utils'
 import {
+  TLiteral,
+  TNever,
   TRef,
   TString,
   TType,
@@ -16,8 +18,7 @@ import {
   type TDefined,
   type TObjectShapePaths,
   type TOptional,
-  type TUnionMembers,
-  TNever,
+  TEnum,
 } from './_internal'
 
 /* ----------------------------------------------------------------------------------------------------------------- - */
@@ -68,6 +69,24 @@ const resolveShapeRefs = <S extends TObjectShape>(shape: S): GetRefResolvedShape
 
   return resolvedShape as GetRefResolvedShape<S>
 }
+
+export type TObjectKeysUnion<S extends TObjectShape> = string extends keyof S
+  ? TNever
+  : u.UnionToTuple<{ [K in keyof S]: TLiteral<K> }[keyof S]> extends readonly [infer H]
+  ? H
+  : TUnion<u.Try<u.UnionToTuple<{ [K in keyof S]: TLiteral<K> }[keyof S]>, readonly TType[]>>
+
+export type TObjectKeysEnum<S extends TObjectShape> = (
+  string extends keyof S ? TEnum<[]> : TEnum<u.Try<u.UnionToTuple<keyof S>, ReadonlyArray<string | number>>>
+) extends infer X
+  ? X
+  : never
+
+export type TObjectValues<S extends TObjectShape> = u.UnionToTuple<S[keyof S]> extends readonly [infer H]
+  ? H
+  : u.UnionToTuple<S[keyof S]> extends readonly [TType, TType, ...TType[]]
+  ? TUnion<u.Try<u.UnionToTuple<S[keyof S]>, readonly TType[]>>
+  : TNever
 
 export type MakePartialShape<S extends TObjectShape, K extends ReadonlyArray<keyof S> = ReadonlyArray<keyof S>> = {
   [K_ in keyof S]: K_ extends K[number] ? TOptional<S[K_]> : S[K_]
@@ -260,21 +279,25 @@ export class TObject<
     return new TObject({ ...this._def, catchall: null }).strip()
   }
 
-  // keyof(): TEnum<u.Try<u.UnionToTuple<keyof S>, ReadonlyArray<string | number>>> {
-  //   // eslint-disable-next-line @typescript-eslint/no-unsafe-return
-  //   return TEnum.create(u.keys(this.shape) as any, this.options()) as any
-  // }
-
-  keys(): TUnion<u.Try<u.UnionToTuple<{ [K in keyof S]: TStringLiteral<K & string> }[keyof S]>, readonly TType[]>> {
-    // eslint-disable-next-line @typescript-eslint/no-unsafe-return
-    return TUnion.create(u.keys(this.shape).map((k) => TLiteral.create(k)) as any, this.options())
+  keyof(): TObjectKeysEnum<S> {
+    return TEnum._create(Object.keys(this.shape), this.options()) as TObjectKeysEnum<S>
   }
 
-  values(): u.UnionToTuple<S[keyof S]> extends readonly [infer Head]
-    ? Head
-    : u.UnionToTuple<S[keyof S]> extends readonly [TType, TType, ...TType[]]
-    ? TUnion<u.Try<u.UnionToTuple<S[keyof S]>, readonly TType[]>>
-    : TNever {
+  keys(): TObjectKeysUnion<S> {
+    const keys = u.keys(this.shape)
+    return (
+      keys.length === 1
+        ? TLiteral.create(keys[0], this.shape[keys[0]].options())
+        : keys.length
+        ? TUnion._create(
+            u.keys(this.shape).map((k) => TLiteral.create(k, this.shape[k].options())),
+            this.options()
+          )
+        : TNever.create(this.options())
+    ) as TObjectKeysUnion<S>
+  }
+
+  values(): TObjectValues<S> {
     const vals = u.values(this.shape)
     return (
       vals.length === 1
@@ -282,11 +305,7 @@ export class TObject<
         : vals.length
         ? TUnion._create(u.values(this.shape), this.options())
         : TNever.create(this.options())
-    ) as u.UnionToTuple<S[keyof S]> extends readonly [infer Head]
-      ? Head
-      : u.UnionToTuple<S[keyof S]> extends readonly [TType, TType, ...TType[]]
-      ? TUnion<u.Try<u.UnionToTuple<S[keyof S]>, readonly TType[]>>
-      : TNever
+    ) as TObjectValues<S>
   }
 
   pick<K extends readonly [keyof S, ...Array<keyof S>]>(keys: K): TObject<Pick<S, K[number]>, UK, C> {
@@ -298,7 +317,7 @@ export class TObject<
   }
 
   augment<T extends TObjectShape>(shape: T): TObject<u.Merge<S, T>, UK, C> {
-    return this._setShape({ ...this.shape, ...shape } as u.Merge<S, T>)
+    return this._setShape(u.merge(this.shape, shape))
   }
 
   extend<T extends TObjectShape>(shape: T): TObject<u.Merge<S, T>, UK, C> {
@@ -392,10 +411,11 @@ export class TObject<
   }): TObject<T, UK, C> {
     const { onObject, onOthers, onAny } = setters
     return this._setShape(
-      Object.fromEntries(
-        Object.entries(this.shape)
+      u.fromEntries(
+        u
+          .entries(this.shape)
           .map(([k, v]) => [k, v.isT(TTypeName.Object) ? onObject?.(v) ?? v : onOthers?.(v) ?? v] as const)
-          .map(([k, v]) => [k, onAny?.(v) ?? v] as const)
+          .map(([k, v]) => [k, onAny?.(v) ?? v])
       ) as T
     )
   }

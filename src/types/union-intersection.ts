@@ -23,7 +23,7 @@ export type TUnionOptions = ExtendedTOptions<{
   additionalIssueKind: EIssueKind['InvalidUnion']
 }>
 
-export type TUnionManifest<T extends TUnionMembers> = MakeManifest<
+export type TUnionManifest<T extends readonly TType[]> = MakeManifest<
   InputOf<T[number]>,
   {
     readonly type: { anyOf: [...{ [K in keyof T]: ManifestOf<T[K]>['type'] }] }
@@ -33,7 +33,7 @@ export type TUnionManifest<T extends TUnionMembers> = MakeManifest<
   }
 >
 
-export interface TUnionDef<T extends TUnionMembers> extends TDef {
+export interface TUnionDef<T extends readonly TType[]> extends TDef {
   readonly typeName: TTypeName.Union
   readonly options: TUnionOptions
   readonly members: T
@@ -123,7 +123,7 @@ export type TIntersectionOptions = ExtendedTOptions<{
   additionalIssueKind: EIssueKind['InvalidIntersection']
 }>
 
-export type TIntersectionManifest<T extends TIntersectionMembers> = MakeManifest<
+export type TIntersectionManifest<T extends readonly TType[]> = MakeManifest<
   u.UnionToIntersection<InputOf<T[number]>>,
   {
     readonly type: { allOf: [...{ [K in keyof T]: ManifestOf<T[K]>['type'] }] }
@@ -133,7 +133,7 @@ export type TIntersectionManifest<T extends TIntersectionMembers> = MakeManifest
   }
 >
 
-export interface TIntersectionDef<T extends TIntersectionMembers> extends TDef {
+export interface TIntersectionDef<T extends readonly TType[]> extends TDef {
   readonly typeName: TTypeName.Intersection
   readonly options: TIntersectionOptions
   readonly members: T

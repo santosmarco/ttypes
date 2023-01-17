@@ -28,6 +28,7 @@ import {
   TNot,
   TNullable,
   TOptional,
+  TPipeline,
   TPreprocess,
   TPromise,
   TRefinement,
@@ -38,6 +39,8 @@ import {
   type EffectCtx,
   type RefinementMessage,
 } from './_internal'
+import { deepEqual } from 'fast-equals'
+import safeJsonStringify from 'safe-json-stringify'
 
 /* ------------------------------------------------------------------------------------------------------------------ */
 /*                                                        TType                                                       */
@@ -65,9 +68,9 @@ export abstract class TType<Output = unknown, Def extends TDef = TDef, Input = O
       }),
     }
 
-    this._parse = memoize(this._parse.bind(this))
-    this._parseSync = this._parseSync.bind(this)
-    this._parseAsync = this._parseAsync.bind(this)
+    this._parse = this._parse.bind(this)
+    this._parseSync = memoize(this._parseSync.bind(this))
+    this._parseAsync = memoize(this._parseAsync.bind(this), { isPromise: true })
     this.parse = this.parse.bind(this)
     this.safeParse = this.safeParse.bind(this)
     this.parseAsync = this.parseAsync.bind(this)
@@ -94,7 +97,7 @@ export abstract class TType<Output = unknown, Def extends TDef = TDef, Input = O
     this.superDefault = this.superDefault.bind(this)
     this.catch = this.catch.bind(this)
     this.lazy = this.lazy.bind(this)
-    // this.pipe = this.pipe.bind(this)
+    this.pipe = this.pipe.bind(this)
     this.preprocess = this.preprocess.bind(this)
     this.refine = this.refine.bind(this)
     this.superRefine = this.superRefine.bind(this)
@@ -301,9 +304,9 @@ export abstract class TType<Output = unknown, Def extends TDef = TDef, Input = O
     return TLazy.create(() => this, this.options())
   }
 
-  // pipe<T extends AnyTType<unknown, Input>>(type: T): TPipeline<this, T> {
-  //   return TPipeline.create(this, type, this.options())
-  // }
+  pipe<T extends AnyTType<unknown, Input>>(type: T): TPipeline<this, T> {
+    return TPipeline.create(this, type, this.options())
+  }
 
   preprocess<In extends Input>(preprocess: (data: unknown) => In): TPreprocess<this, In> {
     return TPreprocess.create(preprocess, this, this.options())

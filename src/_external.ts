@@ -12,10 +12,12 @@ export const catchType = t.TCatch.create
 export const coerceType = t.TCoerce
 export const defaultType = t.TDefault.create
 export const definedType = t.TDefined.create
+export const enumType = t.TEnum.create
 export const falseType = t.TFalse.create
 export const falsyType = t.TFalsy.create
 export const intersectionType = t.TIntersection.create
 export const lazyType = t.TLazy.create
+export const literalType = t.TLiteral.create
 export const nanType = t.TNaN.create
 export const neverType = t.TNever.create
 export const nonnullableType = t.TNonNullable.create
@@ -25,6 +27,7 @@ export const nullType = t.TNull.create
 export const numberType = t.TNumber.create
 export const objectType = t.TObject.create
 export const optionalType = t.TOptional.create
+export const pipelineType = t.TPipeline.create
 export const preprocessType = t.TPreprocess.create
 export const primitiveType = t.TPrimitive.create
 export const promiseType = t.TPromise.create
@@ -58,12 +61,14 @@ export {
   coerceType as coerce,
   defaultType as def,
   definedType as defined,
+  enumType as enum,
   falseType as false,
   falsyType as falsey,
   falsyType as falsy,
   intersectionType as and,
   intersectionType as intersection,
   lazyType as lazy,
+  literalType as literal,
   nanType as nan,
   neverType as never,
   nonnullableType as nonnullable,
@@ -74,6 +79,8 @@ export {
   numberType as number,
   objectType as object,
   optionalType as optional,
+  pipelineType as pipe,
+  pipelineType as pipeline,
   preprocessType as preprocess,
   primitiveType as primitive,
   promiseType as promise,

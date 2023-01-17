@@ -4598,12 +4598,10 @@ export class TObject<
   keys(): TUnion<
     typeUtils.Try<typeUtils.UnionToTuple<{ [K in keyof S]: TStringLiteral<K & string> }[keyof S]>, readonly AnyTType[]>
   > {
-    // eslint-disable-next-line @typescript-eslint/no-unsafe-return
     return TUnion.create(objectKeys(this.shape).map((k) => TLiteral.create(k)) as any, this.options())
   }
 
   values(): TUnion<typeUtils.Try<typeUtils.UnionToTuple<S[keyof S]>, readonly AnyTType[]>> {
-    // eslint-disable-next-line @typescript-eslint/no-unsafe-return
     return TUnion.create(objectValues(this.shape) as any, this.options())
   }
 
@@ -7432,7 +7430,7 @@ export {
   // defaultType as def,
   discriminatedUnionType as discriminatedUnion,
   discriminatedUnionType as taggedUnion,
-  enumType as enum,
+  // enumType as enum,
   extendType as extend,
   // falseType as false,
   // falsyType as falsy,
@@ -7443,7 +7441,7 @@ export {
   instanceofType as instanceof,
   // intersectionType as intersection,
   // lazyType as lazy,
-  literalType as literal,
+  // literalType as literal,
   mapType as map,
   // nanType as nan,
   nativeEnumType as nativeEnum,
@@ -7455,8 +7453,8 @@ export {
   // numberType as number,
   // objectType as object,
   // optionalType as optional,
-  pipelineType as pipe,
-  pipelineType as pipeline,
+  // pipelineType as pipe,
+  // pipelineType as pipeline,
   // preprocessType as preprocess,
   // primitiveType as primitive,
   // promiseType as promise,
