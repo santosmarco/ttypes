@@ -1,4 +1,15 @@
-import { TArray, TBoolean, TBuffer, TSet, TString, type TBooleanCasting, type TType } from './_internal'
+import {
+  TArray,
+  TBigInt,
+  TBoolean,
+  TBuffer,
+  TNumber,
+  TSet,
+  TString,
+  type TBigIntCasting,
+  type TBooleanCasting,
+  type TType,
+} from './_internal'
 
 /* ------------------------------------------------------------------------------------------------------------------ */
 /*                                                       TCoerce                                                      */
@@ -13,6 +24,12 @@ export const TCoerce = {
   },
   string(...args: Parameters<typeof TString.create>): TString<[], string, true> {
     return TString.create(...args).coerce(true)
+  },
+  number(...args: Parameters<typeof TNumber.create>): TNumber<true> {
+    return TNumber.create(...args).coerce(true)
+  },
+  bigint(...args: Parameters<typeof TBigInt.create>): TBigInt<true> {
+    return TBigInt.create(...args).coerce(true)
   },
   array<T extends TType>(...args: Parameters<typeof TArray.create<T>>): TArray<T, 'many', true> {
     return TArray.create(...args).coerce(true)
@@ -35,6 +52,15 @@ export const TCast = {
   },
   buffer(...args: Parameters<typeof TBuffer.create>): TBuffer<false, true> {
     return TBuffer.create(...args).cast(true)
+  },
+  number(...args: Parameters<typeof TNumber.create>): TNumber<false, true> {
+    return TNumber.create(...args).cast(true)
+  },
+  bigint<C extends Exclude<TBigIntCasting, 'bigint'> = 'number'>(
+    value = 'number' as C,
+    ...args: Parameters<typeof TBigInt.create>
+  ): TBigInt<false, C> {
+    return TBigInt.create(...args).cast(value)
   },
   array<T extends TType>(...args: Parameters<typeof TArray.create<T>>): TArray<T, 'many', false, true> {
     return TArray.create(...args).cast(true)

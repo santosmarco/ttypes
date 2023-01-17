@@ -1,20 +1,10 @@
 import util from 'util'
-import {
-  getGlobal,
-  stringUtils,
-  type AnyTType,
-  type InputOf,
-  type LooseStripKey,
-  type ParseContextOf,
-  type ParsePath,
-  type Primitive,
-  type SimplifyDeep,
-  type StripKey,
-  type TParsedType,
-  type objectUtils,
-  type u,
-} from './_internal'
-import { type TChecks } from './checks'
+import type { TChecks } from './checks'
+import { type TDef } from './def'
+import { getGlobal } from './global'
+import { type ParseContextOf, type ParsePath, type TParsedType } from './parse'
+import { type InputOf, type TType } from './types/_internal'
+import { u } from './utils'
 
 /* ------------------------------------------------------------------------------------------------------------------ */
 /*                                                       TIssue                                                       */
@@ -54,21 +44,18 @@ export type EIssueKind = typeof IssueKind
 export type IssueKind = EIssueKind[keyof EIssueKind]
 
 export type ToChecks<T extends TIssue> = ReadonlyArray<
-  LooseStripKey<T['payload'], 'received' | `_${string}`> & { readonly message: string | undefined }
+  u.LooseStripKey<T['payload'], 'received' | `_${string}`> & { readonly message: string | undefined }
 >
 
 /* ----------------------------------------------------- Issues ----------------------------------------------------- */
 
-export type IssueBase<
-  K extends IssueKind,
-  P extends objectUtils.OmitIndexSignature<objectUtils.AnyRecord> | undefined = undefined
-> = SimplifyDeep<
+export type IssueBase<K extends IssueKind, P extends object | null = null> = u.SimplifyDeep<
   {
     readonly kind: K
     readonly path: ParsePath
     readonly data: unknown
     readonly message: string
-  } & (P extends undefined ? { readonly payload?: never } : { readonly payload: Readonly<P> })
+  } & (P extends null ? { readonly payload?: never } : { readonly payload: Readonly<P> })
 >
 
 export type RequiredIssue = IssueBase<EIssueKind['Required']>
@@ -81,8 +68,8 @@ export type InvalidTypeIssue = IssueBase<
 export type InvalidLiteralIssue = IssueBase<
   EIssueKind['InvalidLiteral'],
   {
-    readonly expected: { readonly value: Primitive; readonly formatted: stringUtils.Literalized }
-    readonly received: { readonly value: Primitive; readonly formatted: stringUtils.Literalized }
+    readonly expected: { readonly value: u.Primitive; readonly formatted: u.Literalized }
+    readonly received: { readonly value: u.Primitive; readonly formatted: u.Literalized }
   }
 >
 
@@ -108,8 +95,8 @@ export type InvalidUnionIssue = IssueBase<EIssueKind['InvalidUnion'], { readonly
 export type InvalidDiscriminatorIssue = IssueBase<
   EIssueKind['InvalidDiscriminator'],
   {
-    readonly expected: { readonly values: readonly Primitive[]; readonly formatted: readonly stringUtils.Literalized[] }
-    readonly received: { readonly value: Primitive; readonly formatted: stringUtils.Literalized }
+    readonly expected: { readonly values: readonly u.Primitive[]; readonly formatted: readonly u.Literalized[] }
+    readonly received: { readonly value: u.Primitive; readonly formatted: u.Literalized }
   }
 >
 
@@ -250,7 +237,7 @@ export const DEFAULT_ERROR_FORMATTER: TErrorFormatter = (issues) =>
     sorted: true,
   })
 
-export type ErrorMapIssueInput = StripKey<TIssue, 'message'>
+export type ErrorMapIssueInput = u.StripKey<TIssue, 'message'>
 export type TErrorMapFn = (issue: ErrorMapIssueInput) => string
 export type TErrorMapDict = { readonly [K in IssueKind]?: (issue: Extract<ErrorMapIssueInput, { kind: K }>) => string }
 export type TErrorMap = TErrorMapFn | TErrorMapDict
@@ -276,9 +263,9 @@ export const DEFAULT_ERROR_MAP: TErrorMapFn = (issue) => {
     case IssueKind.InvalidInstance:
       return `Expected an instance of ${issue.payload.expected}`
     case IssueKind.MissingKeys:
-      return `Missing key(s) in object: ${issue.payload.keys.map(stringUtils.literalize).join(', ')}`
+      return `Missing key(s) in object: ${issue.payload.keys.map(u.literalize).join(', ')}`
     case IssueKind.UnrecognizedKeys:
-      return `Unrecognized key(s) found in object: ${issue.payload.keys.map(stringUtils.literalize).join(', ')}`
+      return `Unrecognized key(s) found in object: ${issue.payload.keys.map(u.literalize).join(', ')}`
     case IssueKind.InvalidUnion:
       return 'Invalid union'
     case IssueKind.InvalidIntersection:
@@ -437,7 +424,7 @@ export const resolveErrorMaps = (maps: ReadonlyArray<TErrorMap | undefined>): TE
   }
 }
 
-export class TError<I, T extends AnyTType<unknown, I> = AnyTType<unknown, I>> extends Error {
+export class TError<I, T extends TType<unknown, TDef, I> = TType<unknown, TDef, I>> extends Error {
   private readonly _schema: T
   private readonly _issues: readonly TIssue[]
 
@@ -467,7 +454,7 @@ export class TError<I, T extends AnyTType<unknown, I> = AnyTType<unknown, I>> ex
     return this._issues
   }
 
-  static fromContext<T extends AnyTType>(ctx: ParseContextOf<T>): TError<InputOf<T>, T> {
+  static fromContext<T extends TType>(ctx: ParseContextOf<T>): TError<InputOf<T>, T> {
     return new TError(ctx.root.schema as T, ctx.allIssues)
   }
 

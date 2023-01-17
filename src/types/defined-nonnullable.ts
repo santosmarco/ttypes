@@ -1,8 +1,8 @@
 import type { TDef } from '../def'
 import { IssueKind } from '../error'
-import { TManifest } from '../manifest'
+import { manifest, type TManifest } from '../manifest'
 import type { TOptions } from '../options'
-import type { ParseContextOf, ParseResultOf } from '../parse'
+import { TParsedType, type ParseContextOf, type ParseResultOf } from '../parse'
 import { TTypeName } from '../type-names'
 import type { u } from '../utils'
 import { TType, type InputOf, type OutputOf, type TUnwrappable, type UnwrapDeep } from './_internal'
@@ -22,9 +22,15 @@ export class TDefined<T extends TType>
   extends TType<u.Defined<OutputOf<T>>, TDefinedDef<T>, u.Defined<InputOf<T>>>
   implements TUnwrappable<T>
 {
-  get _manifest(): TDefinedManifest<T> {
+  get _manifest() {
     const underlyingManifest = this.underlying.manifest()
-    return TManifest.type<InputOf<this>>(underlyingManifest.type).wrap(underlyingManifest).required().value
+    return manifest<u.Defined<InputOf<T>>>()({
+      type: { not: [TParsedType.Undefined] },
+      underlying: underlyingManifest,
+      required: true,
+      nullable: manifest.extract(underlyingManifest, 'nullable'),
+      readonly: manifest.extract(underlyingManifest, 'readonly'),
+    })
   }
 
   /* ---------------------------------------------------------------------------------------------------------------- */
@@ -78,10 +84,15 @@ export class TNonNullable<T extends TType>
   extends TType<NonNullable<OutputOf<T>>, TNonNullableDef<T>, NonNullable<InputOf<T>>>
   implements TUnwrappable<T>
 {
-  get _manifest(): TNonNullableManifest<T> {
+  get _manifest() {
     const underlyingManifest = this.underlying.manifest()
-    return TManifest.type<InputOf<this>>(underlyingManifest.type).wrap(underlyingManifest).required().nullable(false)
-      .value
+    return manifest<NonNullable<InputOf<T>>>()({
+      type: { not: [TParsedType.Undefined, TParsedType.Null] },
+      underlying: underlyingManifest,
+      required: true,
+      nullable: false,
+      readonly: manifest.extract(underlyingManifest, 'readonly'),
+    })
   }
 
   /* ---------------------------------------------------------------------------------------------------------------- */

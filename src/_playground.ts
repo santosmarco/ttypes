@@ -16,11 +16,27 @@ const myArray = t
   .manifest({ examples: [['MARCOAAPOLO']] })
   .toSet()
 
-const myBool = t
-  .bool()
-  .cast('number')
-  .coerce({ truthy: [1, 'true', 'hi'] })
+const myBool = t.object({
+  a: t.boolean().coerce({ truthy: [1, '1', 'true', 'yes', 'on'] }),
+  b: t.bigint().coerce(),
+  c: t.ref('d.e'),
+  d: t.object({
+    e: t.string().optional(),
+  }),
+})
 
 type MyBool = t.input<typeof myBool>
 
-console.log(myBool.parse({}))
+console.log(
+  t
+    .object({
+      a: t.string().optional(),
+      b: t.bigint().coerce(),
+      c: t.ref('d.e'),
+      d: t.object({
+        e: t.string().optional(),
+      }),
+    })
+    .values()
+  // t.string().manifest().required
+)

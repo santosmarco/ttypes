@@ -1,6 +1,6 @@
 import type { TDef } from '../def'
 import { IssueKind, type EIssueKind } from '../error'
-import { TManifest } from '../manifest'
+import { type MakeManifest, manifest, type Manifest, type TManifest } from '../manifest'
 import type { ExtendedTOptions, TOptions } from '../options'
 import { TParsedType, type ParseContextOf, type ParseResultOf } from '../parse'
 import { TTypeName } from '../type-names'
@@ -17,8 +17,12 @@ export interface TAnyDef extends TDef {
 }
 
 export class TAny extends TType<any, TAnyDef> {
-  get _manifest(): TAnyManifest {
-    return TManifest.type<any>(TParsedType.Any).required(false).nullable().value
+  get _hint(): TParsedType.Any {
+    return TParsedType.Any
+  }
+
+  get _manifest() {
+    return manifest<any>()({ type: TParsedType.Any, required: false, nullable: true })
   }
 
   /* ---------------------------------------------------------------------------------------------------------------- */
@@ -45,8 +49,12 @@ export interface TUnknownDef extends TDef {
 }
 
 export class TUnknown extends TType<unknown, TUnknownDef> {
-  get _manifest(): TUnknownManifest {
-    return TManifest.type<unknown>(TParsedType.Unknown).required(false).nullable().value
+  get _hint(): TParsedType.Unknown {
+    return TParsedType.Unknown
+  }
+
+  get _manifest() {
+    return manifest<unknown>()({ type: TParsedType.Unknown, required: false, nullable: true })
   }
 
   /* ---------------------------------------------------------------------------------------------------------------- */
@@ -80,8 +88,8 @@ export interface TNeverDef extends TDef {
 }
 
 export class TNever extends TType<never, TNeverDef> {
-  get _manifest(): TNeverManifest {
-    return TManifest.type<never>(TParsedType.Never).setProp('forbidden', true).value
+  get _manifest() {
+    return manifest<never>()({ type: TParsedType.Never, forbidden: true })
   }
 
   /* ---------------------------------------------------------------------------------------------------------------- */

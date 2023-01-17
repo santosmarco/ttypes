@@ -21,7 +21,7 @@ export interface EffectCtx<T extends TType> {
   readonly path: ParsePath
 }
 
-export interface EffectBase<K extends EffectKind, Effect extends u.AnyFn> {
+export interface EffectBase<K extends EffectKind, Effect extends u.Fn> {
   readonly kind: K
   readonly handler: Effect
 }

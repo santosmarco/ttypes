@@ -1,4 +1,5 @@
-import { TError, TOptions, type RequiredTOptions, type TErrorFormatter, type TErrorMap } from './_internal'
+import { TError, type TErrorFormatter, type TErrorMap } from './error'
+import { TOptions, type RequiredTOptions } from './options'
 
 export class TGlobal {
   private static _instance: TGlobal | undefined

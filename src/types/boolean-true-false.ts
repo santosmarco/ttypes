@@ -1,11 +1,11 @@
 import type { TDef } from '../def'
 import { IssueKind } from '../error'
-import { TManifest } from '../manifest'
+import { manifest } from '../manifest'
 import type { TOptions } from '../options'
 import { TParsedType, type ParseContextOf, type ParseResultOf } from '../parse'
 import { TTypeName } from '../type-names'
 import { u } from '../utils'
-import { TType, type InputOf, type OutputOf } from './_internal'
+import { TType, type OutputOf } from './_internal'
 
 /* ------------------------------------------------------------------------------------------------------------------ */
 /*                                                      TBoolean                                                      */
@@ -35,26 +35,6 @@ export type TBooleanOutput<Cast extends TBooleanCasting> = Cast extends 'boolean
   ? 0 | 1
   : never
 
-export interface TBooleanManifest<Coerce extends TBooleanCoercion>
-  extends u.Except<TManifest.Base<TBooleanInput<Coerce>>, 'required' | 'nullable'> {
-  readonly coerce: TBooleanCoercion
-  readonly cast: TBooleanCasting
-  readonly required: Coerce extends true
-    ? false
-    : Coerce extends Record<string, unknown>
-    ? undefined extends Coerce['truthy' | 'falsy']
-      ? false
-      : true
-    : true
-  readonly nullable: Coerce extends true
-    ? true
-    : Coerce extends Record<string, unknown>
-    ? null extends Coerce['truthy' | 'falsy']
-      ? true
-      : false
-    : false
-}
-
 export interface TBooleanDef extends TDef {
   readonly typeName: TTypeName.Boolean
   readonly coerce: TBooleanCoercion
@@ -66,23 +46,36 @@ export class TBoolean<Coerce extends TBooleanCoercion = false, Cast extends TBoo
   TBooleanDef,
   TBooleanInput<Coerce>
 > {
-  get _manifest(): TBooleanManifest<Coerce> {
-    const { coerce } = this._def
+  get _manifest() {
+    const { coerce, cast } = this._def
 
-    return TManifest.type<InputOf<this>>(TParsedType.Boolean)
-      .setProp('coerce', coerce)
-      .setProp('cast', this._def.cast)
-      .required(
-        !(
-          coerce === true ||
-          (typeof coerce !== 'boolean' && u.values(coerce).some((v) => v?.includes(undefined)))
-        ) as TBooleanManifest<Coerce>['required']
-      )
-      .nullable(
-        (coerce === true ||
-          (typeof coerce !== 'boolean' &&
-            u.values(coerce).some((v) => v?.includes(null)))) as TBooleanManifest<Coerce>['nullable']
-      ).value
+    type Required = Coerce extends true
+      ? false
+      : Coerce extends Record<string, unknown>
+      ? undefined extends Coerce['truthy' | 'falsy']
+        ? false
+        : true
+      : true
+
+    type Nullable = Coerce extends true
+      ? true
+      : Coerce extends Record<string, unknown>
+      ? null extends Coerce['truthy' | 'falsy']
+        ? true
+        : false
+      : false
+
+    return manifest<TBooleanInput<Coerce>>()({
+      type: TParsedType.Boolean,
+      coerce,
+      cast,
+      required: !(
+        coerce === true ||
+        (typeof coerce !== 'boolean' && u.values(coerce).some((v) => v?.includes(undefined)))
+      ) as u.Narrow<Required>,
+      nullable: (coerce === true ||
+        (typeof coerce !== 'boolean' && u.values(coerce).some((v) => v?.includes(null)))) as u.Narrow<Nullable>,
+    })
   }
 
   /* ---------------------------------------------------------------------------------------------------------------- */
@@ -127,7 +120,7 @@ export class TBoolean<Coerce extends TBooleanCoercion = false, Cast extends TBoo
 
   /* ----------------------------------------------- Coercion/Casting ----------------------------------------------- */
 
-  coerce<C extends TBooleanCoercion>(value: u.Narrow<C>): TBoolean<C, Cast> {
+  coerce<C extends TBooleanCoercion = true>(value = true as u.Narrow<C>): TBoolean<C, Cast> {
     return new TBoolean({ ...this._def, coerce: u.widen(value) })
   }
 
@@ -184,8 +177,8 @@ export interface TTrueDef extends TDef {
 }
 
 export class TTrue extends TType<true, TTrueDef> {
-  get _manifest(): TManifest.Literal<true> {
-    return TManifest.type<true>(TParsedType.True).literal(u.literalize(true)).value
+  get _manifest() {
+    return manifest<true>()({ type: TParsedType.True, literal: u.literalize(true) })
   }
 
   /* ---------------------------------------------------------------------------------------------------------------- */
@@ -214,8 +207,8 @@ export interface TFalseDef extends TDef {
 }
 
 export class TFalse extends TType<false, TFalseDef> {
-  get _manifest(): TManifest.Literal<false> {
-    return TManifest.type<false>(TParsedType.False).literal(u.literalize(false)).value
+  get _manifest() {
+    return manifest<false>()({ type: TParsedType.False, literal: u.literalize(false) })
   }
 
   /* ---------------------------------------------------------------------------------------------------------------- */

@@ -1,6 +1,7 @@
 lockfileVersion: 5.4
 
 specifiers:
+  '@sinclair/typebox': ^0.25.20
   '@types/clone-deep': ^4.0.1
   '@types/jest': ^29.2.5
   '@types/lodash': ^4.14.191
@@ -49,6 +50,7 @@ specifiers:
   yup: ^0.32.11
 
 dependencies:
+  '@sinclair/typebox': 0.25.20
   ajv: 8.12.0
   ajv-errors: 3.0.0_ajv@8.12.0
   ajv-formats: 2.1.1_ajv@8.12.0
@@ -803,6 +805,10 @@ packages:
   /@sinclair/typebox/0.24.51:
     resolution: {integrity: sha512-1P1OROm/rdubP5aFDSZQILU0vrLCJ4fvHt6EoqHEM+2D/G5MK3bIaymUKLit8Js9gbns5UyJnkP/TZROLw4tUA==}
     dev: true
+
+  /@sinclair/typebox/0.25.20:
+    resolution: {integrity: sha512-7cPrp+XyulftbrBIH0MjUvrn0cFgLe/Tpqi8WPE+iigBiyKCItWKWfY743OI4nLcNbZkz9t0u8Tb3r2t5csE9Q==}
+    dev: false
 
   /@sinonjs/commons/1.8.6:
     resolution: {integrity: sha512-Ky+XkAkqPZSm3NLBeUng77EBQl3cmeJhITaGHdYH8kjVB+aun3S4XBRti2zt17mtt0mIUDiNxYeoJm6drVvBJQ==}

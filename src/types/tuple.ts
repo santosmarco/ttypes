@@ -170,7 +170,7 @@ export class TTuple<T extends TTupleItems, R extends TType | null = null> extend
         const idx = i as keyof Dict
         return idx in fns
           ? typeof fns[idx] === 'function'
-            ? (fns[idx] as u.AnyFn)(item)
+            ? (fns[idx] as u.Fn)(item)
             : fns[idx] instanceof TType
             ? fns[idx]
             : null

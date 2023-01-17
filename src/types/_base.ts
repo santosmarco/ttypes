@@ -1,8 +1,10 @@
+import _ from 'lodash'
 import memoize from 'micro-memoize'
 import { nanoid } from 'nanoid'
+import { TParsedType } from '../../out'
 import type { TChecks } from '../checks'
 import type { TDef } from '../def'
-import { TManifest, type Manifest, type PublicManifest } from '../manifest'
+import { type Manifest, type PublicManifest } from '../manifest'
 import { type ParseOptions } from '../options'
 import {
   AsyncParseContext,
@@ -23,6 +25,7 @@ import {
   TIntersection,
   TLazy,
   TNonNullable,
+  TNot,
   TNullable,
   TOptional,
   TPreprocess,
@@ -31,6 +34,7 @@ import {
   TSuperDefault,
   TTransform,
   TUnion,
+  type BRANDED,
   type EffectCtx,
   type RefinementMessage,
 } from './_internal'
@@ -39,8 +43,6 @@ import {
 /*                                                        TType                                                       */
 /* ------------------------------------------------------------------------------------------------------------------ */
 
-export type InternalDef<T extends TType> = u.Merge<T['$D'], { readonly manifest: Manifest<InputOf<T>> }>
-
 export abstract class TType<Output = unknown, Def extends TDef = TDef, Input = Output> {
   declare readonly $O: Output
   declare readonly $D: Def
@@ -48,12 +50,20 @@ export abstract class TType<Output = unknown, Def extends TDef = TDef, Input = O
 
   protected readonly _def: Def & { readonly manifest: Manifest }
 
-  abstract get _manifest(): Manifest<Input>
+  abstract get _manifest(): BRANDED<Manifest, 'TManifest'>
 
   abstract _parse(ctx: ParseContextOf<this>): ParseResultOf<this>
 
   constructor(def: Def & { readonly manifest?: Manifest }) {
-    this._def = { ...def, manifest: def.manifest ?? TManifest.base() }
+    this._def = {
+      ...def,
+      manifest: _.defaults(def.manifest, {
+        type: TParsedType.Unknown,
+        required: true,
+        nullable: false,
+        readonly: false,
+      }),
+    }
 
     this._parse = memoize(this._parse.bind(this))
     this._parseSync = this._parseSync.bind(this)
@@ -78,7 +88,7 @@ export abstract class TType<Output = unknown, Def extends TDef = TDef, Input = O
     this.promisable = this.promisable.bind(this)
     this.or = this.or.bind(this)
     this.and = this.and.bind(this)
-    // this.not = this.not.bind(this)
+    this.not = this.not.bind(this)
     this.brand = this.brand.bind(this)
     this.default = this.default.bind(this)
     this.superDefault = this.superDefault.bind(this)
@@ -261,9 +271,9 @@ export abstract class TType<Output = unknown, Def extends TDef = TDef, Input = O
     return TIntersection.create([this, u.head(intersectees), ...u.tail(intersectees)], this.options())
   }
 
-  // not<T extends readonly [AnyTType, ...AnyTType[]]>(...blacklist: T): TNot<this, T> {
-  //   return TNot.create(this, blacklist, this.options())
-  // }
+  not<T extends readonly [TType, ...TType[]]>(...blacklist: T): TNot<this, T> {
+    return TNot.create(this, blacklist, this.options())
+  }
 
   brand<B>(brand: u.Narrow<B>): TBrand<this, B> {
     return TBrand.create(this, brand, this.options())

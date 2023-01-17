@@ -1,7 +1,7 @@
 import type { TDef } from '../def'
-import { TManifest } from '../manifest'
+import { manifest, type TManifest } from '../manifest'
 import type { TOptions } from '../options'
-import { type ParseContextOf, type ParseResultOf } from '../parse'
+import { TParsedType, type ParseContextOf, type ParseResultOf } from '../parse'
 import { TTypeName } from '../type-names'
 import { u } from '../utils'
 import { TType, type InputOf, type OutputOf, type TUnwrappable, type UnwrapDeep } from './_internal'
@@ -25,15 +25,17 @@ export class TDefault<T extends TType, D extends u.Defined<OutputOf<T>>>
   extends TType<u.Defined<OutputOf<T>> | D, TDefaultDef<T, D>, InputOf<T> | undefined>
   implements TUnwrappable<T>
 {
-  get _manifest(): TDefaultManifest<T, D> {
+  get _manifest() {
     const underlyingManifest = this.underlying.manifest()
-
-    return TManifest.type<InputOf<T> | undefined>(underlyingManifest.type)
-      .wrap(underlyingManifest)
-      .required(false)
-      .setProp('default', { _value: this.defaultValue }).value
+    return manifest<InputOf<T> | undefined>()({
+      type: { anyOf: [manifest.extract(underlyingManifest, 'type'), TParsedType.Undefined] },
+      underlying: underlyingManifest,
+      required: false,
+      default: this.defaultValue,
+      nullable: manifest.extract(underlyingManifest, 'nullable'),
+      readonly: manifest.extract(underlyingManifest, 'readonly'),
+    })
   }
-
   /* ---------------------------------------------------------------------------------------------------------------- */
 
   _parse(ctx: ParseContextOf<this>): ParseResultOf<this> {
@@ -119,14 +121,16 @@ export class TSuperDefault<T extends TType, D>
   extends TType<u.Not<OutputOf<T>, null | undefined> | D, TSuperDefaultDef<T, D>, InputOf<T> | null | undefined>
   implements TUnwrappable<T>
 {
-  get _manifest(): TSuperDefaultManifest<T, D> {
+  get _manifest() {
     const underlyingManifest = this.underlying.manifest()
-
-    return TManifest.type<InputOf<T> | null | undefined>(underlyingManifest.type)
-      .wrap(underlyingManifest)
-      .required(false)
-      .nullable()
-      .setProp('default', { _value: this.defaultValue }).value
+    return manifest<InputOf<T> | null | undefined>()({
+      type: { anyOf: [manifest.extract(underlyingManifest, 'type'), TParsedType.Undefined, TParsedType.Null] },
+      underlying: this.underlying.manifest(),
+      required: false,
+      nullable: true,
+      default: this.defaultValue,
+      readonly: manifest.extract(underlyingManifest, 'readonly'),
+    })
   }
 
   /* ---------------------------------------------------------------------------------------------------------------- */
@@ -213,9 +217,16 @@ export class TCatch<T extends TType, C extends OutputOf<T>>
   extends TType<OutputOf<T> | C, TCatchDef<T, C>, any>
   implements TUnwrappable<T>
 {
-  get _manifest(): TCatchManifest<T> {
+  get _manifest() {
     const underlyingManifest = this.underlying.manifest()
-    return TManifest.type<any>(underlyingManifest.type).wrap(underlyingManifest).required(false).nullable().value
+    return manifest<any>()({
+      type: TParsedType.Any,
+      underlying: this.underlying.manifest(),
+      required: false,
+      nullable: true,
+      default: this.catchValue,
+      readonly: manifest.extract(underlyingManifest, 'readonly'),
+    })
   }
 
   /* ---------------------------------------------------------------------------------------------------------------- */

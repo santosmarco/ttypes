@@ -1,7 +1,7 @@
 import type { TDef } from '../def'
-import { TManifest } from '../manifest'
+import { manifest, type TManifest } from '../manifest'
 import type { TOptions } from '../options'
-import type { ParseContextOf, ParseResultOf } from '../parse'
+import { TParsedType, type ParseContextOf, type ParseResultOf } from '../parse'
 import { TTypeName } from '../type-names'
 import { TType, type InputOf, type OutputOf, type TUnwrappable, type UnwrapDeep } from './_internal'
 
@@ -17,15 +17,18 @@ export interface TOptionalDef<T extends TType> extends TDef {
 }
 
 export class TOptional<T extends TType>
-  extends TType<InputOf<T> | undefined, TOptionalDef<T>, InputOf<T> | undefined>
+  extends TType<OutputOf<T> | undefined, TOptionalDef<T>, InputOf<T> | undefined>
   implements TUnwrappable<T>
 {
-  get _manifest(): TOptionalManifest<T> {
+  get _manifest() {
     const underlyingManifest = this.underlying.manifest()
-
-    return TManifest.type<InputOf<this>>({ anyOf: [underlyingManifest.type, 'undefined'] })
-      .wrap(underlyingManifest)
-      .required(false).value
+    return manifest<InputOf<T> | undefined>()({
+      type: { anyOf: [manifest.extract(underlyingManifest, 'type'), TParsedType.Undefined] },
+      underlying: underlyingManifest,
+      required: false,
+      nullable: manifest.extract(underlyingManifest, 'nullable'),
+      readonly: manifest.extract(underlyingManifest, 'readonly'),
+    })
   }
 
   /* ---------------------------------------------------------------------------------------------------------------- */
@@ -77,12 +80,15 @@ export class TNullable<T extends TType>
   extends TType<OutputOf<T> | null, TNullableDef<T>, InputOf<T> | null>
   implements TUnwrappable<T>
 {
-  get _manifest(): TNullableManifest<T> {
+  get _manifest() {
     const underlyingManifest = this.underlying.manifest()
-
-    return TManifest.type<InputOf<this>>({ anyOf: [underlyingManifest.type, 'null'] })
-      .wrap(underlyingManifest)
-      .nullable().value
+    return manifest<InputOf<T> | null>()({
+      type: { anyOf: [manifest.extract(underlyingManifest, 'type'), TParsedType.Null] },
+      underlying: underlyingManifest,
+      nullable: true,
+      required: manifest.extract(underlyingManifest, 'required'),
+      readonly: manifest.extract(underlyingManifest, 'readonly'),
+    })
   }
 
   /* ---------------------------------------------------------------------------------------------------------------- */

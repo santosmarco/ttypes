@@ -1,5 +1,6 @@
+import _ from 'lodash'
 import { TParsedType } from './parse'
-import type { ManifestOf, TType } from './types/_internal'
+import type { BRANDED, ManifestOf, TObjectShape, TType } from './types/_internal'
 import { u } from './utils'
 
 /* ------------------------------------------------------------------------------------------------------------------ */
@@ -20,7 +21,11 @@ export interface PublicManifest<T = unknown> {
 
 export type ManifestType =
   | string
-  | u.RequireAtLeastOne<{ readonly anyOf: readonly ManifestType[]; readonly allOf: readonly ManifestType[] }>
+  | u.RequireExactlyOne<{
+      readonly anyOf: readonly ManifestType[]
+      readonly allOf: readonly ManifestType[]
+      readonly not: readonly ManifestType[]
+    }>
 
 export interface Manifest<T = unknown> extends PublicManifest<T> {
   readonly type: ManifestType
@@ -28,6 +33,43 @@ export interface Manifest<T = unknown> extends PublicManifest<T> {
   readonly nullable: boolean
   readonly readonly: boolean
 }
+
+export type MakeManifest<T, P extends Partial<Manifest<T>> & { readonly type: ManifestType }> = BRANDED<
+  u.ReadonlyDeep<
+    {
+      readonly type: P['type']
+      readonly required: 'required' extends keyof P ? P['required'] : true
+      readonly nullable: 'nullable' extends keyof P ? P['nullable'] : false
+      readonly readonly: 'readonly' extends keyof P ? P['readonly'] : false
+    } & u.Except<P, 'type' | 'required' | 'nullable' | 'readonly'>
+  > &
+    PublicManifest<T>,
+  'TManifest'
+>
+
+export const manifest =
+  <T>() =>
+  <P extends Partial<Manifest<T>> & { readonly type: ManifestType }>(manifest: {
+    [K in keyof P]: P[K] | u.Narrow<P[K]>
+  }): MakeManifest<T, P> =>
+    u.enbrand(
+      u.readonlyDeep(_.defaults(manifest as P, { required: true, nullable: false, readonly: false })),
+      'TManifest'
+    ) as MakeManifest<T, P>
+
+manifest.extract = <T extends Manifest, K extends keyof T>(manifest: T, key: K): T[K] => manifest[key]
+
+manifest.map = <T extends readonly TType[]>(types: T): [...{ [P in keyof T]: ManifestOf<T[P]> }] =>
+  types.map((t) => t.manifest()) as [...{ [P in keyof T]: ManifestOf<T[P]> }]
+
+manifest.mapKey = <T extends readonly TType[], K extends keyof Manifest>(
+  types: T,
+  key: K
+): [...{ [P in keyof T]: ManifestOf<T[P]>[K] }] =>
+  types.map((t) => t.manifest()[key]) as [...{ [P in keyof T]: ManifestOf<T[P]>[K] }]
+
+manifest.mapShape = <T extends TObjectShape>(shape: T): { [K in keyof T]: ManifestOf<T[K]> } =>
+  u.fromEntries(u.entries(shape).map(([k, v]) => [k, v.manifest()]))
 
 export namespace TManifest {
   export interface Base<T = unknown> extends Manifest<T> {

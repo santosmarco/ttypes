@@ -1,12 +1,12 @@
 import { TChecks } from '../checks'
 import type { TDef } from '../def'
 import { IssueKind, TError, type InvalidStringIssue, type ToChecks } from '../error'
-import { TManifest } from '../manifest'
+import { manifest, type TManifest } from '../manifest'
 import type { TOptions } from '../options'
 import { TParsedType, type ParseContextOf, type ParseResultOf } from '../parse'
 import { TTypeName } from '../type-names'
 import { u } from '../utils'
-import { TType, type InputOf, type OutputOf, type TSuperDefault } from './_internal'
+import { TType, type OutputOf, type TSuperDefault } from './_internal'
 
 /* ------------------------------------------------------------------------------------------------------------------ */
 /*                                                       TString                                                      */
@@ -22,24 +22,29 @@ export type TStringTransform =
 
 export type TStringInput<Coerce extends boolean> = Coerce extends true ? any : string
 
+// export type TStringOutput<
+//   Transforms extends ReadonlyArray<TStringTransform['kind']>,
+//   OutputFormat extends string
+// > = Transforms extends readonly []
+//   ? OutputFormat
+//   : Transforms extends readonly [
+//       infer H extends TStringTransform['kind'],
+//       ...infer R extends ReadonlyArray<TStringTransform['kind']>
+//     ]
+//   ? {
+//       lowercase: Lowercase<TStringOutput<R, OutputFormat>>
+//       uppercase: Uppercase<TStringOutput<R, OutputFormat>>
+//       capitalize: Capitalize<TStringOutput<R, OutputFormat>>
+//       uncapitalize: Uncapitalize<TStringOutput<R, OutputFormat>>
+//       trim: TStringOutput<R, OutputFormat>
+//       replace: TStringOutput<R, OutputFormat>
+//     }[H]
+//   : never
+
 export type TStringOutput<
-  Transforms extends ReadonlyArray<TStringTransform['kind']>,
+  _Transforms extends ReadonlyArray<TStringTransform['kind']>,
   OutputFormat extends string
-> = Transforms extends readonly []
-  ? OutputFormat
-  : Transforms extends readonly [
-      infer H extends TStringTransform['kind'],
-      ...infer R extends ReadonlyArray<TStringTransform['kind']>
-    ]
-  ? {
-      lowercase: Lowercase<TStringOutput<R, OutputFormat>>
-      uppercase: Uppercase<TStringOutput<R, OutputFormat>>
-      capitalize: Capitalize<TStringOutput<R, OutputFormat>>
-      uncapitalize: Uncapitalize<TStringOutput<R, OutputFormat>>
-      trim: TStringOutput<R, OutputFormat>
-      replace: TStringOutput<R, OutputFormat>
-    }[H]
-  : never
+> = OutputFormat
 
 export type TStringManifestFormat =
   | 'alphanumeric'
@@ -79,9 +84,7 @@ export class TString<
   OutputFormat extends string = string,
   Coerce extends boolean = false
 > extends TType<TStringOutput<Transforms, OutputFormat>, TStringDef<Coerce>, TStringInput<Coerce>> {
-  get _manifest(): TStringManifest<Coerce> {
-    const { coerce } = this._def
-
+  get _manifest() {
     const formats = (
       [
         this.isAlphanumeric && 'alphanumeric',
@@ -96,27 +99,20 @@ export class TString<
       ] as const
     ).filter(u.filterFalsy)
 
-    const patternChecks = this._getChecks('pattern')
-    const substringChecks = this._getChecks('includes')
-
-    return TManifest.type<InputOf<this>>(TParsedType.String)
-      .with({
-        min: this.minLength ?? null,
-        max: this.maxLength ?? null,
-        formats: formats.length ? formats : null,
-        transforms: this._def.transforms.length ? this._def.transforms.map((t) => t.kind) : null,
-        patterns: patternChecks.length
-          ? patternChecks.map((p) =>
-              p.options.name === String(p.pattern) ? p.pattern : { regex: p.pattern, name: p.options.name }
-            )
-          : null,
-        prefix: this.prefix ?? null,
-        suffix: this.suffix ?? null,
-        substrings: substringChecks.length ? substringChecks.map((i) => i.expected) : null,
-        coerce,
-      })
-      .required(!coerce as Coerce extends true ? false : true)
-      .nullable(coerce).value
+    return manifest<TStringInput<Coerce>>()({
+      type: TParsedType.String,
+      minLength: this.minLength ?? null,
+      maxLength: this.maxLength ?? null,
+      formats: formats.length ? formats : null,
+      transforms: this._def.transforms.length ? this._def.transforms.map((t) => t.kind) : null,
+      patterns: this.patterns,
+      prefix: this.prefix ?? null,
+      suffix: this.suffix ?? null,
+      substrings: this.substrings,
+      coerce: this._def.coerce,
+      required: !this._def.coerce as Coerce extends true ? false : true,
+      nullable: this._def.coerce,
+    })
   }
 
   /* ---------------------------------------------------------------------------------------------------------------- */
@@ -487,12 +483,22 @@ export class TString<
     return this._hasCheck('base64')
   }
 
+  get patterns(): ReadonlyArray<RegExp | { readonly regex: RegExp; readonly name: string }> {
+    return this._getChecks('pattern').map((p) =>
+      p.options.name === String(p.pattern) ? p.pattern : { regex: p.pattern, name: p.options.name }
+    )
+  }
+
   get prefix(): string | undefined {
     return this._getChecks('starts_with')[0]?.expected
   }
 
   get suffix(): string | undefined {
     return this._getChecks('ends_with')[0]?.expected
+  }
+
+  get substrings(): readonly string[] {
+    return this._getChecks('includes').map((check) => check.expected)
   }
 
   /* ---------------------------------------------------------------------------------------------------------------- */

@@ -1,4 +1,5 @@
-import type { TOptions, TTypeName } from './_internal'
+import type { TOptions } from './options'
+import type { TTypeName } from './type-names'
 
 /* ------------------------------------------------------------------------------------------------------------------ */
 /*                                                        TDef                                                        */

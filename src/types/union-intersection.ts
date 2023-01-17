@@ -1,10 +1,17 @@
 import type { TDef } from '../def'
 import { IssueKind, type EIssueKind } from '../error'
+import { TManifest, manifest, type MakeManifest } from '../manifest'
 import type { ExtendedTOptions } from '../options'
-import { TParsedType, type ParseContextOf, type ParseResultOf } from '../parse'
-import { TTypeName } from '../type-names'
+import {
+  TParsedType,
+  type ParseContext,
+  type ParseContextOf,
+  type ParseResultOf,
+  type SyncParseResultOf,
+} from '../parse'
+import { TTypeName, type TTypeNameMap } from '../type-names'
 import { u } from '../utils'
-import { TType, type InputOf, type OutputOf } from './_internal'
+import { TType, type InputOf, type ManifestOf, type OutputOf } from './_internal'
 
 /* ------------------------------------------------------------------------------------------------------------------ */
 /*                                                       TUnion                                                       */
@@ -16,27 +23,40 @@ export type TUnionOptions = ExtendedTOptions<{
   additionalIssueKind: EIssueKind['InvalidUnion']
 }>
 
+export type TUnionManifest<T extends TUnionMembers> = MakeManifest<
+  InputOf<T[number]>,
+  {
+    readonly type: { anyOf: [...{ [K in keyof T]: ManifestOf<T[K]>['type'] }] }
+    readonly members: [...{ [K in keyof T]: ManifestOf<T[K]> }]
+    readonly required: u.Equals<ManifestOf<T[number]>['required'], true> extends 1 ? true : false
+    readonly nullable: u.Equals<ManifestOf<T[number]>['nullable'], false> extends 1 ? false : true
+  }
+>
+
 export interface TUnionDef<T extends TUnionMembers> extends TDef {
   readonly typeName: TTypeName.Union
   readonly options: TUnionOptions
   readonly members: T
 }
 
-export class TUnion<T extends TUnionMembers> extends TType<OutputOf<T[number]>, TUnionDef<T>, InputOf<T[number]>> {
-  get _manifest(): TManifest.Union<OutputOf<this>> {
+export class TUnion<T extends readonly TType[]> extends TType<OutputOf<T[number]>, TUnionDef<T>, InputOf<T[number]>> {
+  get _manifest(): TUnionManifest<FlattenMembers<T, AnyTUnion>> {
     const { members } = this.flatten()
 
-    return {
-      ...TManifest.base(TParsedType.Union),
-      anyOf: members.map((m) => m.manifest()),
-      required: members.every((m) => m.isRequired),
-      nullable: members.some((m) => m.isNullable),
-    }
+    type Required = u.Equals<ManifestOf<T[number]>['required'], true> extends 1 ? true : false
+    type Nullable = u.Equals<ManifestOf<T[number]>['nullable'], false> extends 1 ? false : true
+
+    return manifest<InputOf<T[number]>>()({
+      type: { anyOf: manifest.mapKey(members, 'type') },
+      members: manifest.map(members),
+      required: members.every((m) => m.isRequired) as u.Narrow<Required>,
+      nullable: members.some((m) => m.isNullable) as u.Narrow<Nullable>,
+    })
   }
 
   /* ---------------------------------------------------------------------------------------------------------------- */
 
-  _parse(ctx: ParseContextOf<this>): ParseResultOf<this> {
+  _parse(ctx: ParseContext<OutputOf<T[number]>, InputOf<T[number]>>): ParseResultOf<this> {
     const { members } = this.flatten()
 
     const handleResults = (results: Array<SyncParseResultOf<T[number]>>): ParseResultOf<this> => {
@@ -77,12 +97,16 @@ export class TUnion<T extends TUnionMembers> extends TType<OutputOf<T[number]>, 
   }
 
   toIntersection(): TIntersection<T> {
-    return TIntersection.create(this.members, this.options())
+    return TIntersection._create(this.members, this.options())
   }
 
   /* ---------------------------------------------------------------------------------------------------------------- */
 
   static create<T extends TUnionMembers>(alternatives: T, options?: TUnionOptions): TUnion<T> {
+    return this._create(alternatives, options)
+  }
+
+  static _create<T extends readonly TType[]>(alternatives: T, options?: TUnionOptions): TUnion<T> {
     return new TUnion({ typeName: TTypeName.Union, members: alternatives, options: { ...options } })
   }
 }
@@ -99,24 +123,39 @@ export type TIntersectionOptions = ExtendedTOptions<{
   additionalIssueKind: EIssueKind['InvalidIntersection']
 }>
 
-export interface TIntersectionDef<T extends readonly TType[]> extends TDef {
+export type TIntersectionManifest<T extends TIntersectionMembers> = MakeManifest<
+  u.UnionToIntersection<InputOf<T[number]>>,
+  {
+    readonly type: { allOf: [...{ [K in keyof T]: ManifestOf<T[K]>['type'] }] }
+    readonly members: [...{ [K in keyof T]: ManifestOf<T[K]> }]
+    readonly required: u.Equals<ManifestOf<T[number]>['required'], false> extends 1 ? false : true
+    readonly nullable: u.Equals<ManifestOf<T[number]>['nullable'], true> extends 1 ? true : false
+  }
+>
+
+export interface TIntersectionDef<T extends TIntersectionMembers> extends TDef {
   readonly typeName: TTypeName.Intersection
   readonly options: TIntersectionOptions
   readonly members: T
 }
 
-export class TIntersection<T extends TIntersectionMembers> extends TType<
-  UnionToIntersection<OutputOf<T[number]>>,
+export class TIntersection<T extends readonly TType[]> extends TType<
+  u.UnionToIntersection<OutputOf<T[number]>>,
   TIntersectionDef<T>,
-  UnionToIntersection<InputOf<T[number]>>
+  u.UnionToIntersection<InputOf<T[number]>>
 > {
-  get _manifest(): TManifest.Intersection<OutputOf<this>> {
+  get _manifest(): TIntersectionManifest<FlattenMembers<T, AnyTIntersection>> {
     const { members } = this.flatten()
 
-    return {
-      ...TManifest.base(TParsedType.Intersection),
-      allOf: members.map((m) => m.manifest()),
-    }
+    type Required = u.Equals<ManifestOf<T[number]>['required'], false> extends 1 ? false : true
+    type Nullable = u.Equals<ManifestOf<T[number]>['nullable'], true> extends 1 ? true : false
+
+    return manifest<u.UnionToIntersection<InputOf<T[number]>>>()({
+      type: { allOf: manifest.mapKey(members, 'type') },
+      members: manifest.map(members),
+      required: members.some((m) => m.isRequired) as u.Narrow<Required>,
+      nullable: members.every((m) => m.isNullable) as u.Narrow<Nullable>,
+    })
   }
 
   /* ---------------------------------------------------------------------------------------------------------------- */
@@ -170,12 +209,16 @@ export class TIntersection<T extends TIntersectionMembers> extends TType<
   }
 
   toUnion(): TUnion<T> {
-    return TUnion.create(this.members, this.options())
+    return TUnion._create(this.members, this.options())
   }
 
   /* ---------------------------------------------------------------------------------------------------------------- */
 
   static create<T extends TIntersectionMembers>(intersectees: T, options?: TIntersectionOptions): TIntersection<T> {
+    return this._create(intersectees, options)
+  }
+
+  static _create<T extends readonly TType[]>(intersectees: T, options?: TIntersectionOptions): TIntersection<T> {
     return new TIntersection({ typeName: TTypeName.Intersection, members: intersectees, options: { ...options } })
   }
 }
@@ -184,9 +227,9 @@ export type AnyTIntersection = TIntersection<TIntersectionMembers>
 
 /* ------------------------------------------------------------------------------------------------------------------ */
 
-export type FlattenMembers<
-  M extends TUnionMembers | TIntersectionMembers,
-  Compare extends TType & { readonly members: readonly TType[] }
+type _FlattenMembers<
+  M extends readonly TType[],
+  Compare extends { readonly members: readonly TType[] }
 > = M extends readonly []
   ? []
   : M extends readonly [infer H extends TType, ...infer R extends readonly TType[]]
@@ -195,15 +238,20 @@ export type FlattenMembers<
     : [H, ...FlattenMembers<R, Compare>]
   : TType[]
 
-const flattenMembers = <
-  M extends TUnionMembers,
-  TN extends Extract<TTypeNameMap, { readonly members: readonly TType[] }>['typeName']
->(
+export type FlattenMembers<M extends readonly TType[], Compare extends { readonly members: readonly TType[] }> = u.Try<
+  _FlattenMembers<M, Compare>,
+  readonly TType[]
+>
+
+const flattenMembers = <M extends readonly TType[], TN extends TTypeName>(
   members: M,
   typeName: TN
 ): FlattenMembers<M, TTypeNameMap<TN>> =>
   members.reduce(
-    (acc, m) => [...acc, ...(m.isT(typeName) ? flattenMembers(m.members, typeName) : [m])],
+    (acc, m) => [
+      ...acc,
+      ...(m.isT(typeName) ? flattenMembers((m as AnyTUnion | AnyTIntersection).members, typeName) : [m]),
+    ],
     []
   ) as unknown as FlattenMembers<M, TTypeNameMap<TN>>
 

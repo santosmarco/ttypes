@@ -9,7 +9,7 @@ import {
   type InvalidSetIssue,
   type ToChecks,
 } from '../error'
-import { TManifest } from '../manifest'
+import { manifest } from '../manifest'
 import type { TOptions } from '../options'
 import { TParsedType, type ParseContextOf, type ParseResultOf } from '../parse'
 import { TTypeName } from '../type-names'
@@ -17,7 +17,6 @@ import { u } from '../utils'
 import {
   TType,
   type InputOf,
-  type ManifestOf,
   type OutputOf,
   type TDefined,
   type TNever,
@@ -45,18 +44,6 @@ export type TArrayOutput<T extends TType, Card extends TArrayCardinality, Cast e
   ? Set<OutputOf<T>>
   : TArrayIO<T, Card>
 
-export interface TArrayManifest<T extends TType, Card extends TArrayCardinality, Coerce extends boolean>
-  extends TManifest.Base<TArrayInput<T, Card, Coerce>> {
-  readonly element: ManifestOf<T>
-  readonly cardinality: TArrayCardinality
-  readonly minItems: number | null
-  readonly maxItems: number | null
-  readonly unique: boolean
-  readonly sorted: boolean
-  readonly coerce: boolean
-  readonly cast: boolean
-}
-
 export interface TArrayDef<
   T extends TType,
   Card extends TArrayCardinality,
@@ -76,26 +63,37 @@ export class TArray<
   Card extends TArrayCardinality = 'many',
   Coerce extends boolean = false,
   Cast extends boolean = false
-> extends TType<TArrayOutput<T, Card, Cast>, TArrayDef<T, Card, Coerce, Cast>, TArrayInput<T, Card, Coerce>> {
-  get _manifest(): TArrayManifest<T, Card, Coerce> {
-    const coercedExamples = (
-      this._def.coerce
-        ? this._def.manifest.examples
-        : this._def.manifest.examples?.map((ex) => (ex instanceof Set ? [...ex] : ex))
-    ) as Array<InputOf<this>>
+> extends TType<
+  Cast extends true ? Set<OutputOf<T>> : TArrayIO<T, Card>,
+  TArrayDef<T, Card, Coerce, Cast>,
+  TArrayIO<T, Card, '$I'> | (Coerce extends true ? Set<InputOf<T>> : never)
+> {
+  get _hint(): string {
+    if (this._def.cardinality === 'none') {
+      return '[]'
+    }
 
-    return TManifest.type<InputOf<this>>(TParsedType.Array)
-      .element(this.element.manifest())
-      .examples(coercedExamples)
-      .with({
-        cardinality: this._def.cardinality,
-        minItems: this.minItems ?? null,
-        maxItems: this.maxItems ?? null,
-        unique: this.isUnique,
-        sorted: this.isSorted,
-        coerce: this._def.coerce,
-        cast: this._def.cast,
-      }).value
+    const { element } = this._def
+
+    if (this._def.cardinality === 'atleastone') {
+      return `[${element._hint}, ...(${element._hint})[]]`
+    }
+
+    return `(${element._hint})[]`
+  }
+
+  get _manifest() {
+    return manifest<TArrayInput<T, Card, Coerce>>()({
+      type: TParsedType.Array,
+      element: this.element.manifest(),
+      cardinality: this._def.cardinality,
+      minItems: this.minItems ?? null,
+      maxItems: this.maxItems ?? null,
+      unique: this.isUnique,
+      sorted: this.isSorted,
+      coerce: this._def.coerce,
+      cast: this._def.cast,
+    })
   }
 
   /* ---------------------------------------------------------------------------------------------------------------- */
@@ -339,7 +337,7 @@ export class TArray<
 
   ensure(this: TArray<T, Card, Coerce, true>): TSuperDefault<this, Set<never>>
   ensure(this: TArray<T, Card, Coerce>): TSuperDefault<this, []>
-  ensure(): TSuperDefault<this, Set<never>> | TSuperDefault<this, []> {
+  ensure(): TSuperDefault<this, Set<never> | []> {
     if (this._def.cast) {
       return this.superDefault(new Set<never>())
     }
@@ -459,14 +457,6 @@ export type TSetOutput<T extends TType, Cast extends boolean> = Cast extends tru
   ? TArrayIO<T, 'many'>
   : Set<OutputOf<T>>
 
-export interface TSetManifest<T extends TType, Coerce extends boolean> extends TManifest.Base<TSetInput<T, Coerce>> {
-  readonly element: ManifestOf<T>
-  readonly minItems: number | null
-  readonly maxItems: number | null
-  readonly coerce: boolean
-  readonly cast: boolean
-}
-
 export interface TSetDef<T extends TType, Coerce extends boolean, Cast extends boolean> extends TDef {
   readonly typeName: TTypeName.Set
   readonly element: T
@@ -480,22 +470,15 @@ export class TSet<T extends TType, Coerce extends boolean = false, Cast extends 
   TSetDef<T, Coerce, Cast>,
   TSetInput<T, Coerce>
 > {
-  get _manifest(): TSetManifest<T, Coerce> {
-    const coercedExamples = (
-      this._def.coerce
-        ? this._def.manifest.examples
-        : this._def.manifest.examples?.map((ex) => (u.isArray(ex) ? new Set(ex) : ex))
-    ) as Array<InputOf<this>>
-
-    return TManifest.type<InputOf<this>>(TParsedType.Set)
-      .element(this.element.manifest())
-      .examples(coercedExamples)
-      .with({
-        minItems: this.minItems ?? null,
-        maxItems: this.maxItems ?? null,
-        coerce: this._def.coerce,
-        cast: this._def.cast,
-      }).value
+  get _manifest() {
+    return manifest<TSetInput<T, Coerce>>()({
+      type: TParsedType.Set,
+      element: this.element.manifest(),
+      minItems: this.minItems ?? null,
+      maxItems: this.maxItems ?? null,
+      coerce: this._def.coerce,
+      cast: this._def.cast,
+    })
   }
 
   /* ---------------------------------------------------------------------------------------------------------------- */
@@ -700,13 +683,6 @@ export type TBufferInput<Coerce extends boolean> = Buffer | (Coerce extends true
 
 export type TBufferOutput<Cast extends boolean> = Cast extends true ? string : Buffer
 
-export interface TBufferManifest<Coerce extends boolean> extends TManifest.Base<TBufferInput<Coerce>> {
-  readonly minBytes: number | null
-  readonly maxBytes: number | null
-  readonly coerce: boolean
-  readonly cast: boolean
-}
-
 export interface TBufferDef<Coerce extends boolean, Cast extends boolean> extends TDef {
   readonly typeName: TTypeName.Buffer
   readonly checks: ToChecks<InvalidBufferIssue>
@@ -719,13 +695,14 @@ export class TBuffer<Coerce extends boolean = false, Cast extends boolean = fals
   TBufferDef<Coerce, Cast>,
   TBufferInput<Coerce>
 > {
-  get _manifest(): TBufferManifest<Coerce> {
-    return TManifest.type<InputOf<this>>(TParsedType.Buffer).with({
+  get _manifest() {
+    return manifest<TBufferInput<Coerce>>()({
+      type: TParsedType.Buffer,
       minBytes: this.minBytes ?? null,
       maxBytes: this.maxBytes ?? null,
       coerce: this._def.coerce,
       cast: this._def.cast,
-    }).value
+    })
   }
 
   /* ---------------------------------------------------------------------------------------------------------------- */

@@ -1,19 +1,9 @@
 import type { TDef } from './def'
-import {
-  IssueKind,
-  TError,
-  getGlobal,
-  isArray,
-  isAsync,
-  resolveErrorMaps,
-  type ParseOptions,
-  type Primitive,
-  type TIssue,
-  type objectUtils,
-  cloneUtils,
-  emptyMarker,
-} from './_internal'
-import { type TType, type InputOf, type OutputOf } from './types/_internal'
+import { IssueKind, TError, resolveErrorMaps, type TIssue } from './error'
+import { getGlobal } from './global'
+import { type ParseOptions } from './options'
+import { emptyMarker, type InputOf, type OutputOf, type TType } from './types/_internal'
+import { u } from './utils'
 
 /* --------------------------------------------------- TParsedType -------------------------------------------------- */
 
@@ -77,8 +67,8 @@ export namespace TParsedType {
         return TParsedType.Function
       case 'object':
         if (x === null) return TParsedType.Null
-        if (isArray(x)) return TParsedType.Array
-        if (isAsync(x)) return TParsedType.Promise
+        if (u.isArray(x)) return TParsedType.Array
+        if (u.isAsync(x)) return TParsedType.Promise
         if (x instanceof Buffer) return TParsedType.Buffer
         if (x instanceof Date) return TParsedType.Date
         if (x instanceof Map) return TParsedType.Map
@@ -91,7 +81,7 @@ export namespace TParsedType {
     }
   }
 
-  export const Literal = (x: Primitive): TParsedType => {
+  export const Literal = (x: u.Primitive): TParsedType => {
     if (x === null) {
       return TParsedType.Null
     }
@@ -201,14 +191,14 @@ export interface ParseContext<O, I = O> {
   variant(data: unknown, path?: ParsePath): ParseContext<O, I>
   clone<T extends TType>(schema: T, data: unknown): ParseContextOf<T>
   _addIssue<K extends IssueKind>(
-    issue: objectUtils.LooseStripKey<TIssue<K>, 'path' | 'data'> & {
+    issue: u.LooseStripKey<TIssue<K>, 'path' | 'data'> & {
       readonly path?: ParsePath
       readonly fatal?: boolean
     }
   ): void
   addIssue<K extends IssueKind>(
     kind: K,
-    ...args: 'payload' extends objectUtils.OptionalKeysOf<TIssue<K>>
+    ...args: 'payload' extends u.OptionalKeysOf<TIssue<K>>
       ? [message: string | undefined]
       : [payload: TIssue<K>['payload'], message: string | undefined]
   ): this
@@ -228,7 +218,7 @@ export const ParseContext = <T extends TType>({
   parent,
   common,
 }: ParseContextDef<T>): ParseContextOf<T> => {
-  const _internals: ParseContextInternals = cloneUtils.cloneDeep({
+  const _internals: ParseContextInternals = u.cloneDeep({
     status: ParseStatus.Valid,
     data,
     ownChildren: [],

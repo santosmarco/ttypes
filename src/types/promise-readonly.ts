@@ -1,5 +1,5 @@
 import type { TDef } from '../def'
-import { TManifest } from '../manifest'
+import { manifest, type TManifest } from '../manifest'
 import type { TOptions } from '../options'
 import { TParsedType, type ParseContextOf, type ParseResultOf } from '../parse'
 import { TTypeName } from '../type-names'
@@ -28,10 +28,16 @@ export class TPromise<T extends TType>
   extends TType<TPromiseIO<OutputOf<T>>, TPromiseDef<T>, TPromiseIO<InputOf<T>>>
   implements TUnwrappable<T>
 {
-  get _manifest(): TPromiseManifest<T> {
-    return TManifest.type<TPromiseIO<InputOf<T>>>(TParsedType.Promise)
-      .wrap(this.underlying.manifest())
-      .setProp('async', true).value
+  get _manifest() {
+    const underlyingManifest = this.underlying.manifest()
+    return manifest<TPromiseIO<InputOf<T>>>()({
+      type: TParsedType.Promise,
+      underlying: underlyingManifest,
+      async: true,
+      required: manifest.extract(underlyingManifest, 'required'),
+      nullable: manifest.extract(underlyingManifest, 'nullable'),
+      readonly: manifest.extract(underlyingManifest, 'readonly'),
+    })
   }
 
   /* ---------------------------------------------------------------------------------------------------------------- */
