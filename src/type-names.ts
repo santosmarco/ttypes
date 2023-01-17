@@ -49,7 +49,7 @@ import type {
   TUndefined,
   TUnknown,
   TVoid,
-} from './_internal'
+} from './types/_internal'
 
 /* ------------------------------------------------------------------------------------------------------------------ */
 /*                                                      TTypeName                                                     */

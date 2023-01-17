@@ -1,6 +1,5 @@
 import { TParsedType } from '../parse'
 import { arrayUtils } from './arrays'
-import { stringUtils } from './strings'
 
 export interface ObjectUtils {
   isObject(obj: unknown): obj is objectUtils.AnyRecord

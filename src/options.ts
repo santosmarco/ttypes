@@ -30,7 +30,7 @@ export type SchemaColor =
 /**
  * Global options for controlling the color output.
  */
-export interface GlobalColorOptions {
+export type GlobalColorOptions = {
   readonly colorsEnabled?: boolean
 }
 
@@ -40,19 +40,19 @@ export interface GlobalColorOptions {
  *
  * This is specially useful when debugging.
  */
-export interface SchemaColorOptions {
+export type SchemaColorOptions = {
   readonly schemaColor?: SchemaColor
 }
 
 /**
  * Library-wide, global options.
  */
-export interface GlobalOptions extends GlobalColorOptions {}
+export type GlobalOptions = {} & GlobalColorOptions
 
 /**
  * Options used on parsing.
  */
-export interface ParseOptions {
+export type ParseOptions = {
   readonly abortEarly?: boolean
   readonly debug?: boolean
   readonly contextualErrorMap?: TErrorMap

@@ -21,7 +21,7 @@ module.exports = {
   rules: {
     '@typescript-eslint/ban-types': 'off',
     '@typescript-eslint/consistent-type-assertions': 'off',
-    '@typescript-eslint/consistent-type-definitions': ['warn', 'interface'],
+    '@typescript-eslint/consistent-type-definitions': 'off',
     '@typescript-eslint/consistent-type-imports': 'error',
     '@typescript-eslint/explicit-function-return-type': 'warn',
     '@typescript-eslint/member-ordering': 'off',

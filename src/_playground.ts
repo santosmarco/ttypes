@@ -1,16 +1,26 @@
-import { type F } from 'ts-toolbelt'
-import { type AnyTType, TObjectArray, TTypeName, t, type Narrow } from './index'
-import { InferType, object, string } from 'yup'
+import { t } from './index'
 
-const a = t.string()
-const asda = t.tuple([t.string(), t.number(), t.string()], t.buffer()).map({
-  '0': t.array(t.nan()),
-  '1': null,
-  '2': () => t.null(),
-  foo: 'bar',
-  _: t.array(t.nan()),
-})
+const myArray = t
+  .string()
+  .min(10)
+  .max(20)
+  .pattern(/foo/)
+  .pattern(/bar/, { name: 'my bar pattern' })
+  .alphanum()
+  .url()
+  .startsWith('marco')
+  .endsWith('polo')
+  .uppercase()
+  .array()
+  .coerce()
+  .manifest({ examples: [['MARCOAAPOLO']] })
+  .toSet()
 
-type c = t.infer<typeof asda>
+const myBool = t
+  .bool()
+  .cast('number')
+  .coerce({ truthy: [1, 'true', 'hi'] })
 
-console.log(asda.manifest())
+type MyBool = t.input<typeof myBool>
+
+console.log(myBool.parse({}))

@@ -1,5 +1,4 @@
 import util from 'util'
-import type validator from 'validator'
 import {
   getGlobal,
   stringUtils,
@@ -13,7 +12,9 @@ import {
   type StripKey,
   type TParsedType,
   type objectUtils,
+  type u,
 } from './_internal'
+import { type TChecks } from './checks'
 
 /* ------------------------------------------------------------------------------------------------------------------ */
 /*                                                       TIssue                                                       */
@@ -52,38 +53,8 @@ export type EIssueKind = typeof IssueKind
 
 export type IssueKind = EIssueKind[keyof EIssueKind]
 
-/* ---------------------------------------------------- TChecks --------------------------------------------------- */
-export namespace TChecks {
-  export interface Min<V = number, RV = V> {
-    readonly check: 'min'
-    readonly expected: { readonly value: V; readonly inclusive: boolean }
-    readonly received: RV
-  }
-
-  export interface Max<V = number, RV = V> {
-    readonly check: 'max'
-    readonly expected: { readonly value: V; readonly inclusive: boolean }
-    readonly received: RV
-  }
-
-  export interface Range<V = number, RV = V> {
-    readonly check: 'range'
-    readonly expected: {
-      readonly min: { readonly value: V; readonly inclusive: boolean }
-      readonly max: { readonly value: V; readonly inclusive: boolean }
-    }
-    readonly received: RV
-  }
-
-  export interface Length {
-    readonly check: 'length'
-    readonly expected: number
-    readonly received: number
-  }
-}
-
 export type ToChecks<T extends TIssue> = ReadonlyArray<
-  LooseStripKey<T['payload'], 'received'> & { readonly message: string | undefined }
+  LooseStripKey<T['payload'], 'received' | `_${string}`> & { readonly message: string | undefined }
 >
 
 /* ----------------------------------------------------- Issues ----------------------------------------------------- */
@@ -118,14 +89,8 @@ export type InvalidLiteralIssue = IssueBase<
 export type InvalidEnumValueIssue = IssueBase<
   EIssueKind['InvalidEnumValue'],
   {
-    readonly expected: {
-      readonly values: ReadonlyArray<string | number>
-      readonly formatted: ReadonlyArray<stringUtils.Literalized<string> | stringUtils.Literalized<number>>
-    }
-    readonly received: {
-      readonly value: string | number
-      readonly formatted: stringUtils.Literalized<string> | stringUtils.Literalized<number>
-    }
+    readonly expected: { readonly values: readonly u.Primitive[]; readonly formatted: readonly u.Literalized[] }
+    readonly received: { readonly value: u.Primitive; readonly formatted: u.Literalized }
   }
 >
 
@@ -155,26 +120,22 @@ export type InvalidStringIssue = IssueBase<
   | TChecks.Min
   | TChecks.Max
   | TChecks.Length
-  | {
-      readonly check: 'pattern'
-      readonly pattern: RegExp
-      readonly options: { readonly type: 'enforce' | 'disallow'; readonly name: string }
-    }
-  | { readonly check: 'alphanum'; readonly received: string }
-  | {
-      readonly check: 'email'
-      readonly options: Readonly<Required<objectUtils.CamelCaseProperties<validator.IsEmailOptions>>>
-    }
-  | { readonly check: 'url' }
-  | { readonly check: 'cuid' }
-  | { readonly check: 'uuid' }
-  | { readonly check: 'iso_date' }
-  | { readonly check: 'iso_duration' }
-  | { readonly check: 'numeric'; readonly options: { readonly noSymbols: boolean } }
-  | { readonly check: 'base64'; readonly options: { readonly paddingRequired: boolean; readonly urlSafe: boolean } }
-  | { readonly check: 'starts_with'; readonly prefix: string }
-  | { readonly check: 'ends_with'; readonly suffix: string }
-  | { readonly check: 'contains'; readonly substring: string }
+  | TChecks.Format<'alphanum'>
+  | TChecks.Format<'cuid'>
+  | TChecks.Format<'email'>
+  | TChecks.Format<'iso_date'>
+  | TChecks.Format<'iso_duration'>
+  | TChecks.Format<'numeric'>
+  | TChecks.Format<'url'>
+  | TChecks.Format<'uuid'>
+  | TChecks.Format<'base64', { readonly options: { readonly paddingRequired: boolean; readonly urlSafe: boolean } }>
+  | TChecks.Make<
+      'pattern',
+      { readonly pattern: RegExp; readonly options: { readonly type: 'enforce' | 'disallow'; readonly name: string } }
+    >
+  | TChecks.Make<'starts_with', { readonly expected: string }>
+  | TChecks.Make<'ends_with', { readonly expected: string }>
+  | TChecks.Make<'includes', { readonly expected: string }>
 >
 
 export type InvalidNumberIssue = IssueBase<
@@ -210,13 +171,20 @@ export type InvalidDateIssue = IssueBase<
 
 export type InvalidArrayIssue = IssueBase<
   EIssueKind['InvalidArray'],
-  TChecks.Min | TChecks.Max | TChecks.Length | { readonly check: 'unique' } | { readonly check: 'sorted' }
+  | TChecks.Min
+  | TChecks.Max
+  | TChecks.Length
+  | TChecks.Make<
+      'unique',
+      { readonly compareFn: ((a: unknown, b: unknown) => boolean) | undefined; readonly convert: boolean }
+    >
+  | TChecks.Make<
+      'sorted',
+      { readonly sortFn: ((a: unknown, b: unknown) => number) | undefined; readonly convert: boolean }
+    >
 >
 
-export type InvalidSetIssue = IssueBase<
-  EIssueKind['InvalidSet'],
-  TChecks.Min | TChecks.Max | { readonly check: 'size'; readonly expected: number; readonly received: number }
->
+export type InvalidSetIssue = IssueBase<EIssueKind['InvalidSet'], TChecks.Min | TChecks.Max | TChecks.Size>
 
 export type InvalidTupleIssue = IssueBase<EIssueKind['InvalidTuple'], TChecks.Length>
 
@@ -238,11 +206,7 @@ export type InvalidBufferIssue = IssueBase<EIssueKind['InvalidBuffer'], TChecks.
 
 export type ForbiddenIssue = IssueBase<EIssueKind['Forbidden']>
 
-export interface CustomIssue {
-  readonly path?: ParsePath
-  readonly message?: string
-  readonly payload?: Record<string, unknown>
-}
+export type CustomIssue = IssueBase<EIssueKind['Custom'], Record<string, unknown>>
 
 export type TIssue<K extends IssueKind = IssueKind> = {
   [IssueKind.Required]: RequiredIssue
@@ -268,7 +232,7 @@ export type TIssue<K extends IssueKind = IssueKind> = {
   [IssueKind.InvalidRecord]: InvalidRecordIssue
   [IssueKind.InvalidBuffer]: InvalidBufferIssue
   [IssueKind.Forbidden]: ForbiddenIssue
-  [IssueKind.Custom]: CustomIssue & { readonly kind: EIssueKind['Custom'] }
+  [IssueKind.Custom]: CustomIssue
 }[K]
 
 /* ------------------------------------------------------------------------------------------------------------------ */
@@ -302,7 +266,7 @@ export const DEFAULT_ERROR_MAP: TErrorMapFn = (issue) => {
         issue.payload.received.formatted
       )}`
     case IssueKind.InvalidEnumValue:
-      return `Expected one of ${issue.payload.expected.formatted.join(' | ')}, got ${issue.payload.received.formatted}`
+      return `Expected one of: ${issue.payload.expected.formatted.join(' | ')}; got ${issue.payload.received.formatted}`
     case IssueKind.InvalidThisType:
       return 'Invalid `this` context type'
     case IssueKind.InvalidArguments:
@@ -328,7 +292,8 @@ export const DEFAULT_ERROR_MAP: TErrorMapFn = (issue) => {
         return `String must contain ${issue.payload.expected.inclusive ? 'at most' : 'under'} ${
           issue.payload.expected.value
         } character(s)`
-      if (issue.payload.check === 'length') return `String must contain exactly ${issue.payload.expected} character(s)`
+      if (issue.payload.check === 'length')
+        return `String must contain exactly ${issue.payload.expected.value} character(s)`
       if (issue.payload.check === 'pattern')
         return `String must ${issue.payload.options.type === 'enforce' ? 'match' : 'not match'} the pattern: ${
           issue.payload.options.name
@@ -342,9 +307,9 @@ export const DEFAULT_ERROR_MAP: TErrorMapFn = (issue) => {
       if (issue.payload.check === 'iso_duration') return 'String must be a valid ISO duration'
       if (issue.payload.check === 'base64') return 'String must be a valid base64 string'
       if (issue.payload.check === 'numeric') return 'String must be numeric'
-      if (issue.payload.check === 'starts_with') return `String must start with "${issue.payload.prefix}"`
-      if (issue.payload.check === 'ends_with') return `String must end with "${issue.payload.suffix}"`
-      if (issue.payload.check === 'contains') return `String must contain the substring "${issue.payload.substring}"`
+      if (issue.payload.check === 'starts_with') return `String must start with "${issue.payload.expected}"`
+      if (issue.payload.check === 'ends_with') return `String must end with "${issue.payload.expected}"`
+      if (issue.payload.check === 'includes') return `String must contain the substring "${issue.payload.expected}"`
       return TError.assertNever(issue.payload)
     case IssueKind.InvalidNumber:
       if (issue.payload.check === 'min')
@@ -417,7 +382,7 @@ export const DEFAULT_ERROR_MAP: TErrorMapFn = (issue) => {
         return `Array must contain ${issue.payload.expected.inclusive ? 'at most' : 'under'} ${
           issue.payload.expected.value
         } item(s)`
-      if (issue.payload.check === 'length') return `Array must contain exactly ${issue.payload.expected} item(s)`
+      if (issue.payload.check === 'length') return `Array must contain exactly ${issue.payload.expected.value} item(s)`
       if (issue.payload.check === 'unique') return 'Array must contain unique items'
       if (issue.payload.check === 'sorted') return 'Array must be sorted'
       return TError.assertNever(issue.payload)
@@ -430,7 +395,7 @@ export const DEFAULT_ERROR_MAP: TErrorMapFn = (issue) => {
         return `Set must contain ${issue.payload.expected.inclusive ? 'at most' : 'under'} ${
           issue.payload.expected.value
         } item(s)`
-      if (issue.payload.check === 'size') return `Set must contain exactly ${issue.payload.expected} item(s)`
+      if (issue.payload.check === 'size') return `Set must contain exactly ${issue.payload.expected.value} item(s)`
       return TError.assertNever(issue.payload)
     case IssueKind.InvalidTuple:
       return 'Invalid tuple'
@@ -443,7 +408,7 @@ export const DEFAULT_ERROR_MAP: TErrorMapFn = (issue) => {
         return `Buffer must contain ${issue.payload.expected.inclusive ? 'at most' : 'under'} ${
           issue.payload.expected.value
         } byte(s)`
-      if (issue.payload.check === 'length') return `Buffer must contain exactly ${issue.payload.expected} byte(s)`
+      if (issue.payload.check === 'length') return `Buffer must contain exactly ${issue.payload.expected.value} byte(s)`
       return TError.assertNever(issue.payload)
     case IssueKind.Forbidden:
       return 'Forbidden'

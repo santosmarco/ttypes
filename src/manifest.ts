@@ -1,11 +1,12 @@
-import type { AnyTType, ManifestOf, TParsedType, TStringTransformKind, objectUtils, stringUtils } from './_internal'
+import { TParsedType } from './parse'
+import type { ManifestOf, TType } from './types/_internal'
+import { u } from './utils'
 
 /* ------------------------------------------------------------------------------------------------------------------ */
 /*                                                      TManifest                                                     */
 /* ------------------------------------------------------------------------------------------------------------------ */
 
-export interface TManifest<T = unknown> {
-  readonly type: TParsedType
+export interface PublicManifest<T = unknown> {
   readonly title?: string
   readonly summary?: string
   readonly description?: string
@@ -15,151 +16,186 @@ export interface TManifest<T = unknown> {
   readonly unit?: string
   readonly deprecated?: boolean
   readonly meta?: Readonly<Record<string, unknown>>
+}
+
+export type ManifestType =
+  | string
+  | u.RequireAtLeastOne<{ readonly anyOf: readonly ManifestType[]; readonly allOf: readonly ManifestType[] }>
+
+export interface Manifest<T = unknown> extends PublicManifest<T> {
+  readonly type: ManifestType
   readonly required: boolean
   readonly nullable: boolean
   readonly readonly: boolean
 }
 
-export const TManifest = {
-  base<T>(type: TParsedType): TManifest<T> {
-    return { type, required: true, nullable: false, readonly: false }
-  },
-
-  nullish<T>(type: TParsedType): TManifest.Nullish<T> {
-    return { ...TManifest.base(type), required: false, nullable: true }
-  },
-
-  length(
-    min: { readonly value: number; readonly inclusive: boolean } | undefined,
-    max: { readonly value: number; readonly inclusive: boolean } | undefined,
-    length: number | undefined
-  ): TManifest.Length {
-    if (length !== undefined) {
-      return TManifest.length({ value: length, inclusive: true }, { value: length, inclusive: true }, undefined)
-    }
-
-    return {
-      ...(min ? { minLength: min.value } : {}),
-      ...(min ? { exclusiveMinimum: !min.inclusive } : {}),
-      ...(max ? { maxLength: max.value } : {}),
-      ...(max ? { exclusiveMaximum: !max.inclusive } : {}),
-    }
-  },
-
-  minMax(
-    min: { readonly value: number; readonly inclusive: boolean } | undefined,
-    max: { readonly value: number; readonly inclusive: boolean } | undefined,
-    range:
-      | {
-          readonly min: { readonly value: number; readonly inclusive: boolean }
-          readonly max: { readonly value: number; readonly inclusive: boolean }
-        }
-      | undefined
-  ): TManifest.MinMax {
-    if (range) {
-      return TManifest.minMax(range.min, range.max, undefined)
-    }
-
-    return {
-      ...(min ? { minimum: min.value } : {}),
-      ...(min ? { exclusiveMinimum: !min.inclusive } : {}),
-      ...(max ? { maximum: max.value } : {}),
-      ...(max ? { exclusiveMaximum: !max.inclusive } : {}),
-    }
-  },
-}
-
 export namespace TManifest {
-  export type Public<T extends AnyTType> = Pick<T['_manifest'], objectUtils.OptionalKeysOf<TManifest>> extends infer X
-    ? { [K in keyof X]: X[K] }
-    : never
+  export interface Base<T = unknown> extends Manifest<T> {
+    readonly required: true
+    readonly nullable: false
+    readonly readonly: false
+  }
 
-  export interface Optional<T> extends Omit<TManifest<T>, 'required'> {
+  export interface Optional<T> extends u.Except<Base<T>, 'required'> {
     readonly required: false
   }
 
-  export interface Nullable<T> extends Omit<TManifest<T>, 'nullable'> {
-    readonly nullable: true
-  }
-
-  export interface Nullish<T> extends Omit<TManifest<T>, 'required' | 'nullable'> {
+  export interface Nullish<T> extends u.Except<Base<T>, 'required' | 'nullable'> {
     readonly required: false
     readonly nullable: true
   }
 
-  export interface Length {
-    readonly minLength?: number
-    readonly exclusiveMinimum?: boolean
-    readonly maxLength?: number
-    readonly exclusiveMaximum?: boolean
+  export type Wrap<T extends TType, In, Ext extends Partial<Manifest<In>> | null = null> = u.Except<
+    Base<In>,
+    'required' | 'nullable' | 'readonly'
+  > & {
+    readonly underlying: ManifestOf<T>
+    readonly required: 'required' extends keyof Ext ? Ext['required'] : ManifestOf<T>['required']
+    readonly nullable: 'nullable' extends keyof Ext ? Ext['nullable'] : ManifestOf<T>['nullable']
+    readonly readonly: 'readonly' extends keyof Ext ? Ext['readonly'] : ManifestOf<T>['readonly']
   }
 
-  export type StringFormat = 'email' | 'url' | 'cuid' | 'uuid' | 'iso_date' | 'iso_duration' | 'base64' | 'numeric'
-
-  export interface String<T> extends TManifest<T>, Length {
-    readonly formats?: readonly StringFormat[]
-    readonly transforms?: readonly TStringTransformKind[]
-    readonly patterns?: ReadonlyArray<RegExp | { readonly regex: RegExp; readonly name: string }>
-    readonly prefix?: string
-    readonly suffix?: string
-    readonly substring?: string
-    readonly coerce: boolean
-  }
-
-  export interface MinMax {
-    readonly minimum?: number
-    readonly exclusiveMinimum?: boolean
-    readonly maximum?: number
-    readonly exclusiveMaximum?: boolean
-  }
-
-  export interface Number<T> extends TManifest<T>, MinMax {
-    readonly multipleOf?: number
-    readonly coerce: boolean
-    readonly cast: boolean
-  }
-
-  export interface Buffer<T> extends TManifest<T>, Length {
-    readonly coerce: boolean
-  }
-
-  export interface Literal<T extends string | number | bigint | boolean | symbol | null | undefined>
-    extends TManifest<T> {
-    readonly literal: stringUtils.Literalized<T>
+  export interface Literal<T extends u.Primitive> extends u.Except<Base<T>, 'required' | 'nullable'> {
+    readonly literal: u.Literalized<T>
     readonly required: T extends undefined ? false : true
     readonly nullable: T extends null ? true : false
   }
+}
 
-  export interface Enum<T extends ReadonlyArray<string | number>, Out = T[number]> extends TManifest<Out> {
-    readonly enum: T
+export class TManifest<M> {
+  private constructor(private readonly _manifest: M) {}
+
+  /* ---------------------------------------------------------------------------------------------------------------- */
+
+  get value(): M {
+    return this._manifest
   }
 
-  export interface Tuple<T> extends TManifest<T> {
-    readonly items: readonly TManifest[]
-    readonly rest: TManifest | null
+  /* ---------------------------------------------------------------------------------------------------------------- */
+
+  with<M_>(manifest: u.Narrow<M_>): TManifest<u.Merge<M, M_>> {
+    return this._update(u.widen(manifest))
   }
 
-  export interface Record<K extends AnyTType<PropertyKey, PropertyKey>, V extends AnyTType, Out>
-    extends TManifest<Out> {
-    readonly keys: ManifestOf<K>
-    readonly values: ManifestOf<V>
-    readonly coerce: boolean
+  setProp<P extends string, V>(prop: P, value: u.Narrow<V>): TManifest<u.Merge<M, { readonly [K in P]: V }>> {
+    return this._update({ [prop]: value } as { [K in P]: V })
   }
 
-  export interface Map<K extends AnyTType, V extends AnyTType, Out> extends TManifest<Out> {
-    readonly keys: ManifestOf<K>
-    readonly values: ManifestOf<V>
+  examples<T extends readonly unknown[]>(examples: T | undefined): TManifest<u.Merge<M, { readonly examples?: T }>> {
+    return this._update({ examples })
   }
 
-  export interface Never extends TManifest<never> {
-    readonly forbidden: true
+  required<T extends boolean = true>(value = true as T): TManifest<u.Merge<M, { readonly required: T }>> {
+    return this._update({ required: value })
   }
 
-  export interface Union<T> extends TManifest<T> {
-    readonly anyOf: readonly TManifest[]
+  nullable<T extends boolean = true>(value = true as T): TManifest<u.Merge<M, { readonly nullable: T }>> {
+    return this._update({ nullable: value })
   }
 
-  export interface Intersection<T> extends TManifest<T> {
-    readonly allOf: readonly TManifest[]
+  wrap<T extends TType>(underlying: ManifestOf<T>): TManifest<u.Merge<M, { readonly underlying: ManifestOf<T> }>> {
+    return this._update({ underlying })
   }
+
+  element<T extends TType>(element: ManifestOf<T>): TManifest<u.Merge<M, { readonly element: ManifestOf<T> }>> {
+    return this._update({ element })
+  }
+
+  literal<T extends string>(value: T): TManifest<u.Merge<M, { readonly literal: T }>> {
+    return this._update({ literal: value })
+  }
+
+  /* ---------------------------------------------------------------------------------------------------------------- */
+
+  private _update<M_>(manifest: M_): TManifest<u.Merge<M, M_>> {
+    return new TManifest(u.merge(this._manifest, manifest))
+  }
+
+  /* ---------------------------------------------------------------------------------------------------------------- */
+
+  static type<T>(type: ManifestType): TManifest<TManifest.Base<T>> {
+    return new TManifest(this.base(type))
+  }
+
+  static base<T>(type?: ManifestType): TManifest.Base<T> {
+    let unwrappedType: string | { anyOf?: readonly ManifestType[]; allOf?: readonly ManifestType[] } =
+      TParsedType.Unknown
+
+    if (typeof type === 'string') {
+      unwrappedType = type
+    } else {
+      const [unionResult, intersectionResult] = [
+        type?.anyOf && unwrapManifestType(type?.anyOf, 'union'),
+        type?.allOf && unwrapManifestType(type?.allOf, 'intersection'),
+      ]
+
+      unwrappedType = {
+        ...(unionResult && { anyOf: [...unionResult.union] }),
+        ...(intersectionResult && { allOf: [...intersectionResult.intersection] }),
+      }
+    }
+
+    if (typeof unwrappedType !== 'string' && !('allOf' in unwrappedType) && unwrappedType.anyOf?.length === 1) {
+      unwrappedType = unwrappedType.anyOf?.[0]
+    }
+
+    if (typeof unwrappedType !== 'string' && !('anyOf' in unwrappedType) && unwrappedType.allOf?.length === 1) {
+      unwrappedType = unwrappedType.allOf?.[0]
+    }
+
+    return {
+      type: unwrappedType as ManifestType,
+      required: true,
+      nullable: false,
+      readonly: false,
+    }
+  }
+}
+
+/* ------------------------------------------------------------------------------------------------------------------ */
+
+const unwrapManifestType = (
+  types: readonly ManifestType[],
+  mode: 'union' | 'intersection'
+): {
+  readonly union: Set<Exclude<ManifestType, { readonly anyOf: readonly ManifestType[] }>>
+  readonly intersection: Set<Exclude<ManifestType, { readonly allOf: readonly ManifestType[] }>>
+} => {
+  const union = new Set<Exclude<ManifestType, { readonly anyOf: readonly ManifestType[] }>>()
+  const intersection = new Set<Exclude<ManifestType, { readonly allOf: readonly ManifestType[] }>>()
+
+  for (const type of types) {
+    if (typeof type === 'string') {
+      if (mode === 'union') {
+        union.add(type)
+      } else {
+        intersection.add(type)
+      }
+    } else {
+      const [unionResult, intersectionResult] = type.anyOf
+        ? type.allOf
+          ? [unwrapManifestType(type.anyOf, 'union'), unwrapManifestType(type.allOf, 'intersection')]
+          : [unwrapManifestType(type.anyOf, 'union'), undefined]
+        : type.allOf
+        ? [undefined, unwrapManifestType(type.allOf, 'intersection')]
+        : [undefined, undefined]
+
+      unionResult?.union.forEach((t) => union.add(t))
+      intersectionResult?.intersection.forEach((t) => intersection.add(t))
+    }
+  }
+
+  if (union.has(TParsedType.Never) && union.size > 1) {
+    union.delete(TParsedType.Never)
+  }
+
+  if (union.has(TParsedType.Any)) {
+    union.clear()
+    union.add(TParsedType.Any)
+  } else if (union.has(TParsedType.Unknown)) {
+    union.clear()
+    union.add(TParsedType.Unknown)
+  }
+
+  return { union, intersection }
 }

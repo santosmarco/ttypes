@@ -1,4 +1,4 @@
-import * as t from './_internal'
-export * from './_internal'
+import * as t from './_external'
+export * from './_external'
 export { t }
 export default t
