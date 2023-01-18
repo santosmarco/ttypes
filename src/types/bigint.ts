@@ -87,11 +87,7 @@ export class TBigInt<Coerce extends boolean = false, Cast extends TBigIntCasting
         }
       } else if (check.check === 'multiple') {
         if (data % check.expected !== BigInt(0)) {
-          ctx.addIssue(
-            IssueKind.InvalidBigInt,
-            { check: check.check, expected: check.expected, received: data },
-            check.message
-          )
+          ctx.addIssue(IssueKind.InvalidBigInt, { check: check.check, expected: check.expected }, check.message)
           if (ctx.common.abortEarly) {
             return ctx.abort()
           }

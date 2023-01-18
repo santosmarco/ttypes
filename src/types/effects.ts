@@ -55,8 +55,8 @@ export class TEffects<T extends TType, O = OutputOf<T>, I = InputOf<T>>
   extends TType<O, TEffectsDef<T>, I>
   implements TUnwrappable<T>
 {
-  get _manifest(): ManifestOf<T> {
-    return { ...this.underlying.manifest() }
+  get _manifest() {
+    return this.underlying.manifest()
   }
 
   /* ---------------------------------------------------------------------------------------------------------------- */

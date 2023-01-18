@@ -1,6 +1,6 @@
 import type { TDef } from '../def'
 import { IssueKind } from '../issues'
-import { TManifest, type TManifest } from '../manifest'
+import { TManifest } from '../manifest'
 import type { TOptions } from '../options'
 import { TParsedType, type ParseContextOf, type ParseResultOf } from '../parse'
 import { TTypeName } from '../type-names'
@@ -10,8 +10,6 @@ import { TType, type InputOf, type OutputOf, type TUnwrappable, type UnwrapDeep 
 /* ------------------------------------------------------------------------------------------------------------------ */
 /*                                                      TDefined                                                      */
 /* ------------------------------------------------------------------------------------------------------------------ */
-
-export type TDefinedManifest<T extends TType> = TManifest.Wrap<T, u.Defined<InputOf<T>>, { readonly required: true }>
 
 export interface TDefinedDef<T extends TType> extends TDef {
   readonly typeName: TTypeName.Defined
@@ -68,12 +66,6 @@ export type AnyTDefined = TDefined<TType>
 /* ------------------------------------------------------------------------------------------------------------------ */
 /*                                                    TNonNullable                                                    */
 /* ------------------------------------------------------------------------------------------------------------------ */
-
-export type TNonNullableManifest<T extends TType> = TManifest.Wrap<
-  T,
-  NonNullable<InputOf<T>>,
-  { readonly required: true; readonly nullable: false }
->
 
 export interface TNonNullableDef<T extends TType> extends TDef {
   readonly typeName: TTypeName.NonNullable

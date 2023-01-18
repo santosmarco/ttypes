@@ -2,24 +2,16 @@ import type { TDef } from '../def'
 import { TManifest } from '../manifest'
 import { TParsedType, type ParseContextOf, type ParseResultOf } from '../parse'
 import { TTypeName } from '../type-names'
-import { type u } from '../utils'
-import {
-  TType,
-  type InputOf,
-  type OutputOf,
-  type TObject,
-  type TObjectShape,
-  type TTuple,
-  type TTupleItems,
-} from './_internal'
+import type { u } from '../utils'
+import { TType, type InputOf, type OutputOf, type TObject, type TObjectShape, type TTuple } from './_internal'
 
 /* ----------------------------------------------------------------------------------------------------------------- - */
 /*                                                        TRef                                                        */
 /* ------------------------------------------------------------------------------------------------------------------ */
 
-export type TRefContext = TObjectShape | TTupleItems
+export type TRefContext = TObjectShape | readonly TType[]
 
-export type TTuplePaths<T extends TTupleItems> = u.ConditionalOmit<
+export type TTuplePaths<T extends readonly TType[]> = u.ConditionalOmit<
   u.OmitIndexSignature<{ [K in keyof T as `${K & number}` extends `${number}` ? K : never]: K }>,
   never
 > extends infer X
@@ -145,8 +137,46 @@ export class TRef<R extends string, Ctx extends TRefContext | null> extends TTyp
     return current.clone()
   }
 
+  /* ---------------------------------------------------------------------------------------------------------------- */
+
   static create<R extends string>(ref: R): TRef<R, null> {
     return new TRef({ typeName: TTypeName.Ref, $ref: ref, $ctx: null, options: {} })
+  }
+
+  static _internals = {
+    resolveRef(ref: string, ctx: TRefContext) {
+      const path = String(ref)
+        .split(/[.[\]]/g)
+        .filter(Boolean)
+
+      let current = ctx[(Number.isNaN(Number(path[0])) ? path[0] : Number(path[0])) as keyof TRefContext] as TType
+
+      for (const p of path.slice(1)) {
+        const numeric = Number(p)
+
+        if (Number.isNaN(numeric)) {
+          if (current.isT(TTypeName.Object)) {
+            current = current.shape[p]
+          } else if (current.isT(TTypeName.Union)) {
+            const next = current.members.find((m) => m.isT(TTypeName.Object) && p in m.shape)
+
+            if (!next) {
+              throw new Error(`Unable to resolve path for ref: ${ref}`)
+            }
+
+            current = next
+          } else {
+            throw new Error(`Unable to resolve path for ref: ${ref}`)
+          }
+        } else if (current.isT(TTypeName.Tuple)) {
+          current = current.items[numeric]
+        } else {
+          throw new Error(`Unable to resolve path for ref: ${ref}`)
+        }
+      }
+
+      return current.clone()
+    },
   }
 }
 

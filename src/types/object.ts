@@ -1,3 +1,4 @@
+import _ from 'lodash'
 import type { TDef } from '../def'
 import { IssueKind } from '../issues'
 import { TManifest } from '../manifest'
@@ -91,27 +92,39 @@ export type TObjectValues<S extends TObjectShape> = u.UnionToTuple<S[keyof S]> e
   : TNever
 
 export type ModifyShape<
-  Mod extends 'partial' | 'required',
+  Mod extends 'partial' | 'required' | 'schema',
   Depth extends 'flat' | 'deep',
   S extends TObjectShape,
-  K extends Depth extends 'flat' ? ReadonlyArray<keyof S> : never = Depth extends 'flat'
+  K extends Mod extends 'schema' ? TType : Depth extends 'flat' ? ReadonlyArray<keyof S> : never = Mod extends 'schema'
+    ? TType
+    : Depth extends 'flat'
     ? ReadonlyArray<keyof S>
     : never
 > = {
   partial: {
-    flat: { [K_ in keyof S]: K_ extends K[number] ? TOptional<S[K_]> : S[K_] }
+    flat: { [K_ in keyof S]: K_ extends (K & readonly unknown[])[number] ? TOptional<S[K_]> : S[K_] }
     deep: {
       [K in keyof S]: TOptional<
-        S[K] extends TObject<infer S_, infer UK, infer C> ? TObject<ModifyShape<Mod, Depth, S_>, UK, C> : S[K]
+        S[K] extends TObject<infer S_, infer UK, infer C> ? TObject<ModifyShape<'partial', Depth, S_>, UK, C> : S[K]
       >
     }
   }
   required: {
-    flat: { [K_ in keyof S]: K_ extends K[number] ? TDefined<S[K_]> : S[K_] }
+    flat: { [K_ in keyof S]: K_ extends (K & readonly unknown[])[number] ? TDefined<S[K_]> : S[K_] }
     deep: {
       [K in keyof S]: TDefined<
-        S[K] extends TObject<infer S_, infer UK, infer C> ? TObject<ModifyShape<Mod, Depth, S_>, UK, C> : S[K]
+        S[K] extends TObject<infer S_, infer UK, infer C> ? TObject<ModifyShape<'required', Depth, S_>, UK, C> : S[K]
       >
+    }
+  }
+  schema: {
+    flat: { [K_ in keyof S]: K }
+    deep: {
+      [K_ in keyof S]: S[K_] extends TObject<infer S_, infer UK, infer C>
+        ? K extends TType
+          ? TObject<ModifyShape<'schema', Depth, S_, K>, UK, C>
+          : never
+        : K
     }
   }
 }[Mod][Depth]
@@ -119,24 +132,17 @@ export type ModifyShape<
 export type PickOptionalShape<S extends TObjectShape> = {
   [K in keyof S as undefined extends OutputOf<S[K]> ? K : never]: S[K]
 }
+
 export type PickRequiredShape<S extends TObjectShape> = {
   [K in keyof S as undefined extends OutputOf<S[K]> ? never : K]: S[K]
-}
-
-export type MakeSchemaShape<S extends TObjectShape, T extends TType, D extends 'flat' | 'deep'> = {
-  [K in keyof S]: S[K] extends TObject<infer S_, infer UK, infer C>
-    ? D extends 'deep'
-      ? TObject<MakeSchemaShape<S_, T, D>, UK, C>
-      : T
-    : T
 }
 
 export type TObjectCondition<T extends AnyTObject = AnyTObject> = {
   [K in TObjectShapePaths<T['shape']>]: {
     readonly key: K
   } & u.RequireExactlyOne<{
-    readonly is: OutputOf<ReachSchema<K, T['shape']>>
-    readonly not: OutputOf<ReachSchema<K, T['shape']>>
+    readonly is: any
+    readonly not: any
     readonly exists: boolean
   }> &
     u.RequireAtLeastOne<{
@@ -180,8 +186,39 @@ export class TObject<
       return ctx.invalidType({ expected: TParsedType.Object }).abort()
     }
 
-    const { shape, unknownKeys, catchall } = this._def
+    let parser: AnyTObject = this.clone()
     const { data } = ctx
+
+    for (const condition of this._def.conditions) {
+      const value = _.get(data, condition.key)
+      if (condition.is) {
+        parser =
+          ((
+            condition.is instanceof TType
+              ? condition.is.guard(value)
+              : u.isFunction(condition.is)
+              ? condition.is(value)
+              : condition.is === value
+          )
+            ? condition.then?.(parser)
+            : condition.otherwise?.(parser)) ?? parser
+      } else if (condition.not) {
+        parser =
+          ((
+            condition.not instanceof TType
+              ? condition.not.guard(value)
+              : u.isFunction(condition.not)
+              ? condition.not(value)
+              : condition.not === value
+          )
+            ? condition.otherwise?.(parser)
+            : condition.then?.(parser)) ?? parser
+      } else if (condition.exists) {
+        parser = (value === undefined ? condition.otherwise?.(parser) : condition.then?.(parser)) ?? parser
+      }
+    }
+
+    const { shape, unknownKeys, catchall } = (parser as SomeTObject)._def
 
     const extraKeys: PropertyKey[] = []
     if (!catchall || unknownKeys !== 'strip') {
@@ -415,19 +452,25 @@ export class TObject<
     )
   }
 
-  toSchema<T extends TType>(type: T, options?: { readonly deep?: true }): TObject<MakeSchemaShape<S, T, 'deep'>, UK, C>
-  toSchema<T extends TType>(type: T, options: { readonly deep: false }): TObject<MakeSchemaShape<S, T, 'flat'>, UK, C>
+  toSchema<T extends TType>(
+    type: T,
+    options?: { readonly deep?: true }
+  ): TObject<ModifyShape<'schema', 'deep', S, T>, UK, C>
+  toSchema<T extends TType>(
+    type: T,
+    options: { readonly deep: false }
+  ): TObject<ModifyShape<'schema', 'flat', S, T>, UK, C>
   toSchema<T extends TType>(
     type: T,
     options?: { readonly deep?: boolean }
-  ): TObject<MakeSchemaShape<S, T, 'flat' | 'deep'>, UK, C> {
+  ): TObject<ModifyShape<'schema', 'flat' | 'deep', S, T>, UK, C> {
     return this._setShapeDeep({
       onObject: (t) => (options?.deep === false ? type : t.toSchema(type)),
       onOthers: () => type,
     })
   }
 
-  stringify(): TObject<MakeSchemaShape<S, TString, 'flat'>, UK, C> {
+  stringify(): TObject<ModifyShape<'schema', 'flat', S, TString>, UK, C> {
     return this.toSchema(TString.create(), { deep: false })
   }
 
@@ -438,7 +481,7 @@ export class TObject<
     | ReturnType<Extract<Conditions[number], { readonly otherwise: u.Fn }>['otherwise']> {
     return new TObject({
       ...this._def,
-      conditions: [...this._def.conditions, ...conditions],
+      conditions: [...this._def.conditions, ...(conditions as unknown as TObjectCondition[])],
     }) as
       | ReturnType<Extract<Conditions[number], { readonly then: u.Fn }>['then']>
       | ReturnType<Extract<Conditions[number], { readonly otherwise: u.Fn }>['otherwise']>

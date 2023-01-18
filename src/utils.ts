@@ -1,6 +1,6 @@
 import _ from 'lodash'
 import type * as tf from 'type-fest'
-import { type BRANDED, type TType } from './types/_internal'
+import { type BRANDED } from './types/_internal'
 
 export const isArray = <T>(x: T | readonly T[]): x is readonly T[] => Array.isArray(x)
 export const isAsync = <T>(x: T | Promise<T>): x is Promise<T> => x instanceof Promise
@@ -13,9 +13,10 @@ export const conditionalOmit = <T extends Record<string, unknown>>(
 
 export namespace u {
   export type Fn = (...args: readonly any[]) => any
-  export type Ctor = abstract new (...args: readonly unknown[]) => unknown
+  export type Ctor =
+    | (abstract new (...args: readonly unknown[]) => unknown)
+    | (new (...args: readonly unknown[]) => unknown)
   export type AnyRecord = Record<PropertyKey, unknown>
-
   export type BuiltIn =
     | { readonly [Symbol.toStringTag]: string }
     | Fn
@@ -31,6 +32,18 @@ export namespace u {
     | RegExp
   export type Primitive = string | number | bigint | boolean | symbol | null | undefined
   export type Falsy = false | '' | 0 | 0n | null | undefined
+  export type TypedArray =
+    | Int8Array
+    | Uint8Array
+    | Uint8ClampedArray
+    | Int16Array
+    | Uint16Array
+    | Int32Array
+    | Uint32Array
+    | Float32Array
+    | Float64Array
+    | BigInt64Array
+    | BigUint64Array
 
   export type Not<T, U> = T extends U ? never : T
   export type Defined<T> = Not<T, undefined>
@@ -60,27 +73,44 @@ export namespace u {
     ? _Res
     : UnionToTuple<Exclude<T, GetUnionLast<T>>, [GetUnionLast<T>, ..._Res]>
 
-  export type AssertTTypes<T extends readonly unknown[]> = Try<T, readonly TType[]>
-
   export const invert = <T extends boolean>(x: T): T extends true ? false : true => !x as T extends true ? false : true
 }
 
 export namespace u {
-  export const isArray = <T>(x: T | T[]): x is T[] => _.isArray(x)
-  export const isFalsy = (x: unknown): x is Falsy => !x
-  export const isFunction = (x: unknown): x is (...args: readonly unknown[]) => unknown => _.isFunction(x)
-  export const isPlainObject = (x: unknown): x is AnyRecord => _.isPlainObject(x)
-  export const isSet = <T>(x: T | Set<T>): x is Set<T> => _.isSet(x)
-  export const isPrimitive = (x: unknown): x is Primitive =>
-    typeof x === 'string' ||
-    typeof x === 'number' ||
-    typeof x === 'bigint' ||
-    typeof x === 'boolean' ||
-    typeof x === 'symbol' ||
-    x === null ||
-    x === undefined
+  export const isArray = (x: unknown): x is readonly unknown[] => _.isArray(x)
   export const isAsync = <T>(x: T | Promise<T>): x is Promise<T> =>
     Boolean(x && (typeof x === 'object' || typeof x === 'function') && 'then' in x && typeof x.then === 'function')
+  export const isBigInt = (x: unknown): x is bigint => typeof x === 'bigint'
+  export const isBoolean = (x: unknown): x is boolean => typeof x === 'boolean'
+  export const isBuffer = (x: unknown): x is Buffer => _.isBuffer(x)
+  export const isDate = (x: unknown): x is Date => _.isDate(x)
+  export const isFalsy = (x: unknown): x is Falsy => !x
+  export const isFunction = (x: unknown): x is Fn => _.isFunction(x)
+  export const isMap = (x: unknown): x is Map<unknown, unknown> => _.isMap(x)
+  export const isNil = (x: unknown): x is null | undefined => _.isNil(x)
+  export const isNull = (x: unknown): x is null => _.isNull(x)
+  export const isNumber = (x: unknown): x is number => _.isNumber(x)
+  export const isPlainObject = (x: unknown): x is AnyRecord => _.isPlainObject(x)
+  export const isRegExp = (x: unknown): x is RegExp => _.isRegExp(x)
+  export const isSet = <T>(x: T | Set<T>): x is Set<T> => _.isSet(x)
+  export const isString = (x: unknown): x is string => _.isString(x)
+  export const isSymbol = (x: unknown): x is symbol => _.isSymbol(x)
+  export const isTypedArray = (x: unknown): x is TypedArray => _.isTypedArray(x)
+  export const isUndefined = (x: unknown): x is undefined => _.isUndefined(x)
+  export const isWeakMap = (x: unknown): x is WeakMap<object, unknown> => _.isWeakMap(x)
+  export const isWeakSet = (x: unknown): x is WeakSet<object> => _.isWeakSet(x)
+  export const isPrimitive = (x: unknown): x is Primitive =>
+    isNil(x) || isString(x) || isNumber(x) || isBigInt(x) || isBoolean(x) || isSymbol(x)
+
+  export const isConstructor = (x: unknown): x is Ctor => {
+    try {
+      // eslint-disable-next-line no-new
+      new (x as new (...args: readonly any[]) => any)()
+      return true
+    } catch {
+      return false
+    }
+  }
 }
 
 export namespace u {
@@ -162,7 +192,6 @@ export namespace u {
 
 export namespace u {
   /* ---------------------------------------------------- Numeric --------------------------------------------------- */
-
   export type Numeric = number | bigint
   export type Zero = 0 | 0n
   export type Integer<T extends Numeric> = `${T}` extends `${bigint}` ? T : never
@@ -243,7 +272,6 @@ export namespace u {
 
 export namespace u {
   /* ---------------------------------------------------- Arrays ---------------------------------------------------- */
-
   export type Head<T extends readonly unknown[], Catch = never> = T extends readonly []
     ? Catch
     : T extends readonly [infer H, ...unknown[]]
@@ -253,14 +281,14 @@ export namespace u {
   export type Tail<T extends readonly unknown[]> = T extends readonly []
     ? []
     : T extends readonly [unknown, ...infer R]
-    ? [...R]
-    : [...T]
+    ? R
+    : T
 
   export type Reverse<T extends readonly unknown[]> = T extends readonly []
     ? []
     : T extends readonly [infer H, ...infer R]
     ? [...Reverse<R>, H]
-    : [...T]
+    : T
 
   export type Last<T extends readonly unknown[], Catch = never> = Head<Reverse<T>, Catch>
 
@@ -272,18 +300,26 @@ export namespace u {
       : [H, ...Filter<R, U>]
     : never
 
-  export const head = <T extends readonly unknown[]>(arr: T): Head<T> => arr[0] as Head<T>
+  export type BuildTuple<T, N extends number, _Acc extends readonly unknown[] = []> = _Acc['length'] extends N
+    ? _Acc
+    : BuildTuple<T, N, [..._Acc, T]>
+
+  export const head = <T extends readonly unknown[], D = never>(arr: T, def?: D): Head<T, D> =>
+    (arr[0] ?? def) as Head<T, D>
   export const tail = <T extends readonly unknown[]>(arr: T): Tail<T> => arr.slice(1) as Tail<T>
   export const reverse = <T extends readonly unknown[]>(arr: T): Reverse<T> => arr.slice().reverse() as Reverse<T>
-  export const last = <T extends readonly unknown[]>(arr: T): Last<T> => head(reverse(arr))
+  export const last = <T extends readonly unknown[], D = never>(arr: T, def?: D): Last<T, D> => head(reverse(arr), def)
   export const includes = <T>(arr: Narrow<readonly T[]>, x: unknown): x is T => tail([x, ...arr]).includes(x)
+  export const filter = <T extends readonly unknown[], U>(
+    arr: T,
+    fn: (x: T[number], i: number) => x is U
+  ): Filter<T, U> => arr.filter(fn) as Filter<T, U>
   export const filterFalsy = <T>(item: T): item is Exclude<T, Falsy> => Boolean(item)
-  export const toTuple = <T>(items: readonly T[]): UnionToTuple<T> => items as UnionToTuple<T>
-  export const atLeastTwo = <T extends readonly unknown[]>(arr: T): [Head<T>, Head<Tail<T>>, ...Tail<Tail<T>>] => [
-    head(arr),
-    head(tail(arr)),
-    ...tail(tail(arr)),
-  ]
+  export const map = <T extends readonly unknown[], U>(
+    arr: T,
+    fn: (x: T[number], i: number) => U
+  ): { [K in keyof T]: U } => arr.map(fn) as { [K in keyof T]: U }
+  export const buildTuple = <T, N extends number>(x: T, n: N): BuildTuple<T, N> => Array(n).fill(x) as BuildTuple<T, N>
 }
 
 export namespace u {
@@ -293,9 +329,9 @@ export namespace u {
     : Equals<T, unknown> extends 1
     ? T
     : { [K in keyof T]: SimplifyDeep<T[K]> } & {}
+
   export type Narrow<T> = Try<T, [], _internals.Narrow<T>>
 
-  export const simplify = <T>(x: T): Simplify<T> => x as Simplify<T>
   export const widen = <T>(x: Narrow<T>): T => x as T
 
   namespace _internals {

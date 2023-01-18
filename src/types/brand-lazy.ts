@@ -14,10 +14,6 @@ export const BRAND = Symbol('BRAND')
 export type BRAND = typeof BRAND
 export type BRANDED<T, B> = T & { readonly [BRAND]: B }
 
-export interface TBrandManifest<T extends TType, B> extends TManifest.Wrap<T, InputOf<T>> {
-  readonly brand: B
-}
-
 export interface TBrandDef<T extends TType, B> extends TDef {
   readonly typeName: TTypeName.Brand
   readonly underlying: T
@@ -28,12 +24,16 @@ export class TBrand<T extends TType, B>
   extends TType<BRANDED<OutputOf<T>, B>, TBrandDef<T, B>, InputOf<T>>
   implements TUnwrappable<T>
 {
-  get _manifest(): TBrandManifest<T, B> {
+  get _manifest() {
     const underlyingManifest = this.underlying.manifest()
-
-    return TManifest.type<InputOf<this>>(underlyingManifest.type)
-      .wrap(underlyingManifest)
-      .with({ brand: this.getBrand() }).value
+    return TManifest<InputOf<T>>()({
+      type: TManifest.extract(underlyingManifest, 'type'),
+      underlying: underlyingManifest,
+      brand: this.getBrand(),
+      required: TManifest.extract(underlyingManifest, 'required'),
+      nullable: TManifest.extract(underlyingManifest, 'nullable'),
+      readonly: TManifest.extract(underlyingManifest, 'readonly'),
+    })
   }
 
   /* ---------------------------------------------------------------------------------------------------------------- */

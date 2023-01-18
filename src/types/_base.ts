@@ -28,12 +28,14 @@ import {
   TPipeline,
   TPreprocess,
   TPromise,
+  TRecord,
   TRefinement,
   TSuperDefault,
   TTransform,
   TUnion,
   type EffectCtx,
   type RefinementMessage,
+  type TString,
 } from './_internal'
 
 /* ------------------------------------------------------------------------------------------------------------------ */
@@ -50,7 +52,12 @@ export interface TDef {
 /*                                                        TType                                                       */
 /* ------------------------------------------------------------------------------------------------------------------ */
 
-export abstract class TType<Output = unknown, Def extends TDef = TDef, Input = Output> {
+export abstract class TType<
+  Output = unknown,
+  Def extends TDef = TDef,
+  Input = Output,
+  Forbidden extends readonly TType[] = []
+> {
   declare readonly $O: Output
   declare readonly $D: Def
   declare readonly $I: Input
@@ -82,7 +89,7 @@ export abstract class TType<Output = unknown, Def extends TDef = TDef, Input = O
     this.nonnullable = this.nonnullable.bind(this)
     // this.readonly = this.readonly.bind(this)
     this.array = this.array.bind(this)
-    // this.record = this.record.bind(this)
+    this.record = this.record.bind(this)
     this.promise = this.promise.bind(this)
     this.promisable = this.promisable.bind(this)
     this.or = this.or.bind(this)
@@ -250,9 +257,9 @@ export abstract class TType<Output = unknown, Def extends TDef = TDef, Input = O
     return TArray.create(this, this.options())
   }
 
-  // record(): TRecord<TString, this> {
-  //   return TRecord.create(this, this.options())
-  // }
+  record(): TRecord<TString, this> {
+    return TRecord.create(this, this.options())
+  }
 
   promise(): TPromise<this> {
     return TPromise.create(this, this.options())

@@ -1,3 +1,4 @@
+import { getGlobal } from './global'
 import * as t from './types/_internal'
 export * from './types/_internal'
 
@@ -15,9 +16,12 @@ export const definedType = t.TDefined.create
 export const enumType = t.TEnum.create
 export const falseType = t.TFalse.create
 export const falsyType = t.TFalsy.create
+export const functionType = t.TFunction.create
+export const instanceofType = t.TInstanceOf.create
 export const intersectionType = t.TIntersection.create
 export const lazyType = t.TLazy.create
 export const literalType = t.TLiteral.create
+export const mapType = t.TMap.create
 export const nanType = t.TNaN.create
 export const neverType = t.TNever.create
 export const nonnullableType = t.TNonNullable.create
@@ -32,6 +36,7 @@ export const preprocessType = t.TPreprocess.create
 export const primitiveType = t.TPrimitive.create
 export const promiseType = t.TPromise.create
 export const propertykeyType = t.TPropertyKey.create
+export const recordType = t.TRecord.create
 export const refinementType = t.TRefinement.create
 export const refType = t.TRef.create
 export const setType = t.TSet.create
@@ -45,6 +50,8 @@ export const undefinedType = t.TUndefined.create
 export const unionType = t.TUnion.create
 export const unknownType = t.TUnknown.create
 export const voidType = t.TVoid.create
+
+export const global = getGlobal
 
 export {
   anyType as any,
@@ -65,10 +72,16 @@ export {
   falseType as false,
   falsyType as falsey,
   falsyType as falsy,
+  functionType as fn,
+  functionType as func,
+  functionType as function,
+  instanceofType as instance,
+  instanceofType as instanceof,
   intersectionType as and,
   intersectionType as intersection,
   lazyType as lazy,
   literalType as literal,
+  mapType as map,
   nanType as nan,
   neverType as never,
   nonnullableType as nonnullable,
@@ -85,6 +98,7 @@ export {
   primitiveType as primitive,
   promiseType as promise,
   propertykeyType as propertykey,
+  recordType as record,
   refinementType as refine,
   refinementType as refinement,
   refType as ref,

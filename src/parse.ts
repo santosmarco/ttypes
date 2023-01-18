@@ -40,10 +40,13 @@ export enum TParsedType {
   Symbol = 'symbol',
   True = 'true',
   Tuple = 'Tuple',
+  TypedArray = 'TypedArray',
   Undefined = 'undefined',
   Union = 'Union',
   Unknown = 'unknown',
   Void = 'void',
+  WeakMap = 'WeakMap',
+  WeakSet = 'WeakSet',
   Zero = '0',
 }
 
@@ -68,16 +71,21 @@ export namespace TParsedType {
       case 'undefined':
         return TParsedType.Undefined
       case 'function':
+        if (u.isConstructor(x)) return TParsedType.Class
         return TParsedType.Function
       case 'object':
-        if (x === null) return TParsedType.Null
         if (u.isArray(x)) return TParsedType.Array
         if (u.isAsync(x)) return TParsedType.Promise
-        if (x instanceof Buffer) return TParsedType.Buffer
-        if (x instanceof Date) return TParsedType.Date
-        if (x instanceof Map) return TParsedType.Map
-        if (x instanceof RegExp) return TParsedType.RegExp
-        if (x instanceof Set) return TParsedType.Set
+        if (u.isBuffer(x)) return TParsedType.Buffer
+        if (u.isDate(x)) return TParsedType.Date
+        if (u.isFunction(x)) return TParsedType.Function
+        if (u.isMap(x)) return TParsedType.Map
+        if (u.isNull(x)) return TParsedType.Null
+        if (u.isRegExp(x)) return TParsedType.RegExp
+        if (u.isSet(x)) return TParsedType.Set
+        if (u.isTypedArray(x)) return TParsedType.TypedArray
+        if (u.isWeakMap(x)) return TParsedType.WeakMap
+        if (u.isWeakSet(x)) return TParsedType.WeakSet
         return TParsedType.Object
 
       default:
@@ -86,7 +94,7 @@ export namespace TParsedType {
   }
 
   export const Literal = (x: u.Primitive): TParsedType => {
-    if (x === null) {
+    if (u.isNull(x)) {
       return TParsedType.Null
     }
 
