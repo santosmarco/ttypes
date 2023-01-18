@@ -86,25 +86,22 @@ type myBool = t.infer<typeof myBool>
 console.log(t.null().or([t.number()]).pipe(t.number().integer().nullable()).manifest())
 const asa = t
   .object({
-    a: t.string().optional(),
-    b: t.number().optional(),
+    a: t.string().optional().nullable().nullable().defined().brand('marco'),
+    b: t.ref('c.d[1]'),
     c: t
       .object({
         a: t.string().optional(),
         b: t.number().optional().nullable(),
-        c: t.object({ dadsd: t.string().optional().nonnullable() }),
-        d: t
-          .tuple([t.string().optional(), t.number()], t.bigint())
-          .partial()
-          .map((x) => x.defined().or([t.nan()]))
-          .pop()
-          .toArray(),
+        c: t.object({ dadsd: t.bigint().optional().nonnullable().nullable() }).or([t.object({ da: t.number() })]),
+        d: t.tuple(
+          [t.string().optional(), t.number().nullable().defined().or([t.number()]).brand('marco').optional()],
+          t.bigint()
+        ),
         e: t.fn([t.string(), t.number()]).returns(t.boolean()).removeRest().thisType(t.object({})),
       })
       .nullish(),
   })
-  .deepRequired()
-  .not([t.string()])
+  .pick(['a'])
 type asa = t.infer<typeof asa>
 console.log(
   t
@@ -122,6 +119,24 @@ console.log(
     .deepRequired().shape.c.underlying.underlying.shape
 )
 
-console.log(t.tuple.fill(t.string(), 10).manifest())
+console.log(TManifest.unwrapType(asa.shape.a.manifest().type.not, 'not'))
 
-console.log(Object.prototype.toString.call(function* () {}))
+// console.log(asa.parse({ b: null }))
+
+const mycls = t.class(
+  [t.string(), t.number()],
+  t.object({
+    a: t.string(),
+    b: t.number(),
+  })
+)
+
+type casdda = t.infer<typeof mycls>
+
+class MyCls {
+  constructor(public a: string, public b: number) {}
+}
+
+console.log(mycls.parse(MyCls))
+
+const dsd = console.log(t.number().min(10).min(20).minValue)

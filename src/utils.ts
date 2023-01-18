@@ -1,6 +1,6 @@
 import _ from 'lodash'
 import type * as tf from 'type-fest'
-import { type BRANDED } from './types/_internal'
+import { type BRANDED, type TType } from './types/_internal'
 
 export const isArray = <T>(x: T | readonly T[]): x is readonly T[] => Array.isArray(x)
 export const isAsync = <T>(x: T | Promise<T>): x is Promise<T> => x instanceof Promise
@@ -73,6 +73,18 @@ export namespace u {
     ? _Res
     : UnionToTuple<Exclude<T, GetUnionLast<T>>, [GetUnionLast<T>, ..._Res]>
 
+  export const __brand = Symbol('t.__brand')
+  export type __brand = typeof __brand
+  export type Brand<T, B> = T & { readonly [__brand]: B }
+
+  export type AllKeys<T> = T extends unknown ? keyof T : never
+
+  export type LiteralUnion<T, U extends Primitive> = T | (U & Record<never, never>)
+
+  declare const TYPE_ERROR: unique symbol
+  export type $TypeError<Msg extends string> = [typeof TYPE_ERROR, Msg]
+  export type $TTypeError<Msg extends string> = TType<$TypeError<Msg>>
+
   export const invert = <T extends boolean>(x: T): T extends true ? false : true => !x as T extends true ? false : true
 }
 
@@ -83,6 +95,7 @@ export namespace u {
   export const isBigInt = (x: unknown): x is bigint => typeof x === 'bigint'
   export const isBoolean = (x: unknown): x is boolean => typeof x === 'boolean'
   export const isBuffer = (x: unknown): x is Buffer => _.isBuffer(x)
+  export const isObject = (x: unknown): x is AnyRecord => _.isObject(x)
   export const isDate = (x: unknown): x is Date => _.isDate(x)
   export const isFalsy = (x: unknown): x is Falsy => !x
   export const isFunction = (x: unknown): x is Fn => _.isFunction(x)
@@ -90,7 +103,6 @@ export namespace u {
   export const isNil = (x: unknown): x is null | undefined => _.isNil(x)
   export const isNull = (x: unknown): x is null => _.isNull(x)
   export const isNumber = (x: unknown): x is number => _.isNumber(x)
-  export const isPlainObject = (x: unknown): x is AnyRecord => _.isPlainObject(x)
   export const isRegExp = (x: unknown): x is RegExp => _.isRegExp(x)
   export const isSet = <T>(x: T | Set<T>): x is Set<T> => _.isSet(x)
   export const isString = (x: unknown): x is string => _.isString(x)
@@ -115,7 +127,6 @@ export namespace u {
 
 export namespace u {
   /* ---------------------------------------------------- Strings --------------------------------------------------- */
-
   export type Literalized<T extends Primitive = Primitive> = T extends string
     ? T extends ''
       ? 'empty string'
@@ -261,8 +272,7 @@ export namespace u {
   export const intersect = <A extends AnyRecord, B extends AnyRecord>(a: A, b: B): Intersect<A, B> => pick(a, keys(b))
   export const diff = <A extends AnyRecord, B extends AnyRecord>(a: A, b: B): Diff<A, B> => omit(a, keys(b))
 
-  export const enbrand = <T extends AnyRecord, B extends string>(obj: T, _brand: B): BRANDED<T, B> =>
-    obj as BRANDED<T, B>
+  export const enbrand = <T extends AnyRecord, B extends string>(obj: T, _brand: B): Brand<T, B> => obj as Brand<T, B>
 
   export const readonlyDeep = <T extends object>(obj: T): ReadonlyDeep<T> => cloneDeep(obj) as ReadonlyDeep<T>
 
@@ -324,7 +334,7 @@ export namespace u {
 
 export namespace u {
   export type Simplify<T> = T extends BuiltIn ? T : { [K in keyof T]: T[K] } & {}
-  export type SimplifyDeep<T> = T extends BuiltIn
+  export type SimplifyDeep<T> = T extends BuiltIn | BRANDED<unknown, any>
     ? T
     : Equals<T, unknown> extends 1
     ? T

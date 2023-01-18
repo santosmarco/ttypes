@@ -15,7 +15,7 @@ export enum TParsedType {
   BigIntZero = '0n',
   Boolean = 'boolean',
   Buffer = 'Buffer',
-  Class = 'class',
+  Constructor = 'constructor',
   Date = 'Date',
   EmptyString = '""',
   False = 'false',
@@ -71,7 +71,7 @@ export namespace TParsedType {
       case 'undefined':
         return TParsedType.Undefined
       case 'function':
-        if (u.isConstructor(x)) return TParsedType.Class
+        if (u.isConstructor(x)) return TParsedType.Constructor
         return TParsedType.Function
       case 'object':
         if (u.isArray(x)) return TParsedType.Array
@@ -200,8 +200,7 @@ export interface ParseContext<O, I = O> {
   isInvalid(): boolean
   setInvalid(): this
   child<T extends TType>(schema: T, data: unknown, path?: ReadonlyArray<ParsePath[number] | symbol>): ParseContextOf<T>
-  variant(data: unknown, path?: ParsePath): ParseContext<O, I>
-  clone<T extends TType>(schema: T, data: unknown): ParseContextOf<T>
+  clone<T extends TType>(schema: T, data: unknown, path?: ReadonlyArray<ParsePath[number] | symbol>): ParseContextOf<T>
   _addIssue<K extends IssueKind>(
     issue: u.LooseStripKey<TIssue<K>, 'path' | 'data' | 'manifest'> & {
       readonly path?: ParsePath
@@ -317,12 +316,14 @@ export const ParseContext = <T extends TType>({
       return child
     },
 
-    variant(data, path) {
-      return this.child(this.schema, data, path)
-    },
-
-    clone(schema, data) {
-      return ParseContext.of(schema, data, this.common)
+    clone(schema, data, path) {
+      return ParseContext({
+        schema,
+        data,
+        path: this.path.concat((path ?? []).map((p) => (typeof p === 'symbol' ? String(p) : p))),
+        parent: undefined,
+        common: this.common,
+      })
     },
 
     _addIssue(issue) {

@@ -3,12 +3,11 @@ import { TChecks } from '../checks'
 import type { TDef } from '../def'
 import {
   IssueKind,
-  TError,
   type InvalidArrayIssue,
   type InvalidBufferIssue,
   type InvalidSetIssue,
   type ToChecks,
-} from '../error'
+} from '../issues'
 import { TManifest } from '../manifest'
 import type { TOptions } from '../options'
 import { TParsedType, type ParseContextOf, type ParseResultOf } from '../parse'
@@ -23,6 +22,7 @@ import {
   type TOptional,
   type TSuperDefault,
 } from './_internal'
+import { TError } from '../error'
 
 /* ------------------------------------------------------------------------------------------------------------------ */
 /*                                                       TArray                                                       */

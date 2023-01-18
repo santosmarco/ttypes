@@ -47,30 +47,30 @@ export type TObjectIO<
     >
   : never
 
-export type TObjectShapeArg<S extends TObjectShape> = {
-  [K in keyof S]: Exclude<S[K], AnyTRef> | TRef<Exclude<TObjectShapePaths<S>, K>, null>
-}
+export type TObjectShapeWithRefs = Record<string, TType | AnyTRef>
 
-export type GetRefResolvedShape<S extends TObjectShape> = {
-  [K in keyof S]: S[K] extends TRef<infer R, infer _Ctx> ? ReachSchema<R, S> : S[K]
-}
+export type ResolveShapeReferences<S extends TObjectShapeWithRefs> = {
+  [K in keyof S]: S[K] extends TRef<infer R> ? ReachSchema<R, S> : S[K]
+} extends infer X extends TObjectShape
+  ? X
+  : never
 
-const resolveShapeRefs = <S extends TObjectShape>(shape: S): GetRefResolvedShape<S> => {
+const resolveShapeReferences = <S extends TObjectShapeWithRefs>(shape: S): ResolveShapeReferences<S> => {
   const resolvedShape = {} as Record<keyof S, unknown>
 
   for (const k of u.keys(shape)) {
     const v = shape[k]
 
     if (v instanceof TRef) {
-      resolvedShape[k] = v._contextualize(shape)._resolve()
+      resolvedShape[k] = v.resolve(shape)
     } else if (v.isT(TTypeName.Object)) {
-      resolvedShape[k] = v.extend(resolveShapeRefs(v.shape))
+      resolvedShape[k] = v.extend(resolveShapeReferences(v.shape))
     } else {
       resolvedShape[k] = v
     }
   }
 
-  return resolvedShape as GetRefResolvedShape<S>
+  return resolvedShape as ResolveShapeReferences<S>
 }
 
 export type TObjectKeysUnion<S extends TObjectShape> = string extends keyof S
@@ -182,7 +182,7 @@ export class TObject<
   /* ---------------------------------------------------------------------------------------------------------------- */
 
   _parse(ctx: ParseContextOf<this>): ParseResultOf<this> {
-    if (!u.isPlainObject(ctx.data)) {
+    if (!u.isObject(ctx.data)) {
       return ctx.invalidType({ expected: TParsedType.Object }).abort()
     }
 
@@ -519,18 +519,20 @@ export class TObject<
     passthrough: this._makeCreate('passthrough'),
     strict: this._makeCreate('strict'),
     strip: this._makeCreate(),
-    lazy: <S extends TObjectShape>(shape: () => TObjectShapeArg<S>, options?: TObjectOptions) =>
-      this._makeCreate()(shape(), options),
+    lazy: <S extends TObjectShapeWithRefs>(
+      shape: () => { [K in keyof S]: S[K] | TRef<Exclude<TObjectShapePaths<S>, K>> },
+      options?: TObjectOptions
+    ) => this._makeCreate()(shape(), options),
   })
 
   private static _makeCreate<UK extends TObjectUnknownKeys = 'strip'>(unknownKeys = 'strip' as UK) {
-    return <S extends TObjectShape>(
-      shape: TObjectShapeArg<S>,
+    return <S extends TObjectShapeWithRefs>(
+      shape: { [K in keyof S]: S[K] | TRef<Exclude<TObjectShapePaths<S>, K>> },
       options?: TObjectOptions
-    ): TObject<GetRefResolvedShape<S>, UK> =>
-      new TObject({
+    ): TObject<ResolveShapeReferences<S>, UK> =>
+      new TObject<ResolveShapeReferences<S>, UK>({
         typeName: TTypeName.Object,
-        shape: resolveShapeRefs(shape as S),
+        shape: resolveShapeReferences(shape as S),
         unknownKeys,
         catchall: null,
         conditions: [],

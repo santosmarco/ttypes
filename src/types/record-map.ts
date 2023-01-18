@@ -54,7 +54,7 @@ export class TRecord<
       ctx.setData(u.fromEntries([...ctx.data.entries()]))
     }
 
-    if (!u.isPlainObject(ctx.data)) {
+    if (!u.isObject(ctx.data)) {
       return ctx.invalidType({ expected: TParsedType.Object }).abort()
     }
 

@@ -4,20 +4,17 @@ import type {
   AnyTBoolean,
   AnyTBrand,
   AnyTCatch,
-  AnyTDate,
+  AnyTConstructor,
   AnyTDefault,
   AnyTDefined,
-  AnyTDiscriminatedUnion,
   AnyTEffects,
   AnyTEnum,
   AnyTFunction,
-  AnyTIf,
   AnyTInstanceOf,
   AnyTIntersection,
   AnyTLazy,
   AnyTLiteral,
   AnyTMap,
-  AnyTNativeEnum,
   AnyTNonNullable,
   AnyTNot,
   AnyTNullable,
@@ -25,14 +22,12 @@ import type {
   AnyTOptional,
   AnyTPipeline,
   AnyTPromise,
-  AnyTReadonly,
   AnyTRecord,
   AnyTRef,
   AnyTSet,
   AnyTString,
   AnyTSuperDefault,
   AnyTTuple,
-  AnyTType,
   AnyTUnion,
   SomeTObject,
   TAny,
@@ -46,6 +41,7 @@ import type {
   TPropertyKey,
   TSymbol,
   TTrue,
+  TType,
   TUndefined,
   TUnknown,
   TVoid,
@@ -63,6 +59,7 @@ export enum TTypeName {
   Brand = 'TBrand',
   Buffer = 'TBuffer',
   Catch = 'TCatch',
+  Constructor = 'TConstructor',
   Custom = 'TCustom',
   Date = 'TDate',
   Default = 'TDefault',
@@ -116,24 +113,25 @@ export type TTypeNameMap<T extends TTypeName = TTypeName> = {
   [TTypeName.Brand]: AnyTBrand
   [TTypeName.Buffer]: TBuffer
   [TTypeName.Catch]: AnyTCatch
-  [TTypeName.Custom]: AnyTType
-  [TTypeName.Date]: AnyTDate
+  [TTypeName.Constructor]: AnyTConstructor
+  [TTypeName.Custom]: TType
+  [TTypeName.Date]: TType //
   [TTypeName.Default]: AnyTDefault
   [TTypeName.Defined]: AnyTDefined
-  [TTypeName.DiscriminatedUnion]: AnyTDiscriminatedUnion
+  [TTypeName.DiscriminatedUnion]: TType //
   [TTypeName.Effects]: AnyTEffects
   [TTypeName.Enum]: AnyTEnum
   [TTypeName.False]: TFalse
   [TTypeName.Falsy]: TFalsy
   [TTypeName.Function]: AnyTFunction
-  [TTypeName.If]: AnyTIf
+  [TTypeName.If]: TType //
   [TTypeName.InstanceOf]: AnyTInstanceOf
   [TTypeName.Intersection]: AnyTIntersection
   [TTypeName.Lazy]: AnyTLazy
   [TTypeName.Literal]: AnyTLiteral
   [TTypeName.Map]: AnyTMap
   [TTypeName.NaN]: TNaN
-  [TTypeName.NativeEnum]: AnyTNativeEnum
+  [TTypeName.NativeEnum]: TType //
   [TTypeName.Never]: TNever
   [TTypeName.NonNullable]: AnyTNonNullable
   [TTypeName.Not]: AnyTNot
@@ -146,7 +144,7 @@ export type TTypeNameMap<T extends TTypeName = TTypeName> = {
   [TTypeName.Primitive]: TPrimitive
   [TTypeName.Promise]: AnyTPromise
   [TTypeName.PropertyKey]: TPropertyKey
-  [TTypeName.Readonly]: AnyTReadonly
+  [TTypeName.Readonly]: TType //
   [TTypeName.Record]: AnyTRecord
   [TTypeName.Ref]: AnyTRef
   [TTypeName.Set]: AnyTSet
@@ -160,3 +158,8 @@ export type TTypeNameMap<T extends TTypeName = TTypeName> = {
   [TTypeName.Unknown]: TUnknown
   [TTypeName.Void]: TVoid
 }[T]
+
+type c = Exclude<
+  Extract<TTypeNameMap, { underlying: any }>,
+  AnyTBrand | AnyTCatch | AnyTDefault | AnyTDefined | AnyTEffects | AnyTLazy
+>

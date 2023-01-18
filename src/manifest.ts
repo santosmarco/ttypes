@@ -1,7 +1,7 @@
 import _ from 'lodash'
 import { TError } from '../out'
 import { TParsedType } from './parse'
-import type { BRANDED, ManifestOf, TObjectShape, TType } from './types/_internal'
+import type { ManifestOf, TObjectShape, TType } from './types/_internal'
 import { u } from './utils'
 
 /* ---------------------------------------------------- Manifest ---------------------------------------------------- */
@@ -29,9 +29,9 @@ export interface Manifest<T = unknown> extends PublicManifest<T> {
   readonly readonly: boolean
 }
 
-export type BrandedManifest<T = unknown> = BRANDED<Manifest<T>, 'TManifest'>
+export type BrandedManifest<T = unknown> = u.Brand<Manifest<T>, 'TManifest'>
 
-export type MakeManifest<T, P extends Partial<Manifest<T>> & { readonly type: ManifestType }> = BRANDED<
+export type MakeManifest<T, P extends Partial<Manifest<T>> & { readonly type: ManifestType }> = u.Brand<
   u.ReadonlyDeep<
     {
       readonly type: P['type']
@@ -132,7 +132,9 @@ TManifest.unwrapType = (types: readonly ManifestType[], mode: 'union' | 'interse
     union.add(TParsedType.Unknown)
   }
 
-  not.forEach((t) => t && union.delete(t))
+  console.log(union, not)
+
+  not.forEach((t) => union.delete(t))
 
   return [...union].join(' | ')
 }

@@ -12,7 +12,7 @@ import { TType, type InputOf, type ManifestOf, type OutputOf, type TUnwrappable,
 
 export const BRAND = Symbol('BRAND')
 export type BRAND = typeof BRAND
-export type BRANDED<T, B> = T & { readonly [BRAND]: B }
+export type BRANDED<T, B> = T & { [BRAND]: B }
 
 export interface TBrandDef<T extends TType, B> extends TDef {
   readonly typeName: TTypeName.Brand

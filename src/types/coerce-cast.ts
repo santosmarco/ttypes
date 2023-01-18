@@ -3,11 +3,13 @@ import {
   TBigInt,
   TBoolean,
   TBuffer,
+  TDate,
   TNumber,
   TSet,
   TString,
   type TBigIntCasting,
   type TBooleanCasting,
+  type TDateCasting,
   type TType,
 } from './_internal'
 
@@ -21,6 +23,9 @@ export const TCoerce = {
   },
   buffer(...args: Parameters<typeof TBuffer.create>): TBuffer<true> {
     return TBuffer.create(...args).coerce(true)
+  },
+  date(...args: Parameters<typeof TDate.create>): TDate<true> {
+    return TDate.create(...args).coerce(true)
   },
   string(...args: Parameters<typeof TString.create>): TString<[], string, true> {
     return TString.create(...args).coerce(true)
@@ -52,6 +57,12 @@ export const TCast = {
   },
   buffer(...args: Parameters<typeof TBuffer.create>): TBuffer<false, true> {
     return TBuffer.create(...args).cast(true)
+  },
+  date<C extends Exclude<TDateCasting, 'date'> = 'number'>(
+    value = 'number' as C,
+    ...args: Parameters<typeof TDate.create>
+  ): TDate<false, C> {
+    return TDate.create(...args).cast(value)
   },
   number(...args: Parameters<typeof TNumber.create>): TNumber<false, true> {
     return TNumber.create(...args).cast(true)

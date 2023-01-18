@@ -50,6 +50,7 @@ export const undefinedType = t.TUndefined.create
 export const unionType = t.TUnion.create
 export const unknownType = t.TUnknown.create
 export const voidType = t.TVoid.create
+export const constructorType = t.TConstructor.create
 
 export const global = getGlobal
 
@@ -66,6 +67,10 @@ export {
   castType as cast,
   catchType as catch,
   coerceType as coerce,
+  constructorType as class,
+  constructorType as cls,
+  constructorType as constructor,
+  constructorType as ctor,
   defaultType as def,
   definedType as defined,
   enumType as enum,

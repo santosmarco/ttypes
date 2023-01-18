@@ -7426,7 +7426,7 @@ export {
   // bufferType as buffer,
   // catchType as catch,
   customType as custom,
-  dateType as date,
+  // dateType as date,
   // defaultType as def,
   discriminatedUnionType as discriminatedUnion,
   discriminatedUnionType as taggedUnion,

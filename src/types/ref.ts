@@ -1,15 +1,20 @@
-import type { TDef } from '../def'
-import { TManifest } from '../manifest'
-import { TParsedType, type ParseContextOf, type ParseResultOf } from '../parse'
 import { TTypeName } from '../type-names'
 import type { u } from '../utils'
-import { TType, type InputOf, type OutputOf, type TObject, type TObjectShape, type TTuple } from './_internal'
+import type {
+  AnyTObject,
+  AnyTTuple,
+  AnyTUnion,
+  FlattenMembers,
+  TObjectShapeWithRefs,
+  TType,
+  UnwrapUntil,
+} from './_internal'
 
 /* ----------------------------------------------------------------------------------------------------------------- - */
 /*                                                        TRef                                                        */
 /* ------------------------------------------------------------------------------------------------------------------ */
 
-export type TRefContext = TObjectShape | readonly TType[]
+export type TRefContext = Record<string, TType | AnyTRef> | readonly TType[]
 
 export type TTuplePaths<T extends readonly TType[]> = u.ConditionalOmit<
   u.OmitIndexSignature<{ [K in keyof T as `${K & number}` extends `${number}` ? K : never]: K }>,
@@ -21,28 +26,26 @@ export type TTuplePaths<T extends readonly TType[]> = u.ConditionalOmit<
             | `[${K_}]`
             | `.${K_}`
             | (K_ extends keyof T
-                ? T[K_] extends TObject<infer S>
-                  ? `${`[${K_}]` | `.${K_}`}.${TObjectShapePaths<S>}`
-                  : T[K_] extends TTuple<infer I>
-                  ? `${`[${K_}]` | `.${K_}`}${TTuplePaths<I>}`
+                ? UnwrapUntil<T[K_], AnyTObject> extends AnyTObject
+                  ? `${`[${K_}]` | `.${K_}`}.${TObjectShapePaths<UnwrapUntil<T[K_], AnyTObject>['shape']>}`
+                  : UnwrapUntil<T[K_], AnyTTuple> extends AnyTTuple
+                  ? `${`[${K_}]` | `.${K_}`}${TTuplePaths<UnwrapUntil<T[K_], AnyTTuple>['items']>}`
                   : never
                 : never)
         : never
     }[keyof X]
   : never
 
-export type TObjectShapePaths<T extends TObjectShape> = T extends unknown
-  ? {
-      [K in keyof T]:
-        | K
-        | (T[K] extends TObject<infer S>
-            ? `${K & string}.${TObjectShapePaths<S>}`
-            : T[K] extends TTuple<infer I>
-            ? `${K & string}${TTuplePaths<I>}`
-            : never)
-    }[keyof T] &
-      string
-  : never
+export type TObjectShapePaths<T extends TObjectShapeWithRefs> = {
+  [K in keyof T]:
+    | K
+    | (UnwrapUntil<T[K], AnyTObject> extends AnyTObject
+        ? `${K & string}.${TObjectShapePaths<UnwrapUntil<T[K], AnyTObject>['shape']>}`
+        : UnwrapUntil<T[K], AnyTTuple> extends AnyTTuple
+        ? `${K & string}${TTuplePaths<UnwrapUntil<T[K], AnyTTuple>['items']>}`
+        : never)
+}[keyof T] &
+  string
 
 export type _ReachSchema<R extends string, Ctx extends TRefContext> = u.ReplaceAll<
   u.ReplaceAll<R, '[', '.'>,
@@ -55,93 +58,57 @@ export type _ReachSchema<R extends string, Ctx extends TRefContext> = u.ReplaceA
     ? Left extends keyof Ctx
       ? Right extends ''
         ? Ctx[Left]
-        : Ctx[Left] extends TObject<infer S>
-        ? _ReachSchema<Right, S>
-        : Ctx[Left] extends TTuple<infer I>
-        ? _ReachSchema<Right, I>
-        : Ctx[Left]
-      : never
-    : never
-  : never
+        : UnwrapUntil<Ctx[Left], AnyTObject> extends AnyTObject
+        ? _ReachSchema<Right, UnwrapUntil<Ctx[Left], AnyTObject>['shape']>
+        : Ctx[Left] extends AnyTUnion
+        ? _ReachSchema<
+            Right,
+            Extract<
+              Extract<
+                UnwrapUntil<FlattenMembers<Ctx[Left]['members'], AnyTUnion>[number], AnyTObject>,
+                AnyTObject
+              >['shape'],
+              { readonly [K in Right]: unknown }
+            >
+          >
+        : UnwrapUntil<Ctx[Left], AnyTTuple> extends AnyTTuple
+        ? _ReachSchema<Right, UnwrapUntil<Ctx[Left], AnyTTuple>['items']>
+        : Ctx[Left] extends AnyTUnion
+        ? _ReachSchema<
+            Right,
+            Extract<
+              Extract<
+                UnwrapUntil<FlattenMembers<Ctx[Left]['members'], AnyTUnion>[number], AnyTTuple>,
+                AnyTTuple
+              >['items'],
+              { readonly [K in Right]: unknown }
+            >
+          >
+        : u.$TTypeError<'Invalid reference path'>
+      : u.$TTypeError<'Invalid reference path'>
+    : u.$TTypeError<'Invalid reference path'>
+  : u.$TTypeError<'Invalid reference path'>
 
-export type ReachSchema<R extends string, Ctx extends TRefContext> = Ctx extends unknown
-  ? u.Try<_ReachSchema<R, Ctx>, TType>
-  : never
+export type ReachSchema<R extends string, Ctx extends TRefContext> = u.Try<_ReachSchema<R, Ctx>, TType>
 
-export interface TRefDef<R extends string, Ctx extends TRefContext | null> extends TDef {
-  readonly typeName: TTypeName.Ref
-  readonly $ref: R
-  readonly $ctx: Ctx
-}
+export class TRef<Ref extends string> {
+  private constructor(private readonly ref: Ref) {}
 
-export class TRef<R extends string, Ctx extends TRefContext | null> extends TType<
-  OutputOf<ReachSchema<R, NonNullable<Ctx>>>,
-  TRefDef<R, Ctx>,
-  InputOf<ReachSchema<R, NonNullable<Ctx>>>
-> {
-  get _manifest() {
-    return TManifest<InputOf<ReachSchema<R, NonNullable<Ctx>>>>()({
-      type: TParsedType.Unknown,
-    })
-  }
-
-  _parse(ctx: ParseContextOf<this>): ParseResultOf<this> {
-    const underlying = this._resolve()
-    return underlying._parse(ctx.child(underlying, ctx.data))
-  }
-
-  get $ref(): R {
-    return this._def.$ref
-  }
-
-  _contextualize<C extends TRefContext>(ctx: C): TRef<R, C> {
-    return new TRef({ ...this._def, $ctx: ctx })
-  }
-
-  _resolve(): TType {
-    const { $ref, $ctx } = this._def
-
-    if (!$ctx) {
-      throw new Error(`Unable to resolve path for $ref: ${$ref}`)
+  resolve(ctx: TRefContext): TType {
+    if (!ctx) {
+      throw new Error(`Unable to resolve path for $ref: ${this.ref}`)
     }
 
-    const path = String($ref)
-      .split(/[.[\]]/g)
-      .filter(Boolean)
-
-    let current = $ctx[(Number.isNaN(Number(path[0])) ? path[0] : Number(path[0])) as keyof TRefContext] as TType
-
-    for (const p of path.slice(1)) {
-      const numeric = Number(p)
-
-      if (Number.isNaN(numeric)) {
-        if (current.isT(TTypeName.Object)) {
-          current = current.shape[p]
-        } else if (current.isT(TTypeName.Union)) {
-          const next = current.members.find((m) => m.isT(TTypeName.Object) && p in m.shape)
-          if (!next) {
-            throw new Error(`Unable to resolve path for $ref: ${$ref}`)
-          }
-
-          current = next
-        } else {
-          throw new Error(`Unable to resolve path for $ref: ${$ref}`)
-        }
-      } else if (current.isT(TTypeName.Tuple)) {
-        current = current.items[numeric]
-      } else {
-        throw new Error(`Unable to resolve path for $ref: ${$ref}`)
-      }
-    }
-
-    return current.clone()
+    return TRef._internals.resolveRef(this.ref, ctx)
   }
 
   /* ---------------------------------------------------------------------------------------------------------------- */
 
-  static create<R extends string>(ref: R): TRef<R, null> {
-    return new TRef({ typeName: TTypeName.Ref, $ref: ref, $ctx: null, options: {} })
+  static create<R extends string>(ref: R): TRef<R> {
+    return new TRef(ref)
   }
+
+  /* ---------------------------------------------------------------------------------------------------------------- */
 
   static _internals = {
     resolveRef(ref: string, ctx: TRefContext) {
@@ -152,6 +119,10 @@ export class TRef<R extends string, Ctx extends TRefContext | null> extends TTyp
       let current = ctx[(Number.isNaN(Number(path[0])) ? path[0] : Number(path[0])) as keyof TRefContext] as TType
 
       for (const p of path.slice(1)) {
+        while ('underlying' in current) {
+          current = current.underlying as TType
+        }
+
         const numeric = Number(p)
 
         if (Number.isNaN(numeric)) {
@@ -180,4 +151,4 @@ export class TRef<R extends string, Ctx extends TRefContext | null> extends TTyp
   }
 }
 
-export type AnyTRef = TRef<string, TRefContext | null>
+export type AnyTRef = TRef<string>

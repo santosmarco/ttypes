@@ -11,17 +11,17 @@ export namespace TChecks {
 
   /* ---------------------------------------------------------------------------------------------------------------- */
 
-  export interface Min<V = number, RV = V> extends Base<'min'> {
+  export interface Min<V extends u.Numeric | Date | 'now' = number, RV = V> extends Base<'min'> {
     readonly expected: { readonly value: V; readonly inclusive: boolean }
     readonly received: RV
   }
 
-  export interface Max<V = number, RV = V> extends Base<'max'> {
+  export interface Max<V extends u.Numeric | Date | 'now' = number, RV = V> extends Base<'max'> {
     readonly expected: { readonly value: V; readonly inclusive: boolean }
     readonly received: RV
   }
 
-  export interface Range<V = number, RV = V> extends Base<'range'> {
+  export interface Range<V extends u.Numeric | Date | 'now' = number, RV = V> extends Base<'range'> {
     readonly expected: {
       readonly min: { readonly value: V; readonly inclusive: boolean }
       readonly max: { readonly value: V; readonly inclusive: boolean }
@@ -49,15 +49,24 @@ export namespace TChecks {
 
   /* ---------------------------------------------------------------------------------------------------------------- */
 
-  export const handleMin = <V = number, RV = V>(value: V, expected: Min<V, RV>['expected']): boolean => {
+  export const handleMin = <V extends u.Numeric | Date | 'now' = number, RV = V>(
+    value: V,
+    expected: Min<V, RV>['expected']
+  ): boolean => {
     return expected.inclusive ? value >= expected.value : value > expected.value
   }
 
-  export const handleMax = <V = number, RV = V>(value: V, expected: Max<V, RV>['expected']): boolean => {
+  export const handleMax = <V extends u.Numeric | Date | 'now' = number, RV = V>(
+    value: V,
+    expected: Max<V, RV>['expected']
+  ): boolean => {
     return handleMin(expected.value, { value, inclusive: expected.inclusive })
   }
 
-  export const handleRange = <V = number, RV = V>(value: V, expected: Range<V, RV>['expected']): boolean => {
+  export const handleRange = <V extends u.Numeric | Date | 'now' = number, RV = V>(
+    value: V,
+    expected: Range<V, RV>['expected']
+  ): boolean => {
     return handleMin(value, expected.min) && handleMax(value, expected.max)
   }
 

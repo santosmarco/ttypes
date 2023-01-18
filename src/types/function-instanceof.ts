@@ -10,6 +10,7 @@ import {
   TTuple,
   TType,
   TUnknown,
+  type AnyTObject,
   type AnyTTuple,
   type InputOf,
   type OutputOf,
@@ -80,7 +81,7 @@ export class TFunction<T extends TType | null, A extends AnyTTuple, R extends TT
       return ctx.success(async function (this: unknown, ...args) {
         let boundFn = fn
         if (thisParameterType) {
-          const thisCtx = ctx.clone(thisParameterType, this)
+          const thisCtx = ctx.clone(thisParameterType, this, ['thisType'])
           const parsedThis = await thisParameterType._parseAsync(thisCtx)
           if (!parsedThis.ok) {
             throw makeError(IssueKind.InvalidThisType)(thisCtx, parsedThis.error.issues)
@@ -89,14 +90,14 @@ export class TFunction<T extends TType | null, A extends AnyTTuple, R extends TT
           boundFn = fn.bind(parsedThis.data)
         }
 
-        const argsCtx = ctx.clone(parameters, args)
+        const argsCtx = ctx.clone(parameters, args, ['args'])
         const parsedArgs = await parameters._parseAsync(argsCtx)
         if (!parsedArgs.ok) {
           throw makeError(IssueKind.InvalidArguments)(argsCtx, parsedArgs.error.issues)
         }
 
         const result = (await boundFn(...parsedArgs.data)) as unknown
-        const returnCtx = ctx.clone<R>(returnType, result)
+        const returnCtx = ctx.clone<R>(returnType, result, ['returnType'])
         const parsedResult = await returnType._parseAsync(returnCtx)
         if (!parsedResult.ok) {
           throw makeError(IssueKind.InvalidReturnType)(returnCtx, parsedResult.error.issues)
@@ -109,7 +110,7 @@ export class TFunction<T extends TType | null, A extends AnyTTuple, R extends TT
     return ctx.success(function (this: unknown, ...args) {
       let boundFn = fn
       if (thisParameterType) {
-        const thisCtx = ctx.clone(thisParameterType, this)
+        const thisCtx = ctx.clone(thisParameterType, this, ['thisType'])
         const parsedThis = thisParameterType._parseSync(thisCtx)
         if (!parsedThis.ok) {
           throw makeError(IssueKind.InvalidThisType)(thisCtx, parsedThis.error.issues)
@@ -118,14 +119,14 @@ export class TFunction<T extends TType | null, A extends AnyTTuple, R extends TT
         boundFn = fn.bind(parsedThis.data)
       }
 
-      const argsCtx = ctx.clone(parameters, args)
+      const argsCtx = ctx.clone(parameters, args, ['args'])
       const parsedArgs = parameters._parseSync(argsCtx)
       if (!parsedArgs.ok) {
         throw makeError(IssueKind.InvalidArguments)(argsCtx, parsedArgs.error.issues)
       }
 
       const result = boundFn(...parsedArgs.data) as unknown
-      const returnCtx = ctx.clone(returnType, result)
+      const returnCtx = ctx.clone(returnType, result, ['returnType'])
       const parsedResult = returnType._parseSync(returnCtx)
       if (!parsedResult.ok) {
         throw makeError(IssueKind.InvalidReturnType)(returnCtx, parsedResult.error.issues)
@@ -283,6 +284,126 @@ export class TFunction<T extends TType | null, A extends AnyTTuple, R extends TT
 export type AnyTFunction = TFunction<TType | null, AnyTTuple, TType>
 
 /* ------------------------------------------------------------------------------------------------------------------ */
+/*                                                    TConstructor                                                    */
+/* ------------------------------------------------------------------------------------------------------------------ */
+
+export type TConstructorOptions = MakeTOptions<{
+  additionalIssueKind: IssueKind.InvalidArguments | IssueKind.InvalidInstance
+}>
+
+export interface TConstructorDef<A extends AnyTTuple, R extends AnyTObject> extends TDef {
+  readonly typeName: TTypeName.Constructor
+  readonly options: TConstructorOptions
+  readonly parameters: A
+  readonly instanceType: R
+}
+
+export class TConstructor<A extends AnyTTuple, R extends AnyTObject> extends TType<
+  new (...args: InputOf<A>) => OutputOf<R>,
+  TConstructorDef<A, R>,
+  new (...args: OutputOf<A>) => InputOf<R>
+> {
+  get _manifest() {
+    return TManifest<new (...args: OutputOf<A>) => InputOf<R>>()({
+      type: TParsedType.Constructor,
+      parameters: this.parameters.manifest(),
+      instanceType: this.instanceType.manifest(),
+    })
+  }
+
+  _parse(ctx: ParseContextOf<this>): ParseResultOf<this> {
+    if (!u.isConstructor(ctx.data)) {
+      return ctx.invalidType({ expected: TParsedType.Constructor }).abort()
+    }
+
+    const makeError =
+      <K extends IssueKind.InvalidArguments | IssueKind.InvalidInstance>(kind: K) =>
+      <T extends TType>(ctx: ParseContextOf<T>, issues: readonly TIssue[]): TError<InputOf<T>> =>
+        ctx
+          .addIssue<IssueKind.InvalidArguments | IssueKind.InvalidInstance>(
+            kind,
+            { issues },
+            this.options().messages?.[u.toCamelCase(kind)]
+          )
+          .abort().error
+
+    const { parameters, instanceType } = this._def
+    const { data: ctor } = ctx
+
+    return ctx.success(
+      class extends ctor {
+        constructor(...args: OutputOf<A>) {
+          super(...args)
+
+          const argsCtx = ctx.clone(parameters, args, ['args'])
+          const parsedArgs = parameters._parseSync(argsCtx)
+          if (!parsedArgs.ok) {
+            throw makeError(IssueKind.InvalidArguments)(argsCtx, parsedArgs.error.issues)
+          }
+
+          const result = this as OutputOf<R>
+          const returnCtx = ctx.clone(instanceType, result, ['instanceType'])
+          const parsedResult = instanceType._parseSync(returnCtx)
+          if (!parsedResult.ok) {
+            throw makeError(IssueKind.InvalidInstance)(returnCtx, parsedResult.error.issues)
+          }
+        }
+      }
+    )
+  }
+
+  /* ---------------------------------------------------------------------------------------------------------------- */
+
+  get parameters(): A {
+    return this._def.parameters
+  }
+
+  get instanceType(): R {
+    return this._def.instanceType
+  }
+
+  /* ---------------------------------------------------------------------------------------------------------------- */
+
+  args<Args extends TTupleItems>(...args: Args): TConstructor<TTuple<Args, A['restType']>, R> {
+    return new TConstructor({
+      ...this._def,
+      parameters: (this._def.parameters.restType
+        ? TTuple.create(args, this._def.parameters.restType, this.options())
+        : TTuple.create(args, this.options())) as TTuple<Args, A['restType']>,
+    })
+  }
+
+  rest<Rest extends TType>(rest: Rest): TConstructor<TTuple<A['items'], Rest>, R> {
+    return new TConstructor({ ...this._def, parameters: this._def.parameters.rest(rest) })
+  }
+
+  removeRest(): TConstructor<TTuple<A['items']>, R> {
+    return new TConstructor({ ...this._def, parameters: this._def.parameters.removeRest() })
+  }
+
+  instance<Instance extends AnyTObject>(instanceType: Instance): TConstructor<A, Instance> {
+    return new TConstructor({ ...this._def, instanceType })
+  }
+
+  /* ---------------------------------------------------------------------------------------------------------------- */
+
+  static create<A extends TTupleItems, R extends AnyTObject>(
+    parameters: A,
+    instanceType: R,
+    options?: TConstructorOptions
+  ): TConstructor<TTuple<A, TUnknown>, R> {
+    return new TConstructor({
+      typeName: TTypeName.Constructor,
+      parameters: TTuple.create(parameters).rest(TUnknown.create()),
+      instanceType,
+      options: { ...options },
+    })
+  }
+}
+
+export type AnyTConstructor = TConstructor<AnyTTuple, AnyTObject>
+
+/* ------------------------------------------------------------------------------------------------------------------ */
 /*                                                     TInstanceOf                                                    */
 /* ------------------------------------------------------------------------------------------------------------------ */
 
@@ -299,7 +420,7 @@ export interface TInstanceOfDef<T extends u.Ctor> extends TDef {
 export class TInstanceOf<T extends u.Ctor> extends TType<InstanceType<T>, TInstanceOfDef<T>> {
   get _manifest() {
     return TManifest<InstanceType<T>>()({
-      type: TParsedType.Class,
+      type: TParsedType.Constructor,
       cls: this.cls,
     })
   }
