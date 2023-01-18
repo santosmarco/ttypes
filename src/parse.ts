@@ -1,6 +1,7 @@
 import type { TDef } from './def'
-import { IssueKind, TError, resolveErrorMaps, type TIssue } from './error'
+import { TError, resolveErrorMaps } from './error'
 import { getGlobal } from './global'
+import { IssueKind, type TIssue } from './issues'
 import { type ParseOptions } from './options'
 import { emptyMarker, type InputOf, type OutputOf, type TType } from './types/_internal'
 import { u } from './utils'
@@ -194,7 +195,7 @@ export interface ParseContext<O, I = O> {
   variant(data: unknown, path?: ParsePath): ParseContext<O, I>
   clone<T extends TType>(schema: T, data: unknown): ParseContextOf<T>
   _addIssue<K extends IssueKind>(
-    issue: u.LooseStripKey<TIssue<K>, 'path' | 'data'> & {
+    issue: u.LooseStripKey<TIssue<K>, 'path' | 'data' | 'manifest'> & {
       readonly path?: ParsePath
       readonly fatal?: boolean
     }
@@ -331,7 +332,16 @@ export const ParseContext = <T extends TType>({
         this.setInvalid()
       }
 
-      const issueWithPath = { ...issue, path: this.path.concat(issue.path ?? []), data: this.data }
+      let issueWithPath = {
+        ...issue,
+        path: this.path.concat(issue.path ?? []),
+        data: this.data,
+        manifest: this.schema.manifest(),
+      }
+
+      if (issueWithPath.payload === undefined) {
+        issueWithPath = u.omit(issueWithPath, ['payload']) as typeof issueWithPath
+      }
 
       const issueMsg =
         issue.message ??

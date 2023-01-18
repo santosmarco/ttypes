@@ -1,5 +1,5 @@
 import type { TDef } from '../def'
-import { manifest, type TManifest } from '../manifest'
+import { TManifest, type TManifest } from '../manifest'
 import type { TOptions } from '../options'
 import { TParsedType, type ParseContextOf, type ParseResultOf } from '../parse'
 import { TTypeName } from '../type-names'
@@ -8,8 +8,6 @@ import { TType, type InputOf, type OutputOf, type TUnwrappable, type UnwrapDeep 
 /* ------------------------------------------------------------------------------------------------------------------ */
 /*                                                      TOptional                                                     */
 /* ------------------------------------------------------------------------------------------------------------------ */
-
-export type TOptionalManifest<T extends TType> = TManifest.Wrap<T, InputOf<T> | undefined, { readonly required: false }>
 
 export interface TOptionalDef<T extends TType> extends TDef {
   readonly typeName: TTypeName.Optional
@@ -22,12 +20,12 @@ export class TOptional<T extends TType>
 {
   get _manifest() {
     const underlyingManifest = this.underlying.manifest()
-    return manifest<InputOf<T> | undefined>()({
-      type: { anyOf: [manifest.extract(underlyingManifest, 'type'), TParsedType.Undefined] },
+    return TManifest<InputOf<T> | undefined>()({
+      type: { anyOf: [TManifest.extract(underlyingManifest, 'type'), TParsedType.Undefined] },
       underlying: underlyingManifest,
       required: false,
-      nullable: manifest.extract(underlyingManifest, 'nullable'),
-      readonly: manifest.extract(underlyingManifest, 'readonly'),
+      nullable: TManifest.extract(underlyingManifest, 'nullable'),
+      readonly: TManifest.extract(underlyingManifest, 'readonly'),
     })
   }
 
@@ -69,8 +67,6 @@ export type AnyTOptional = TOptional<TType>
 /*                                                      TNullable                                                     */
 /* ------------------------------------------------------------------------------------------------------------------ */
 
-export type TNullableManifest<T extends TType> = TManifest.Wrap<T, InputOf<T> | null, { readonly nullable: true }>
-
 export interface TNullableDef<T extends TType> extends TDef {
   readonly typeName: TTypeName.Nullable
   readonly underlying: T
@@ -82,12 +78,12 @@ export class TNullable<T extends TType>
 {
   get _manifest() {
     const underlyingManifest = this.underlying.manifest()
-    return manifest<InputOf<T> | null>()({
-      type: { anyOf: [manifest.extract(underlyingManifest, 'type'), TParsedType.Null] },
+    return TManifest<InputOf<T> | null>()({
+      type: { anyOf: [TManifest.extract(underlyingManifest, 'type'), TParsedType.Null] },
       underlying: underlyingManifest,
       nullable: true,
-      required: manifest.extract(underlyingManifest, 'required'),
-      readonly: manifest.extract(underlyingManifest, 'readonly'),
+      required: TManifest.extract(underlyingManifest, 'required'),
+      readonly: TManifest.extract(underlyingManifest, 'readonly'),
     })
   }
 

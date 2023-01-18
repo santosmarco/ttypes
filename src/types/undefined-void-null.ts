@@ -1,5 +1,5 @@
 import type { TDef } from '../def'
-import { manifest } from '../manifest'
+import { TManifest } from '../manifest'
 import type { TOptions } from '../options'
 import { TParsedType, type ParseContextOf, type ParseResultOf } from '../parse'
 import { TTypeName } from '../type-names'
@@ -16,7 +16,7 @@ export interface TUndefinedDef extends TDef {
 
 export class TUndefined extends TType<undefined, TUndefinedDef> {
   get _manifest() {
-    return manifest<undefined>()({ type: TParsedType.Undefined, literal: u.literalize(undefined), required: false })
+    return TManifest<undefined>()({ type: TParsedType.Undefined, literal: u.literalize(undefined), required: false })
   }
 
   /* ---------------------------------------------------------------------------------------------------------------- */
@@ -42,7 +42,7 @@ export interface TVoidDef extends TDef {
 
 export class TVoid extends TType<void, TVoidDef> {
   get _manifest() {
-    return manifest<void>()({ type: TParsedType.Void, required: false })
+    return TManifest<void>()({ type: TParsedType.Void, required: false })
   }
 
   /* ---------------------------------------------------------------------------------------------------------------- */
@@ -68,7 +68,7 @@ export interface TNullDef extends TDef {
 
 export class TNull extends TType<null, TNullDef> {
   get _manifest() {
-    return manifest<null>()({ type: TParsedType.Null, literal: u.literalize(null), nullable: true })
+    return TManifest<null>()({ type: TParsedType.Null, literal: u.literalize(null), nullable: true })
   }
 
   /* ---------------------------------------------------------------------------------------------------------------- */

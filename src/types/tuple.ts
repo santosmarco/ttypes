@@ -1,6 +1,6 @@
 import type { TDef } from '../def'
-import { IssueKind, type EIssueKind } from '../error'
-import type { ExtendedTOptions } from '../options'
+import { IssueKind } from '../issues'
+import type { MakeTOptions } from '../options'
 import { TParsedType, type ParseContextOf, type ParseResultOf } from '../parse'
 import { TTypeName } from '../type-names'
 import { u } from '../utils'
@@ -10,8 +10,8 @@ import { TNever, TType, TUnion, type OutputOf, type TOptional } from './_interna
 /*                                                       TTuple                                                       */
 /* ------------------------------------------------------------------------------------------------------------------ */
 
-export type TTupleOptions = ExtendedTOptions<{
-  additionalIssueKind: EIssueKind['InvalidTuple']
+export type TTupleOptions = MakeTOptions<{
+  additionalIssueKind: IssueKind.InvalidTuple
 }>
 
 export interface TTupleDef<T extends TTupleItems, R extends TType | null = null> extends TDef {

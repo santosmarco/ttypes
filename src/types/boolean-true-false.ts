@@ -1,6 +1,6 @@
 import type { TDef } from '../def'
-import { IssueKind } from '../error'
-import { manifest } from '../manifest'
+import { IssueKind } from '../issues'
+import { TManifest } from '../manifest'
 import type { TOptions } from '../options'
 import { TParsedType, type ParseContextOf, type ParseResultOf } from '../parse'
 import { TTypeName } from '../type-names'
@@ -21,7 +21,9 @@ export type TBooleanInput<Coerce extends TBooleanCoercion> = Coerce extends true
   ? any
   : Coerce extends Record<string, unknown>
   ? Coerce['falsy'] extends ReadonlyArray<infer F>
-    ? F | (Coerce['truthy'] extends ReadonlyArray<infer T> ? T : never)
+    ? Coerce['truthy'] extends ReadonlyArray<infer T>
+      ? F | T
+      : F
     : Coerce['truthy'] extends ReadonlyArray<infer T>
     ? T
     : never
@@ -65,7 +67,7 @@ export class TBoolean<Coerce extends TBooleanCoercion = false, Cast extends TBoo
         : false
       : false
 
-    return manifest<TBooleanInput<Coerce>>()({
+    return TManifest<TBooleanInput<Coerce>>()({
       type: TParsedType.Boolean,
       coerce,
       cast,
@@ -178,7 +180,7 @@ export interface TTrueDef extends TDef {
 
 export class TTrue extends TType<true, TTrueDef> {
   get _manifest() {
-    return manifest<true>()({ type: TParsedType.True, literal: u.literalize(true) })
+    return TManifest<true>()({ type: TParsedType.True, literal: u.literalize(true) })
   }
 
   /* ---------------------------------------------------------------------------------------------------------------- */
@@ -208,7 +210,7 @@ export interface TFalseDef extends TDef {
 
 export class TFalse extends TType<false, TFalseDef> {
   get _manifest() {
-    return manifest<false>()({ type: TParsedType.False, literal: u.literalize(false) })
+    return TManifest<false>()({ type: TParsedType.False, literal: u.literalize(false) })
   }
 
   /* ---------------------------------------------------------------------------------------------------------------- */

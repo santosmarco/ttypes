@@ -1,7 +1,8 @@
 import { TChecks } from '../checks'
 import type { TDef } from '../def'
-import { IssueKind, TError, type InvalidBigIntIssue, type ToChecks } from '../error'
-import { manifest, type TManifest } from '../manifest'
+import { TError } from '../error'
+import { IssueKind, type InvalidBigIntIssue, type ToChecks } from '../issues'
+import { TManifest } from '../manifest'
 import type { TOptions } from '../options'
 import { TParsedType, type ParseContextOf, type ParseResultOf } from '../parse'
 import { TTypeName } from '../type-names'
@@ -22,15 +23,6 @@ export type TBigIntOutput<Cast extends TBigIntCasting> = Cast extends 'bigint'
   ? `${bigint}`
   : number
 
-export interface TBigIntManifest<Coerce extends boolean, Cast extends TBigIntCasting>
-  extends TManifest.Base<TBigIntInput<Coerce>> {
-  readonly min: bigint | null
-  readonly max: bigint | null
-  readonly multipleOf: bigint | null
-  readonly coerce: Coerce
-  readonly cast: Cast
-}
-
 export interface TBigIntDef<Coerce extends boolean, Cast extends TBigIntCasting> extends TDef {
   readonly typeName: TTypeName.BigInt
   readonly checks: ToChecks<InvalidBigIntIssue>
@@ -44,7 +36,7 @@ export class TBigInt<Coerce extends boolean = false, Cast extends TBigIntCasting
   TBigIntInput<Coerce>
 > {
   get _manifest() {
-    return manifest<TBigIntInput<Coerce>>()({
+    return TManifest<TBigIntInput<Coerce>>()({
       type: TParsedType.BigInt,
       min: this.minValue ?? null,
       max: this.maxValue ?? null,

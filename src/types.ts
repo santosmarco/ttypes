@@ -2423,7 +2423,7 @@ export class TBuffer<Coerce extends boolean = false> extends TType<Buffer, TBuff
 /* ------------------------------------------------------------------------------------------------------------------ */
 
 export type TLiteralOptions = ExtendedTOptions<{
-  additionalIssueKind: EIssueKind['InvalidLiteral']
+  additionalIssueKind: IssueKind.InvalidLiteral
 }>
 
 export interface TLiteralDef<T extends Primitive> extends TDef {
@@ -2680,7 +2680,7 @@ export type AnyTStringLiteral = TStringLiteral<string>
 /* ------------------------------------------------------------------------------------------------------------------ */
 
 export type TEnumOptions = ExtendedTOptions<{
-  additionalIssueKind: EIssueKind['InvalidEnumValue']
+  additionalIssueKind: IssueKind.InvalidEnumValue
 }>
 
 export interface TEnumDef<T extends ReadonlyArray<string | number>> extends TDef {
@@ -3705,7 +3705,7 @@ export type TTupleItemsManifest<T extends TTupleItems> = T extends readonly []
   : never
 
 export type TTupleOptions = ExtendedTOptions<{
-  additionalIssueKind: EIssueKind['InvalidTuple']
+  additionalIssueKind: IssueKind.InvalidTuple
 }>
 
 export interface TTupleDef<T extends TTupleItems, R extends AnyTType | null = null> extends TDef {
@@ -4433,7 +4433,7 @@ export type MakeSchemaShape<S extends TObjectShape, T extends AnyTType, D extend
 }
 
 export type TObjectOptions = ExtendedTOptions<{
-  additionalIssueKind: EIssueKind['UnrecognizedKeys']
+  additionalIssueKind: IssueKind.UnrecognizedKeys
 }>
 
 export interface TObjectDef<
@@ -4857,7 +4857,7 @@ export class TNull extends TType<null, TNullDef> {
 /* ------------------------------------------------------------------------------------------------------------------ */
 
 export type TNeverOptions = ExtendedTOptions<{
-  additionalIssueKind: EIssueKind['Forbidden']
+  additionalIssueKind: IssueKind.Forbidden
 }>
 
 export interface TNeverDef extends TDef {
@@ -4894,7 +4894,7 @@ export type TFunctionInnerIO<T extends AnyTType | null, A extends AnyTTuple, R e
   : (...args: OutputOf<A>) => InputOf<R>
 
 export type TFunctionOptions = ExtendedTOptions<{
-  additionalIssueKind: EIssueKind['InvalidThisType'] | EIssueKind['InvalidArguments'] | EIssueKind['InvalidReturnType']
+  additionalIssueKind: IssueKind.InvalidThisType | IssueKind.InvalidArguments | IssueKind.InvalidReturnType
 }>
 
 export interface TFunctionManifest<T extends AnyTType | null, A extends AnyTTuple, R extends AnyTType>
@@ -5391,7 +5391,7 @@ export type AnyTNonNullable = TNonNullable<AnyTType>
 /* ------------------------------------------------------------------------------------------------------------------ */
 
 export type TNotOptions = ExtendedTOptions<{
-  additionalIssueKind: EIssueKind['Forbidden']
+  additionalIssueKind: IssueKind.Forbidden
 }>
 
 export interface TNotDef<T extends AnyTType, Blacklist extends readonly AnyTType[]> extends TDef {
@@ -6000,7 +6000,7 @@ export const flattenMembers = <
   ) as unknown as FlattenMembers<M, TTypeNameMap<TN>>
 
 export type TUnionOptions = ExtendedTOptions<{
-  additionalIssueKind: EIssueKind['InvalidUnion']
+  additionalIssueKind: IssueKind.InvalidUnion
 }>
 
 export interface TUnionDef<T extends TUnionMembers> extends TDef {
@@ -6137,7 +6137,7 @@ const getDiscriminator = <T extends AnyTType>(type: T): readonly Primitive[] | n
 }
 
 export type TDiscriminatedUnionOptions = ExtendedTOptions<{
-  additionalIssueKind: EIssueKind['InvalidDiscriminator']
+  additionalIssueKind: IssueKind.InvalidDiscriminator
 }>
 
 export interface TDiscriminatedUnionDef<
@@ -6267,7 +6267,7 @@ export type TIntersectionMembers =
   | readonly [AnyTType, ...AnyTType[]]
 
 export type TIntersectionOptions = ExtendedTOptions<{
-  additionalIssueKind: EIssueKind['InvalidIntersection']
+  additionalIssueKind: IssueKind.InvalidIntersection
 }>
 
 export interface TIntersectionDef<T extends readonly AnyTType[]> extends TDef {
@@ -6485,7 +6485,7 @@ export type AnyTPipeline = TPipeline<AnyTType, AnyTType>
 /* ------------------------------------------------------------------------------------------------------------------ */
 
 export type TInstanceOfOptions = ExtendedTOptions<{
-  additionalIssueKind: EIssueKind['InvalidInstance']
+  additionalIssueKind: IssueKind.InvalidInstance
 }>
 
 export interface TInstanceOfDef<T extends Ctor> extends TDef {

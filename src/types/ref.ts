@@ -1,5 +1,5 @@
 import type { TDef } from '../def'
-import { type TManifest, manifest } from '../manifest'
+import { TManifest } from '../manifest'
 import { TParsedType, type ParseContextOf, type ParseResultOf } from '../parse'
 import { TTypeName } from '../type-names'
 import { type u } from '../utils'
@@ -39,16 +39,18 @@ export type TTuplePaths<T extends TTupleItems> = u.ConditionalOmit<
     }[keyof X]
   : never
 
-export type TObjectShapePaths<T extends TObjectShape> = {
-  [K in keyof T]:
-    | K
-    | (T[K] extends TObject<infer S>
-        ? `${K & string}.${TObjectShapePaths<S>}`
-        : T[K] extends TTuple<infer I>
-        ? `${K & string}${TTuplePaths<I>}`
-        : never)
-}[keyof T] &
-  string
+export type TObjectShapePaths<T extends TObjectShape> = T extends unknown
+  ? {
+      [K in keyof T]:
+        | K
+        | (T[K] extends TObject<infer S>
+            ? `${K & string}.${TObjectShapePaths<S>}`
+            : T[K] extends TTuple<infer I>
+            ? `${K & string}${TTuplePaths<I>}`
+            : never)
+    }[keyof T] &
+      string
+  : never
 
 export type _ReachSchema<R extends string, Ctx extends TRefContext> = u.ReplaceAll<
   u.ReplaceAll<R, '[', '.'>,
@@ -70,7 +72,9 @@ export type _ReachSchema<R extends string, Ctx extends TRefContext> = u.ReplaceA
     : never
   : never
 
-export type ReachSchema<R extends string, Ctx extends TRefContext> = u.Try<_ReachSchema<R, Ctx>, TType>
+export type ReachSchema<R extends string, Ctx extends TRefContext> = Ctx extends unknown
+  ? u.Try<_ReachSchema<R, Ctx>, TType>
+  : never
 
 export interface TRefDef<R extends string, Ctx extends TRefContext | null> extends TDef {
   readonly typeName: TTypeName.Ref
@@ -84,7 +88,7 @@ export class TRef<R extends string, Ctx extends TRefContext | null> extends TTyp
   InputOf<ReachSchema<R, NonNullable<Ctx>>>
 > {
   get _manifest() {
-    return manifest<InputOf<ReachSchema<R, NonNullable<Ctx>>>>()({
+    return TManifest<InputOf<ReachSchema<R, NonNullable<Ctx>>>>()({
       type: TParsedType.Unknown,
     })
   }

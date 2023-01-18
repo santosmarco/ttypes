@@ -1,6 +1,6 @@
 import type { TDef } from '../def'
-import { IssueKind } from '../error'
-import { manifest, type TManifest } from '../manifest'
+import { IssueKind } from '../issues'
+import { TManifest, type TManifest } from '../manifest'
 import type { TOptions } from '../options'
 import { TParsedType, type ParseContextOf, type ParseResultOf } from '../parse'
 import { TTypeName } from '../type-names'
@@ -24,12 +24,12 @@ export class TDefined<T extends TType>
 {
   get _manifest() {
     const underlyingManifest = this.underlying.manifest()
-    return manifest<u.Defined<InputOf<T>>>()({
+    return TManifest<u.Defined<InputOf<T>>>()({
       type: { not: [TParsedType.Undefined] },
       underlying: underlyingManifest,
       required: true,
-      nullable: manifest.extract(underlyingManifest, 'nullable'),
-      readonly: manifest.extract(underlyingManifest, 'readonly'),
+      nullable: TManifest.extract(underlyingManifest, 'nullable'),
+      readonly: TManifest.extract(underlyingManifest, 'readonly'),
     })
   }
 
@@ -86,12 +86,12 @@ export class TNonNullable<T extends TType>
 {
   get _manifest() {
     const underlyingManifest = this.underlying.manifest()
-    return manifest<NonNullable<InputOf<T>>>()({
+    return TManifest<NonNullable<InputOf<T>>>()({
       type: { not: [TParsedType.Undefined, TParsedType.Null] },
       underlying: underlyingManifest,
       required: true,
       nullable: false,
-      readonly: manifest.extract(underlyingManifest, 'readonly'),
+      readonly: TManifest.extract(underlyingManifest, 'readonly'),
     })
   }
 

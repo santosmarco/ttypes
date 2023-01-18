@@ -1,11 +1,8 @@
-import _ from 'lodash'
 import memoize from 'micro-memoize'
 import { nanoid } from 'nanoid'
-import { TParsedType } from '../../out'
 import type { TChecks } from '../checks'
-import type { TDef } from '../def'
-import { type Manifest, type PublicManifest } from '../manifest'
-import { type ParseOptions } from '../options'
+import type { BrandedManifest, Manifest, PublicManifest } from '../manifest'
+import type { ParseOptions, TOptions } from '../options'
 import {
   AsyncParseContext,
   SyncParseContext,
@@ -35,12 +32,19 @@ import {
   TSuperDefault,
   TTransform,
   TUnion,
-  type BRANDED,
   type EffectCtx,
   type RefinementMessage,
 } from './_internal'
-import { deepEqual } from 'fast-equals'
-import safeJsonStringify from 'safe-json-stringify'
+
+/* ------------------------------------------------------------------------------------------------------------------ */
+/*                                                        TDef                                                        */
+/* ------------------------------------------------------------------------------------------------------------------ */
+
+export interface TDef {
+  readonly typeName: TTypeName
+  readonly options: TOptions
+  readonly checks?: ReadonlyArray<{ readonly check: string }>
+}
 
 /* ------------------------------------------------------------------------------------------------------------------ */
 /*                                                        TType                                                       */
@@ -51,22 +55,14 @@ export abstract class TType<Output = unknown, Def extends TDef = TDef, Input = O
   declare readonly $D: Def
   declare readonly $I: Input
 
-  protected readonly _def: Def & { readonly manifest: Manifest }
+  protected readonly _def: Def & { readonly manifest: Partial<Manifest> }
 
-  abstract get _manifest(): BRANDED<Manifest, 'TManifest'>
+  abstract get _manifest(): BrandedManifest<Input>
 
   abstract _parse(ctx: ParseContextOf<this>): ParseResultOf<this>
 
-  constructor(def: Def & { readonly manifest?: Manifest }) {
-    this._def = {
-      ...def,
-      manifest: _.defaults(def.manifest, {
-        type: TParsedType.Unknown,
-        required: true,
-        nullable: false,
-        readonly: false,
-      }),
-    }
+  constructor(def: Def & { readonly manifest?: Partial<Manifest> }) {
+    this._def = { ...def, manifest: { ...def.manifest } }
 
     this._parse = this._parse.bind(this)
     this._parseSync = memoize(this._parseSync.bind(this))
@@ -262,20 +258,20 @@ export abstract class TType<Output = unknown, Def extends TDef = TDef, Input = O
     return TPromise.create(this, this.options())
   }
 
-  promisable(): TUnion<[TPromise<this>, this]> {
-    return this.promise().or(this)
+  promisable(): TUnion<[this, TPromise<this>]> {
+    return this.or([this.promise()])
   }
 
-  or<T extends readonly [TType, ...TType[]]>(...alternatives: T): TUnion<[this, u.Head<T>, ...u.Tail<T>]> {
-    return TUnion.create([this, u.head(alternatives), ...u.tail(alternatives)], this.options())
+  or<T extends readonly [TType, ...TType[]]>(alternatives: T): TUnion<[this, ...T]> {
+    return TUnion._create([this, ...alternatives], this.options())
   }
 
-  and<T extends readonly [TType, ...TType[]]>(...intersectees: T): TIntersection<[this, u.Head<T>, ...u.Tail<T>]> {
-    return TIntersection.create([this, u.head(intersectees), ...u.tail(intersectees)], this.options())
+  and<T extends readonly [TType, ...TType[]]>(intersectees: T): TIntersection<[this, ...T]> {
+    return TIntersection._create([this, ...intersectees], this.options())
   }
 
-  not<T extends readonly [TType, ...TType[]]>(...blacklist: T): TNot<this, T> {
-    return TNot.create(this, blacklist, this.options())
+  not<T extends readonly [TType, ...TType[]]>(forbidden: T): TNot<this, T> {
+    return TNot.create(this, forbidden, this.options())
   }
 
   brand<B>(brand: u.Narrow<B>): TBrand<this, B> {
@@ -304,7 +300,7 @@ export abstract class TType<Output = unknown, Def extends TDef = TDef, Input = O
     return TLazy.create(() => this, this.options())
   }
 
-  pipe<T extends AnyTType<unknown, Input>>(type: T): TPipeline<this, T> {
+  pipe<T extends TType<unknown, TDef, Input>>(type: T): TPipeline<this, T> {
     return TPipeline.create(this, type, this.options())
   }
 
@@ -368,9 +364,7 @@ export abstract class TType<Output = unknown, Def extends TDef = TDef, Input = O
     return this._construct()
   }
 
-  isT<T extends readonly [TTypeName, ...TTypeName[]]>(...types: T): this is TTypeNameMap<T[number]>
-  isT<T extends readonly TTypeName[]>(...types: T): this is TTypeNameMap<T[number]>
-  isT<T extends readonly TTypeName[]>(...types: T): this is TTypeNameMap<T[number]> {
+  isT<T extends readonly [TTypeName, ...TTypeName[]]>(...types: T): this is TTypeNameMap<T[number]> {
     return types.includes(this.typeName)
   }
 
@@ -406,8 +400,6 @@ export abstract class TType<Output = unknown, Def extends TDef = TDef, Input = O
     return Reflect.construct<[def: Def], this>(this.constructor as new (def: Def) => this, [u.merge(this._def, def)])
   }
 }
-
-export type AnyTType<O = unknown, I = unknown> = TType<O, TDef, I>
 
 /* ------------------------------------------------------------------------------------------------------------------ */
 

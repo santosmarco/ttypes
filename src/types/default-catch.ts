@@ -1,5 +1,5 @@
 import type { TDef } from '../def'
-import { manifest, type TManifest } from '../manifest'
+import { TManifest, type TManifest } from '../manifest'
 import type { TOptions } from '../options'
 import { TParsedType, type ParseContextOf, type ParseResultOf } from '../parse'
 import { TTypeName } from '../type-names'
@@ -9,11 +9,6 @@ import { TType, type InputOf, type OutputOf, type TUnwrappable, type UnwrapDeep 
 /* ------------------------------------------------------------------------------------------------------------------ */
 /*                                                      TDefault                                                      */
 /* ------------------------------------------------------------------------------------------------------------------ */
-
-export interface TDefaultManifest<T extends TType, D>
-  extends TManifest.Wrap<T, InputOf<T> | undefined, { readonly required: false }> {
-  readonly default: { readonly _value: D }
-}
 
 export interface TDefaultDef<T extends TType, D extends u.Defined<OutputOf<T>>> extends TDef {
   readonly typeName: TTypeName.Default
@@ -27,15 +22,16 @@ export class TDefault<T extends TType, D extends u.Defined<OutputOf<T>>>
 {
   get _manifest() {
     const underlyingManifest = this.underlying.manifest()
-    return manifest<InputOf<T> | undefined>()({
-      type: { anyOf: [manifest.extract(underlyingManifest, 'type'), TParsedType.Undefined] },
+    return TManifest<InputOf<T> | undefined>()({
+      type: { anyOf: [TManifest.extract(underlyingManifest, 'type'), TParsedType.Undefined] },
       underlying: underlyingManifest,
-      required: false,
       default: this.defaultValue,
-      nullable: manifest.extract(underlyingManifest, 'nullable'),
-      readonly: manifest.extract(underlyingManifest, 'readonly'),
+      required: false,
+      nullable: TManifest.extract(underlyingManifest, 'nullable'),
+      readonly: TManifest.extract(underlyingManifest, 'readonly'),
     })
   }
+
   /* ---------------------------------------------------------------------------------------------------------------- */
 
   _parse(ctx: ParseContextOf<this>): ParseResultOf<this> {
@@ -106,11 +102,6 @@ export type AnyTDefault = TDefault<TType, unknown>
 /*                                                    TSuperDefault                                                   */
 /* ------------------------------------------------------------------------------------------------------------------ */
 
-export interface TSuperDefaultManifest<T extends TType, D>
-  extends TManifest.Wrap<T, InputOf<T> | null | undefined, { readonly required: false; readonly nullable: true }> {
-  readonly default: { readonly _value: D }
-}
-
 export interface TSuperDefaultDef<T extends TType, D> extends TDef {
   readonly typeName: TTypeName.SuperDefault
   readonly underlying: T
@@ -123,13 +114,13 @@ export class TSuperDefault<T extends TType, D>
 {
   get _manifest() {
     const underlyingManifest = this.underlying.manifest()
-    return manifest<InputOf<T> | null | undefined>()({
-      type: { anyOf: [manifest.extract(underlyingManifest, 'type'), TParsedType.Undefined, TParsedType.Null] },
+    return TManifest<InputOf<T> | null | undefined>()({
+      type: { anyOf: [TManifest.extract(underlyingManifest, 'type'), TParsedType.Undefined, TParsedType.Null] },
       underlying: this.underlying.manifest(),
+      default: this.defaultValue,
       required: false,
       nullable: true,
-      default: this.defaultValue,
-      readonly: manifest.extract(underlyingManifest, 'readonly'),
+      readonly: TManifest.extract(underlyingManifest, 'readonly'),
     })
   }
 
@@ -201,12 +192,6 @@ export type AnyTSuperDefault = TSuperDefault<TType, unknown>
 /*                                                       TCatch                                                       */
 /* ------------------------------------------------------------------------------------------------------------------ */
 
-export type TCatchManifest<T extends TType> = TManifest.Wrap<
-  T,
-  any,
-  { readonly required: false; readonly nullable: true }
->
-
 export interface TCatchDef<T extends TType, C extends OutputOf<T>> extends TDef {
   readonly typeName: TTypeName.Catch
   readonly underlying: T
@@ -219,13 +204,13 @@ export class TCatch<T extends TType, C extends OutputOf<T>>
 {
   get _manifest() {
     const underlyingManifest = this.underlying.manifest()
-    return manifest<any>()({
+    return TManifest<any>()({
       type: TParsedType.Any,
       underlying: this.underlying.manifest(),
+      default: this.catchValue,
       required: false,
       nullable: true,
-      default: this.catchValue,
-      readonly: manifest.extract(underlyingManifest, 'readonly'),
+      readonly: TManifest.extract(underlyingManifest, 'readonly'),
     })
   }
 

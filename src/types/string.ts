@@ -1,7 +1,8 @@
 import { TChecks } from '../checks'
 import type { TDef } from '../def'
-import { IssueKind, TError, type InvalidStringIssue, type ToChecks } from '../error'
-import { manifest, type TManifest } from '../manifest'
+import { TError } from '../error'
+import { IssueKind, type InvalidStringIssue, type ToChecks } from '../issues'
+import { TManifest } from '../manifest'
 import type { TOptions } from '../options'
 import { TParsedType, type ParseContextOf, type ParseResultOf } from '../parse'
 import { TTypeName } from '../type-names'
@@ -57,21 +58,6 @@ export type TStringManifestFormat =
   | 'iso_duration'
   | 'base64'
 
-export interface TStringManifest<Coerce extends boolean>
-  extends u.Except<TManifest.Base<TStringInput<Coerce>>, 'required' | 'nullable'> {
-  readonly min: number | null
-  readonly max: number | null
-  readonly formats: readonly TStringManifestFormat[] | null
-  readonly transforms: ReadonlyArray<TStringTransform['kind']> | null
-  readonly patterns: ReadonlyArray<RegExp | { readonly regex: RegExp; readonly name: string }> | null
-  readonly prefix: string | null
-  readonly suffix: string | null
-  readonly substrings: readonly string[] | null
-  readonly coerce: Coerce
-  readonly required: Coerce extends true ? false : true
-  readonly nullable: Coerce
-}
-
 export interface TStringDef<Coerce extends boolean = boolean> extends TDef {
   readonly typeName: TTypeName.String
   readonly transforms: readonly TStringTransform[]
@@ -99,7 +85,7 @@ export class TString<
       ] as const
     ).filter(u.filterFalsy)
 
-    return manifest<TStringInput<Coerce>>()({
+    return TManifest<TStringInput<Coerce>>()({
       type: TParsedType.String,
       minLength: this.minLength ?? null,
       maxLength: this.maxLength ?? null,
@@ -110,7 +96,7 @@ export class TString<
       suffix: this.suffix ?? null,
       substrings: this.substrings,
       coerce: this._def.coerce,
-      required: !this._def.coerce as Coerce extends true ? false : true,
+      required: u.invert(this._def.coerce),
       nullable: this._def.coerce,
     })
   }

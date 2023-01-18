@@ -1,5 +1,5 @@
 import type { TDef } from '../def'
-import { manifest } from '../manifest'
+import { TManifest } from '../manifest'
 import type { TOptions } from '../options'
 import { TParsedType, type ParseContextOf, type ParseResultOf } from '../parse'
 import { TTypeName } from '../type-names'
@@ -16,7 +16,7 @@ export interface TFalsyDef extends TDef {
 
 export class TFalsy extends TType<false | '' | 0 | 0n | null | undefined, TFalsyDef> {
   get _manifest() {
-    return manifest<u.Falsy>()({
+    return TManifest<u.Falsy>()({
       type: {
         anyOf: [
           TParsedType.False,
@@ -55,7 +55,7 @@ export interface TPrimitiveDef extends TDef {
 
 export class TPrimitive extends TType<string | number | bigint | boolean | symbol | null | undefined, TPrimitiveDef> {
   get _manifest() {
-    return manifest<u.Primitive>()({
+    return TManifest<u.Primitive>()({
       type: {
         anyOf: [
           TParsedType.String,
@@ -97,7 +97,7 @@ export interface TPropertyKeyDef extends TDef {
 
 export class TPropertyKey extends TType<string | number | symbol, TPropertyKeyDef> {
   get _manifest() {
-    return manifest<PropertyKey>()({
+    return TManifest<PropertyKey>()({
       type: { anyOf: [TParsedType.String, TParsedType.Number, TParsedType.Symbol] },
     })
   }

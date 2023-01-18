@@ -1,5 +1,5 @@
 import type { TDef } from '../def'
-import { IssueKind, type CustomIssue } from '../error'
+import { IssueKind, type CustomIssue } from '../issues'
 import type { TOptions } from '../options'
 import type { AsyncParseResultOf, ParseContextOf, ParsePath, ParseResultOf, SyncParseResultOf } from '../parse'
 import { TTypeName } from '../type-names'

@@ -1,4 +1,5 @@
 import { t } from './index'
+import { TManifest } from './manifest'
 
 const myArray = t
   .string()
@@ -19,33 +20,66 @@ const myArray = t
 const myBool = t
   .object({
     a: t.boolean().coerce({ truthy: [1, '1', 'true', 'yes', 'on'] }),
-    b: t.bigint().coerce(),
-    c: t.ref('d.e'),
+    // b: t.bigint().coerce(),
+    // c: t.ref('d.e'),
     d: t.object({
       e: t.string().optional(),
     }),
+    f: t.any(),
   })
+  .when([
+    {
+      key: 'f',
+      is: 'a',
+      then: (x) => x.setKey('ksok', t.bigint()),
+      otherwise: (x) => x.setKey('kosdsdk', t.true()),
+    },
+    {
+      key: 'a',
+      is: true,
+      then: (x) => x.setKey('sdsd', t.bigint()),
+      otherwise: (x) => x.setKey('asd', t.true()),
+    },
+    {
+      key: 'd.e',
+      not: 'a',
+      then: (x) => x.setKey('dasdasd', t.bigint()),
+      otherwise: (x) => x.setKey('aasdasdadsd', t.true()),
+    },
+    {
+      key: 'd.e',
+      is: 'a',
+      then: (x) => x.setKey('sadaddsd', t.bigint()),
+      otherwise: (x) => x.setKey('aasdasdsd', t.true()),
+    },
+    {
+      key: 'd.e',
+      is: 'a',
+      then: (x) => x.setKey('sdasdadssd', t.bigint()),
+      otherwise: (x) => x.setKey('asdadasd', t.true()),
+    },
+    {
+      key: 'd.e',
+      is: 'a',
+      then: (x) => x.setKey('sasdaddsd', t.bigint()),
+      otherwise: (x) => x.setKey('asasdadd', t.true()),
+    },
+    {
+      key: 'd.e',
+      is: 'a',
+      // then: (x) => x.setKey('sasdasdsd', t.bigint()),
+      otherwise: (x) => x.setKey('aasdadsd', t.true()),
+    },
+  ])
+  .extend({ asd: t.literal('foo') })
   .partial()
+// .partial(['ksok'])
+// .if('', {
+//   is: 'hi',
+//   then: (x) => x.setKey('f', t.true()),
+//   otherwise: (x) => x.extend({ aa: t.falsy() }),
+// })
 
-type MyBool = t.input<typeof myBool>
+type myBool = t.infer<typeof myBool>
 
-console.log(
-  myBool._parseSync.cache
-
-  // t.string().manifest().required
-)
-
-myBool.safeParse(2)
-myBool.safeParse('2')
-// myBool.safeParse([2])
-// console.log(myBool._parseSync.cache)
-
-myBool.safeParse({})
-// console.log(myBool._parseSync.cache)
-
-myBool.safeParse({})
-// console.log(myBool._parseSync.cache)
-myBool.safeParse({})
-// console.log(myBool._parseSync.cache)
-myBool.safeParse({})
-// console.log(myBool._parseSync.cache)
+console.log(t.null().or([t.number()]).pipe(t.number().integer().nullable()).manifest())

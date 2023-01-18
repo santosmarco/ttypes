@@ -1,7 +1,7 @@
 import type { TDef } from '../def'
-import { IssueKind, type EIssueKind } from '../error'
-import { TManifest, manifest, type MakeManifest } from '../manifest'
-import type { ExtendedTOptions } from '../options'
+import { IssueKind } from '../issues'
+import { TManifest, type MakeManifest } from '../manifest'
+import type { MakeTOptions } from '../options'
 import {
   TParsedType,
   type ParseContext,
@@ -19,8 +19,8 @@ import { TType, type InputOf, type ManifestOf, type OutputOf } from './_internal
 
 export type TUnionMembers = readonly [TType, TType, ...TType[]]
 
-export type TUnionOptions = ExtendedTOptions<{
-  additionalIssueKind: EIssueKind['InvalidUnion']
+export type TUnionOptions = MakeTOptions<{
+  additionalIssueKind: IssueKind.InvalidUnion
 }>
 
 export type TUnionManifest<T extends readonly TType[]> = MakeManifest<
@@ -46,9 +46,9 @@ export class TUnion<T extends readonly TType[]> extends TType<OutputOf<T[number]
     type Required = u.Equals<ManifestOf<T[number]>['required'], true> extends 1 ? true : false
     type Nullable = u.Equals<ManifestOf<T[number]>['nullable'], false> extends 1 ? false : true
 
-    return manifest<InputOf<T[number]>>()({
-      type: { anyOf: manifest.mapKey(members, 'type') },
-      members: manifest.map(members),
+    return TManifest<InputOf<T[number]>>()({
+      type: { anyOf: TManifest.mapKey(members, 'type') },
+      members: TManifest.map(members),
       required: members.every((m) => m.isRequired) as u.Narrow<Required>,
       nullable: members.some((m) => m.isNullable) as u.Narrow<Nullable>,
     })
@@ -119,8 +119,8 @@ export type AnyTUnion = TUnion<TUnionMembers>
 
 export type TIntersectionMembers = readonly [TType, TType, ...TType[]]
 
-export type TIntersectionOptions = ExtendedTOptions<{
-  additionalIssueKind: EIssueKind['InvalidIntersection']
+export type TIntersectionOptions = MakeTOptions<{
+  additionalIssueKind: IssueKind.InvalidIntersection
 }>
 
 export type TIntersectionManifest<T extends readonly TType[]> = MakeManifest<
@@ -150,9 +150,9 @@ export class TIntersection<T extends readonly TType[]> extends TType<
     type Required = u.Equals<ManifestOf<T[number]>['required'], false> extends 1 ? false : true
     type Nullable = u.Equals<ManifestOf<T[number]>['nullable'], true> extends 1 ? true : false
 
-    return manifest<u.UnionToIntersection<InputOf<T[number]>>>()({
-      type: { allOf: manifest.mapKey(members, 'type') },
-      members: manifest.map(members),
+    return TManifest<u.UnionToIntersection<InputOf<T[number]>>>()({
+      type: { allOf: TManifest.mapKey(members, 'type') },
+      members: TManifest.map(members),
       required: members.some((m) => m.isRequired) as u.Narrow<Required>,
       nullable: members.every((m) => m.isNullable) as u.Narrow<Nullable>,
     })

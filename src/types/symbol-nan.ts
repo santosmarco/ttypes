@@ -1,5 +1,5 @@
 import type { TDef } from '../def'
-import { manifest } from '../manifest'
+import { TManifest } from '../manifest'
 import type { TOptions } from '../options'
 import { TParsedType, type ParseContextOf, type ParseResultOf } from '../parse'
 import { TTypeName } from '../type-names'
@@ -15,7 +15,7 @@ export interface TSymbolDef extends TDef {
 
 export class TSymbol extends TType<symbol, TSymbolDef> {
   get _manifest() {
-    return manifest<symbol>()({ type: TParsedType.Symbol })
+    return TManifest<symbol>()({ type: TParsedType.Symbol })
   }
 
   /* ---------------------------------------------------------------------------------------------------------------- */
@@ -43,7 +43,7 @@ export interface TNaNDef extends TDef {
 
 export class TNaN extends TType<number, TNaNDef> {
   get _manifest() {
-    return manifest<number>()({ type: TParsedType.NaN })
+    return TManifest<number>()({ type: TParsedType.NaN })
   }
 
   /* ---------------------------------------------------------------------------------------------------------------- */

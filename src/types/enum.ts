@@ -1,7 +1,7 @@
 import type { TDef } from '../def'
-import { IssueKind, type EIssueKind } from '../error'
-import { manifest } from '../manifest'
-import type { ExtendedTOptions } from '../options'
+import { IssueKind } from '../issues'
+import { TManifest } from '../manifest'
+import type { MakeTOptions } from '../options'
 import { TParsedType, type ParseContextOf, type ParseResultOf } from '../parse'
 import { TTypeName } from '../type-names'
 import { u } from '../utils'
@@ -11,8 +11,8 @@ import { TType } from './_internal'
 /*                                                        TEnum                                                       */
 /* ------------------------------------------------------------------------------------------------------------------ */
 
-export type TEnumOptions = ExtendedTOptions<{
-  additionalIssueKind: EIssueKind['InvalidEnumValue']
+export type TEnumOptions = MakeTOptions<{
+  additionalIssueKind: IssueKind.InvalidEnumValue
 }>
 
 export interface TEnumDef<T extends ReadonlyArray<string | number>> extends TDef {
@@ -23,7 +23,7 @@ export interface TEnumDef<T extends ReadonlyArray<string | number>> extends TDef
 
 export class TEnum<T extends ReadonlyArray<string | number>> extends TType<T[number], TEnumDef<T>> {
   get _manifest() {
-    return manifest<T[number]>()({
+    return TManifest<T[number]>()({
       type: TParsedType.Enum(this.values),
       enum: this.values,
     })

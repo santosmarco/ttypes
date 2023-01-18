@@ -9,7 +9,7 @@ import {
   type InvalidSetIssue,
   type ToChecks,
 } from '../error'
-import { manifest } from '../manifest'
+import { TManifest } from '../manifest'
 import type { TOptions } from '../options'
 import { TParsedType, type ParseContextOf, type ParseResultOf } from '../parse'
 import { TTypeName } from '../type-names'
@@ -36,9 +36,9 @@ export type TArrayIO<T extends TType, Card extends TArrayCardinality, IO extends
   many: Array<T[IO]>
 }[Card]
 
-export type TArrayInput<T extends TType, Card extends TArrayCardinality, Coerce extends boolean> =
-  | TArrayIO<T, Card, '$I'>
-  | (Coerce extends true ? Set<InputOf<T>> : never)
+export type TArrayInput<T extends TType, Card extends TArrayCardinality, Coerce extends boolean> = Coerce extends true
+  ? TArrayIO<T, Card, '$I'> | Set<InputOf<T>>
+  : TArrayIO<T, Card, '$I'>
 
 export type TArrayOutput<T extends TType, Card extends TArrayCardinality, Cast extends boolean> = Cast extends true
   ? Set<OutputOf<T>>
@@ -83,7 +83,7 @@ export class TArray<
   }
 
   get _manifest() {
-    return manifest<TArrayInput<T, Card, Coerce>>()({
+    return TManifest<TArrayInput<T, Card, Coerce>>()({
       type: TParsedType.Array,
       element: this.element.manifest(),
       cardinality: this._def.cardinality,
@@ -449,9 +449,9 @@ const flattenTArrayElement = <T extends AnyTArray, D extends 'flat' | 'deep' = '
 /*                                                        TSet                                                        */
 /* ------------------------------------------------------------------------------------------------------------------ */
 
-export type TSetInput<T extends TType, Coerce extends boolean> =
-  | Set<InputOf<T>>
-  | (Coerce extends true ? TArrayIO<T, 'many', '$I'> : never)
+export type TSetInput<T extends TType, Coerce extends boolean> = Coerce extends true
+  ? Set<InputOf<T>> | TArrayIO<T, 'many', '$I'>
+  : Set<InputOf<T>>
 
 export type TSetOutput<T extends TType, Cast extends boolean> = Cast extends true
   ? TArrayIO<T, 'many'>
@@ -471,7 +471,7 @@ export class TSet<T extends TType, Coerce extends boolean = false, Cast extends 
   TSetInput<T, Coerce>
 > {
   get _manifest() {
-    return manifest<TSetInput<T, Coerce>>()({
+    return TManifest<TSetInput<T, Coerce>>()({
       type: TParsedType.Set,
       element: this.element.manifest(),
       minItems: this.minItems ?? null,
@@ -696,7 +696,7 @@ export class TBuffer<Coerce extends boolean = false, Cast extends boolean = fals
   TBufferInput<Coerce>
 > {
   get _manifest() {
-    return manifest<TBufferInput<Coerce>>()({
+    return TManifest<TBufferInput<Coerce>>()({
       type: TParsedType.Buffer,
       minBytes: this.minBytes ?? null,
       maxBytes: this.maxBytes ?? null,

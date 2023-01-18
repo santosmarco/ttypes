@@ -1,7 +1,7 @@
 import type { TDef } from '../def'
-import { IssueKind, type EIssueKind } from '../error'
-import { manifest } from '../manifest'
-import type { ExtendedTOptions } from '../options'
+import { IssueKind } from '../issues'
+import { TManifest } from '../manifest'
+import type { MakeTOptions } from '../options'
 import { type ParseContextOf, type ParseResultOf } from '../parse'
 import { TTypeName } from '../type-names'
 import { type u } from '../utils'
@@ -11,37 +11,39 @@ import { TType, type InputOf, type OutputOf, type TUnwrappable, type UnwrapDeep 
 /*                                                        TNot                                                        */
 /* ------------------------------------------------------------------------------------------------------------------ */
 
-export type TNotOptions = ExtendedTOptions<{
-  additionalIssueKind: EIssueKind['Forbidden']
+export type TNotOptions = MakeTOptions<{
+  additionalIssueKind: IssueKind.Forbidden
 }>
 
-export interface TNotDef<T extends TType, Blacklist extends readonly TType[]> extends TDef {
+export interface TNotDef<T extends TType, Forbidden extends readonly TType[]> extends TDef {
   readonly typeName: TTypeName.Not
   readonly options: TNotOptions
   readonly underlying: T
-  readonly blacklist: Blacklist
+  readonly forbidden: Forbidden
 }
 
-export class TNot<T extends TType, Blacklist extends readonly TType[]>
+export class TNot<T extends TType, Forbidden extends readonly TType[]>
   extends TType<
-    u.Not<OutputOf<T>, OutputOf<Blacklist[number]>>,
-    TNotDef<T, Blacklist>,
-    u.Not<InputOf<T>, InputOf<Blacklist[number]>>
+    u.Not<OutputOf<T>, OutputOf<Forbidden[number]>>,
+    TNotDef<T, Forbidden>,
+    u.Not<InputOf<T>, InputOf<Forbidden[number]>>
   >
   implements TUnwrappable<T>
 {
   get _manifest() {
-    return manifest<u.Not<InputOf<T>, InputOf<Blacklist[number]>>>()({
-      type: { not: manifest.mapKey(this.blacklist, 'type') },
-      blacklist: manifest.map(this.blacklist),
+    return TManifest<u.Not<InputOf<T>, InputOf<Forbidden[number]>>>()({
+      type: { not: TManifest.mapKey(this.forbidden, 'type') },
+      forbidden: TManifest.map(this.forbidden),
     })
   }
 
+  /* ---------------------------------------------------------------------------------------------------------------- */
+
   _parse(ctx: ParseContextOf<this>): ParseResultOf<this> {
-    const { underlying, blacklist } = this._def
+    const { underlying, forbidden } = this._def
 
     if (ctx.common.async) {
-      return Promise.all(blacklist.map(async (t) => t._parseAsync(ctx.clone(t, ctx.data)))).then((results) => {
+      return Promise.all(forbidden.map(async (t) => t._parseAsync(ctx.clone(t, ctx.data)))).then((results) => {
         for (const res of results) {
           if (res.ok) {
             return ctx.addIssue(IssueKind.Forbidden, this.options().messages?.forbidden).abort()
@@ -52,7 +54,7 @@ export class TNot<T extends TType, Blacklist extends readonly TType[]>
       }) as ParseResultOf<this>
     }
 
-    for (const res of blacklist.map((t) => t._parseSync(ctx.clone(t, ctx.data)))) {
+    for (const res of forbidden.map((t) => t._parseSync(ctx.clone(t, ctx.data)))) {
       if (res.ok) {
         return ctx.addIssue(IssueKind.Forbidden, this.options().messages?.forbidden).abort()
       }
@@ -76,18 +78,18 @@ export class TNot<T extends TType, Blacklist extends readonly TType[]>
     return (this.underlying instanceof TNot ? this.underlying.unwrapDeep() : this.underlying) as U
   }
 
-  get blacklist(): Blacklist {
-    return this._def.blacklist
+  get forbidden(): Forbidden {
+    return this._def.forbidden
   }
 
   /* ---------------------------------------------------------------------------------------------------------------- */
 
-  static create<T extends TType, Blacklist extends readonly [TType, ...TType[]]>(
+  static create<T extends TType, Forbidden extends readonly [TType, ...TType[]]>(
     underlying: T,
-    blacklist: Blacklist,
+    forbidden: Forbidden,
     options?: TNotOptions
-  ): TNot<T, Blacklist> {
-    return new TNot({ typeName: TTypeName.Not, underlying, blacklist, options: { ...options } })
+  ): TNot<T, Forbidden> {
+    return new TNot({ typeName: TTypeName.Not, underlying, forbidden, options: { ...options } })
   }
 }
 

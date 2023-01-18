@@ -1,4 +1,5 @@
-import type { EIssueKind, IssueKind, TErrorMap } from './error'
+import type { TErrorMap } from './error'
+import type { IssueKind } from './issues'
 import type { u } from './utils'
 
 /* ------------------------------------------------------------------------------------------------------------------ */
@@ -68,20 +69,20 @@ export type TOptions = SchemaColorOptions &
   ParseOptions & {
     readonly schemaErrorMap?: TErrorMap
     readonly messages?: {
-      readonly [K in EIssueKind['Required'] | EIssueKind['InvalidType'] as u.CamelCase<K>]?: string
+      readonly [K in IssueKind.Required | IssueKind.InvalidType as u.CamelCase<K>]?: string
     }
   } extends infer X
   ? { [K in keyof X]: X[K] }
   : never
 
-export type ExtendedTOptions<
-  E extends { readonly additionalIssueKind?: Exclude<IssueKind, EIssueKind['Required'] | EIssueKind['InvalidType']> }
+export type MakeTOptions<
+  P extends { readonly additionalIssueKind?: Exclude<IssueKind, IssueKind.Required | IssueKind.InvalidType> }
 > = Omit<TOptions, 'messages'> & {
   readonly messages?: {
     readonly [K in
-      | EIssueKind['Required']
-      | EIssueKind['InvalidType']
-      | ('additionalIssueKind' extends keyof E ? E['additionalIssueKind'] & string : never) as u.CamelCase<
+      | IssueKind.Required
+      | IssueKind.InvalidType
+      | ('additionalIssueKind' extends keyof P ? P['additionalIssueKind'] & string : never) as u.CamelCase<
       K & string
     >]?: string
   }

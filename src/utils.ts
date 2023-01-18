@@ -61,6 +61,8 @@ export namespace u {
     : UnionToTuple<Exclude<T, GetUnionLast<T>>, [GetUnionLast<T>, ..._Res]>
 
   export type AssertTTypes<T extends readonly unknown[]> = Try<T, readonly TType[]>
+
+  export const invert = <T extends boolean>(x: T): T extends true ? false : true => !x as T extends true ? false : true
 }
 
 export namespace u {

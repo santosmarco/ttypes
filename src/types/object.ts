@@ -1,11 +1,12 @@
 import type { TDef } from '../def'
-import { IssueKind, type EIssueKind } from '../error'
-import { manifest } from '../manifest'
-import type { ExtendedTOptions } from '../options'
+import { IssueKind } from '../issues'
+import { TManifest } from '../manifest'
+import type { MakeTOptions } from '../options'
 import { TParsedType, type ParseContextOf, type ParseResultOf, type SyncParseResultOf } from '../parse'
 import { TTypeName } from '../type-names'
 import { u } from '../utils'
 import {
+  TEnum,
   TLiteral,
   TNever,
   TRef,
@@ -18,7 +19,6 @@ import {
   type TDefined,
   type TObjectShapePaths,
   type TOptional,
-  TEnum,
 } from './_internal'
 
 /* ----------------------------------------------------------------------------------------------------------------- - */
@@ -33,16 +33,18 @@ export type TObjectIO<
   UK extends TObjectUnknownKeys | null,
   C extends TType | null,
   IO extends '$I' | '$O' = '$O'
-> = u.SimplifyDeep<
-  u.EnforceOptional<{ [K in keyof S]: S[K][IO] }> &
-    (C extends TType
-      ? Record<string, C[IO]>
-      : UK extends 'passthrough'
-      ? Record<string, unknown>
-      : UK extends 'strict'
-      ? Record<string, never>
-      : unknown)
->
+> = S extends unknown
+  ? u.SimplifyDeep<
+      u.EnforceOptional<{ [K in keyof S]: S[K][IO] }> &
+        (C extends TType
+          ? Record<string, C[IO]>
+          : UK extends 'passthrough'
+          ? Record<string, unknown>
+          : UK extends 'strict'
+          ? Record<string, never>
+          : unknown)
+    >
+  : never
 
 export type TObjectShapeArg<S extends TObjectShape> = {
   [K in keyof S]: Exclude<S[K], AnyTRef> | TRef<Exclude<TObjectShapePaths<S>, K>, null>
@@ -88,23 +90,31 @@ export type TObjectValues<S extends TObjectShape> = u.UnionToTuple<S[keyof S]> e
   ? TUnion<u.Try<u.UnionToTuple<S[keyof S]>, readonly TType[]>>
   : TNever
 
-export type MakePartialShape<S extends TObjectShape, K extends ReadonlyArray<keyof S> = ReadonlyArray<keyof S>> = {
-  [K_ in keyof S]: K_ extends K[number] ? TOptional<S[K_]> : S[K_]
-}
-export type MakeRequiredShape<S extends TObjectShape, K extends ReadonlyArray<keyof S> = ReadonlyArray<keyof S>> = {
-  [K_ in keyof S]: K_ extends K[number] ? TDefined<S[K_]> : S[K_]
-}
-
-export type MakeDeepPartialShape<S extends TObjectShape> = {
-  [K in keyof S]: TOptional<
-    S[K] extends TObject<infer S_, infer UK, infer C> ? TObject<MakeDeepPartialShape<S_>, UK, C> : S[K]
-  >
-}
-export type MakeDeepRequiredShape<S extends TObjectShape> = {
-  [K in keyof S]: TDefined<
-    S[K] extends TObject<infer S_, infer UK, infer C> ? TObject<MakeDeepRequiredShape<S_>, UK, C> : S[K]
-  >
-}
+export type ModifyShape<
+  Mod extends 'partial' | 'required',
+  Depth extends 'flat' | 'deep',
+  S extends TObjectShape,
+  K extends Depth extends 'flat' ? ReadonlyArray<keyof S> : never = Depth extends 'flat'
+    ? ReadonlyArray<keyof S>
+    : never
+> = {
+  partial: {
+    flat: { [K_ in keyof S]: K_ extends K[number] ? TOptional<S[K_]> : S[K_] }
+    deep: {
+      [K in keyof S]: TOptional<
+        S[K] extends TObject<infer S_, infer UK, infer C> ? TObject<ModifyShape<Mod, Depth, S_>, UK, C> : S[K]
+      >
+    }
+  }
+  required: {
+    flat: { [K_ in keyof S]: K_ extends K[number] ? TDefined<S[K_]> : S[K_] }
+    deep: {
+      [K in keyof S]: TDefined<
+        S[K] extends TObject<infer S_, infer UK, infer C> ? TObject<ModifyShape<Mod, Depth, S_>, UK, C> : S[K]
+      >
+    }
+  }
+}[Mod][Depth]
 
 export type PickOptionalShape<S extends TObjectShape> = {
   [K in keyof S as undefined extends OutputOf<S[K]> ? K : never]: S[K]
@@ -121,8 +131,22 @@ export type MakeSchemaShape<S extends TObjectShape, T extends TType, D extends '
     : T
 }
 
-export type TObjectOptions = ExtendedTOptions<{
-  additionalIssueKind: EIssueKind['UnrecognizedKeys']
+export type TObjectCondition<T extends AnyTObject = AnyTObject> = {
+  [K in TObjectShapePaths<T['shape']>]: {
+    readonly key: K
+  } & u.RequireExactlyOne<{
+    readonly is: OutputOf<ReachSchema<K, T['shape']>>
+    readonly not: OutputOf<ReachSchema<K, T['shape']>>
+    readonly exists: boolean
+  }> &
+    u.RequireAtLeastOne<{
+      readonly then: (obj: T) => AnyTObject
+      readonly otherwise: (obj: T) => AnyTObject
+    }>
+}[TObjectShapePaths<T['shape']>]
+
+export type TObjectOptions = MakeTOptions<{
+  additionalIssueKind: IssueKind.UnrecognizedKeys
 }>
 
 export interface TObjectDef<S extends TObjectShape, UK extends TObjectUnknownKeys | null, C extends TType | null>
@@ -132,6 +156,7 @@ export interface TObjectDef<S extends TObjectShape, UK extends TObjectUnknownKey
   readonly shape: S
   readonly unknownKeys: UK
   readonly catchall: C
+  readonly conditions: readonly TObjectCondition[]
 }
 
 export class TObject<
@@ -140,11 +165,15 @@ export class TObject<
   C extends TType | null = null
 > extends TType<TObjectIO<S, UK, C>, TObjectDef<S, UK, C>, TObjectIO<S, UK, C, '$I'>> {
   get _manifest() {
-    return manifest<TObjectIO<S, UK, C, '$I'>>()({
+    return TManifest<TObjectIO<S, UK, C, '$I'>>()({
       type: TParsedType.Object,
-      properties: manifest.mapShape(this.shape),
+      properties: TManifest.mapShape(this.shape),
+      unknownKeys: this._def.unknownKeys,
+      catchall: this._def.catchall?.manifest() ?? null,
     })
   }
+
+  /* ---------------------------------------------------------------------------------------------------------------- */
 
   _parse(ctx: ParseContextOf<this>): ParseResultOf<this> {
     if (!u.isPlainObject(ctx.data)) {
@@ -342,31 +371,35 @@ export class TObject<
     return this._setShape(u.diff(this.shape, shape))
   }
 
-  partial(): TObject<MakePartialShape<S>, UK, C>
-  partial<K extends readonly [keyof S, ...Array<keyof S>]>(keys: K): TObject<MakePartialShape<S, K>, UK, C>
-  partial(keys?: readonly [keyof S, ...Array<keyof S>]): TObject<MakePartialShape<S>, UK, C> {
+  partial(): TObject<ModifyShape<'partial', 'flat', S>, UK, C>
+  partial<K extends readonly [keyof S, ...Array<keyof S>]>(
+    keys: K
+  ): TObject<ModifyShape<'partial', 'flat', S, K>, UK, C>
+  partial(keys?: ReadonlyArray<keyof S>): AnyTObject {
     return this._setShape(
       u.fromEntries(
         u.entries(this.shape).map(([k, v]) => [k, (keys ?? u.keys(this.shape)).includes(k) ? v.optional() : v])
-      ) as MakePartialShape<S>
+      )
     )
   }
 
-  required(): TObject<MakeRequiredShape<S>, UK, C>
-  required<K extends readonly [keyof S, ...Array<keyof S>]>(keys: K): TObject<MakeRequiredShape<S, K>, UK, C>
-  required(keys?: readonly [keyof S, ...Array<keyof S>]): TObject<MakeRequiredShape<S>, UK, C> {
+  required(): TObject<ModifyShape<'required', 'flat', S>, UK, C>
+  required<K extends readonly [keyof S, ...Array<keyof S>]>(
+    keys: K
+  ): TObject<ModifyShape<'required', 'flat', S, K>, UK, C>
+  required(keys?: ReadonlyArray<keyof S>): AnyTObject {
     return this._setShape(
       u.fromEntries(
         u.entries(this.shape).map(([k, v]) => [k, (keys ?? u.keys(this.shape)).includes(k) ? v.defined() : v])
-      ) as MakeRequiredShape<S>
+      )
     )
   }
 
-  deepPartial(): TObject<MakeDeepPartialShape<S>, UK, C> {
+  deepPartial(): TObject<ModifyShape<'partial', 'deep', S>, UK, C> {
     return this._setShapeDeep({ onObject: (t) => t.deepPartial(), onAny: (t) => t.optional() })
   }
 
-  deepRequired(): TObject<MakeDeepRequiredShape<S>, UK, C> {
+  deepRequired(): TObject<ModifyShape<'required', 'deep', S>, UK, C> {
     return this._setShapeDeep({ onObject: (t) => t.deepRequired(), onAny: (t) => t.defined() })
   }
 
@@ -396,6 +429,19 @@ export class TObject<
 
   stringify(): TObject<MakeSchemaShape<S, TString, 'flat'>, UK, C> {
     return this.toSchema(TString.create(), { deep: false })
+  }
+
+  when<Conditions extends readonly [TObjectCondition<this>, ...Array<TObjectCondition<this>>]>(
+    conditions: Conditions
+  ):
+    | ReturnType<Extract<Conditions[number], { readonly then: u.Fn }>['then']>
+    | ReturnType<Extract<Conditions[number], { readonly otherwise: u.Fn }>['otherwise']> {
+    return new TObject({
+      ...this._def,
+      conditions: [...this._def.conditions, ...conditions],
+    }) as
+      | ReturnType<Extract<Conditions[number], { readonly then: u.Fn }>['then']>
+      | ReturnType<Extract<Conditions[number], { readonly otherwise: u.Fn }>['otherwise']>
   }
 
   /* ---------------------------------------------------------------------------------------------------------------- */
@@ -444,6 +490,7 @@ export class TObject<
         shape: resolveShapeRefs(shape as S),
         unknownKeys,
         catchall: null,
+        conditions: [],
         options: { ...options },
       })
   }

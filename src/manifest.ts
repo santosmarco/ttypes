@@ -1,11 +1,10 @@
 import _ from 'lodash'
+import { TError } from '../out'
 import { TParsedType } from './parse'
 import type { BRANDED, ManifestOf, TObjectShape, TType } from './types/_internal'
 import { u } from './utils'
 
-/* ------------------------------------------------------------------------------------------------------------------ */
-/*                                                      TManifest                                                     */
-/* ------------------------------------------------------------------------------------------------------------------ */
+/* ---------------------------------------------------- Manifest ---------------------------------------------------- */
 
 export interface PublicManifest<T = unknown> {
   readonly title?: string
@@ -21,11 +20,7 @@ export interface PublicManifest<T = unknown> {
 
 export type ManifestType =
   | string
-  | u.RequireExactlyOne<{
-      readonly anyOf: readonly ManifestType[]
-      readonly allOf: readonly ManifestType[]
-      readonly not: readonly ManifestType[]
-    }>
+  | u.RequireExactlyOne<Readonly<Record<'anyOf' | 'allOf' | 'not', readonly ManifestType[]>>>
 
 export interface Manifest<T = unknown> extends PublicManifest<T> {
   readonly type: ManifestType
@@ -33,6 +28,8 @@ export interface Manifest<T = unknown> extends PublicManifest<T> {
   readonly nullable: boolean
   readonly readonly: boolean
 }
+
+export type BrandedManifest<T = unknown> = BRANDED<Manifest<T>, 'TManifest'>
 
 export type MakeManifest<T, P extends Partial<Manifest<T>> & { readonly type: ManifestType }> = BRANDED<
   u.ReadonlyDeep<
@@ -47,7 +44,11 @@ export type MakeManifest<T, P extends Partial<Manifest<T>> & { readonly type: Ma
   'TManifest'
 >
 
-export const manifest =
+/* ------------------------------------------------------------------------------------------------------------------ */
+/*                                                      TManifest                                                     */
+/* ------------------------------------------------------------------------------------------------------------------ */
+
+export const TManifest =
   <T>() =>
   <P extends Partial<Manifest<T>> & { readonly type: ManifestType }>(manifest: {
     [K in keyof P]: P[K] | u.Narrow<P[K]>
@@ -57,177 +58,69 @@ export const manifest =
       'TManifest'
     ) as MakeManifest<T, P>
 
-manifest.extract = <T extends Manifest, K extends keyof T>(manifest: T, key: K): T[K] => manifest[key]
+TManifest.extract = <T extends Manifest, K extends keyof T>(manifest: T, key: K): T[K] => manifest[key]
 
-manifest.map = <T extends readonly TType[]>(types: T): [...{ [P in keyof T]: ManifestOf<T[P]> }] =>
+TManifest.map = <T extends readonly TType[]>(types: T): [...{ [P in keyof T]: ManifestOf<T[P]> }] =>
   types.map((t) => t.manifest()) as [...{ [P in keyof T]: ManifestOf<T[P]> }]
 
-manifest.mapKey = <T extends readonly TType[], K extends keyof Manifest>(
+TManifest.mapKey = <T extends readonly TType[], K extends keyof Manifest>(
   types: T,
   key: K
 ): [...{ [P in keyof T]: ManifestOf<T[P]>[K] }] =>
   types.map((t) => t.manifest()[key]) as [...{ [P in keyof T]: ManifestOf<T[P]>[K] }]
 
-manifest.mapShape = <T extends TObjectShape>(shape: T): { [K in keyof T]: ManifestOf<T[K]> } =>
+TManifest.mapShape = <T extends TObjectShape>(shape: T): { [K in keyof T]: ManifestOf<T[K]> } =>
   u.fromEntries(u.entries(shape).map(([k, v]) => [k, v.manifest()]))
 
-export namespace TManifest {
-  export interface Base<T = unknown> extends Manifest<T> {
-    readonly required: true
-    readonly nullable: false
-    readonly readonly: false
-  }
+TManifest.unwrapType = (types: readonly ManifestType[], mode: 'union' | 'intersection' | 'not'): string => {
+  const unwrapInner = (
+    types: readonly ManifestType[],
+    mode: 'union' | 'intersection' | 'not'
+  ): {
+    readonly union: Set<ManifestType>
+    readonly intersection: Set<ManifestType>
+    readonly not: Set<ManifestType>
+  } => {
+    const union = new Set<ManifestType>()
+    const intersection = new Set<ManifestType>()
+    const not = new Set<ManifestType>()
 
-  export interface Optional<T> extends u.Except<Base<T>, 'required'> {
-    readonly required: false
-  }
-
-  export interface Nullish<T> extends u.Except<Base<T>, 'required' | 'nullable'> {
-    readonly required: false
-    readonly nullable: true
-  }
-
-  export type Wrap<T extends TType, In, Ext extends Partial<Manifest<In>> | null = null> = u.Except<
-    Base<In>,
-    'required' | 'nullable' | 'readonly'
-  > & {
-    readonly underlying: ManifestOf<T>
-    readonly required: 'required' extends keyof Ext ? Ext['required'] : ManifestOf<T>['required']
-    readonly nullable: 'nullable' extends keyof Ext ? Ext['nullable'] : ManifestOf<T>['nullable']
-    readonly readonly: 'readonly' extends keyof Ext ? Ext['readonly'] : ManifestOf<T>['readonly']
-  }
-
-  export interface Literal<T extends u.Primitive> extends u.Except<Base<T>, 'required' | 'nullable'> {
-    readonly literal: u.Literalized<T>
-    readonly required: T extends undefined ? false : true
-    readonly nullable: T extends null ? true : false
-  }
-}
-
-export class TManifest<M> {
-  private constructor(private readonly _manifest: M) {}
-
-  /* ---------------------------------------------------------------------------------------------------------------- */
-
-  get value(): M {
-    return this._manifest
-  }
-
-  /* ---------------------------------------------------------------------------------------------------------------- */
-
-  with<M_>(manifest: u.Narrow<M_>): TManifest<u.Merge<M, M_>> {
-    return this._update(u.widen(manifest))
-  }
-
-  setProp<P extends string, V>(prop: P, value: u.Narrow<V>): TManifest<u.Merge<M, { readonly [K in P]: V }>> {
-    return this._update({ [prop]: value } as { [K in P]: V })
-  }
-
-  examples<T extends readonly unknown[]>(examples: T | undefined): TManifest<u.Merge<M, { readonly examples?: T }>> {
-    return this._update({ examples })
-  }
-
-  required<T extends boolean = true>(value = true as T): TManifest<u.Merge<M, { readonly required: T }>> {
-    return this._update({ required: value })
-  }
-
-  nullable<T extends boolean = true>(value = true as T): TManifest<u.Merge<M, { readonly nullable: T }>> {
-    return this._update({ nullable: value })
-  }
-
-  wrap<T extends TType>(underlying: ManifestOf<T>): TManifest<u.Merge<M, { readonly underlying: ManifestOf<T> }>> {
-    return this._update({ underlying })
-  }
-
-  element<T extends TType>(element: ManifestOf<T>): TManifest<u.Merge<M, { readonly element: ManifestOf<T> }>> {
-    return this._update({ element })
-  }
-
-  literal<T extends string>(value: T): TManifest<u.Merge<M, { readonly literal: T }>> {
-    return this._update({ literal: value })
-  }
-
-  /* ---------------------------------------------------------------------------------------------------------------- */
-
-  private _update<M_>(manifest: M_): TManifest<u.Merge<M, M_>> {
-    return new TManifest(u.merge(this._manifest, manifest))
-  }
-
-  /* ---------------------------------------------------------------------------------------------------------------- */
-
-  static type<T>(type: ManifestType): TManifest<TManifest.Base<T>> {
-    return new TManifest(this.base(type))
-  }
-
-  static base<T>(type?: ManifestType): TManifest.Base<T> {
-    let unwrappedType: string | { anyOf?: readonly ManifestType[]; allOf?: readonly ManifestType[] } =
-      TParsedType.Unknown
-
-    if (typeof type === 'string') {
-      unwrappedType = type
-    } else {
-      const [unionResult, intersectionResult] = [
-        type?.anyOf && unwrapManifestType(type?.anyOf, 'union'),
-        type?.allOf && unwrapManifestType(type?.allOf, 'intersection'),
-      ]
-
-      unwrappedType = {
-        ...(unionResult && { anyOf: [...unionResult.union] }),
-        ...(intersectionResult && { allOf: [...intersectionResult.intersection] }),
-      }
-    }
-
-    if (typeof unwrappedType !== 'string' && !('allOf' in unwrappedType) && unwrappedType.anyOf?.length === 1) {
-      unwrappedType = unwrappedType.anyOf?.[0]
-    }
-
-    if (typeof unwrappedType !== 'string' && !('anyOf' in unwrappedType) && unwrappedType.allOf?.length === 1) {
-      unwrappedType = unwrappedType.allOf?.[0]
-    }
-
-    return {
-      type: unwrappedType as ManifestType,
-      required: true,
-      nullable: false,
-      readonly: false,
-    }
-  }
-}
-
-/* ------------------------------------------------------------------------------------------------------------------ */
-
-const unwrapManifestType = (
-  types: readonly ManifestType[],
-  mode: 'union' | 'intersection'
-): {
-  readonly union: Set<Exclude<ManifestType, { readonly anyOf: readonly ManifestType[] }>>
-  readonly intersection: Set<Exclude<ManifestType, { readonly allOf: readonly ManifestType[] }>>
-} => {
-  const union = new Set<Exclude<ManifestType, { readonly anyOf: readonly ManifestType[] }>>()
-  const intersection = new Set<Exclude<ManifestType, { readonly allOf: readonly ManifestType[] }>>()
-
-  for (const type of types) {
-    if (typeof type === 'string') {
-      if (mode === 'union') {
-        union.add(type)
+    for (const type of types) {
+      if (typeof type === 'string') {
+        if (mode === 'union') {
+          union.add(type)
+        } else if (mode === 'intersection') {
+          intersection.add(type)
+        } else if (mode === 'not') {
+          not.add(type)
+        } else {
+          TError.assertNever(mode)
+        }
       } else {
-        intersection.add(type)
-      }
-    } else {
-      const [unionResult, intersectionResult] = type.anyOf
-        ? type.allOf
-          ? [unwrapManifestType(type.anyOf, 'union'), unwrapManifestType(type.allOf, 'intersection')]
-          : [unwrapManifestType(type.anyOf, 'union'), undefined]
-        : type.allOf
-        ? [undefined, unwrapManifestType(type.allOf, 'intersection')]
-        : [undefined, undefined]
+        const unwrapped = type.anyOf
+          ? unwrapInner(type.anyOf, 'union')
+          : type.allOf
+          ? unwrapInner(type.allOf, 'intersection')
+          : type.not
+          ? unwrapInner(type.not, 'not')
+          : TError.assertNever(type)
 
-      unionResult?.union.forEach((t) => union.add(t))
-      intersectionResult?.intersection.forEach((t) => intersection.add(t))
+        unwrapped.union.forEach((t) => union.add(t))
+        unwrapped.intersection.forEach((t) => intersection.add(t))
+        unwrapped.not.forEach((t) => not.add(t))
+      }
     }
+
+    return { union, intersection, not }
   }
 
-  if (union.has(TParsedType.Never) && union.size > 1) {
+  const { union, not } = unwrapInner(types, mode)
+
+  if (union.has(TParsedType.Never)) {
+    if (union.size === 1) {
+      return TParsedType.Never
+    }
+
     union.delete(TParsedType.Never)
   }
 
@@ -239,5 +132,7 @@ const unwrapManifestType = (
     union.add(TParsedType.Unknown)
   }
 
-  return { union, intersection }
+  not.forEach((t) => t && union.delete(t))
+
+  return [...union].join(' | ')
 }

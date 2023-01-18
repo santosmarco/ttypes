@@ -1,7 +1,7 @@
 import type { TDef } from '../def'
-import { IssueKind, type EIssueKind } from '../error'
-import { manifest } from '../manifest'
-import type { ExtendedTOptions } from '../options'
+import { IssueKind } from '../issues'
+import { TManifest } from '../manifest'
+import type { MakeTOptions } from '../options'
 import { TParsedType, type ParseContextOf, type ParseResultOf } from '../parse'
 import { TTypeName } from '../type-names'
 import { u } from '../utils'
@@ -11,8 +11,8 @@ import { TType } from './_internal'
 /*                                                      TLiteral                                                      */
 /* ------------------------------------------------------------------------------------------------------------------ */
 
-export type TLiteralOptions = ExtendedTOptions<{
-  additionalIssueKind: EIssueKind['InvalidLiteral']
+export type TLiteralOptions = MakeTOptions<{
+  additionalIssueKind: IssueKind.InvalidLiteral
 }>
 
 export interface TLiteralDef<T extends u.Primitive> extends TDef {
@@ -23,7 +23,7 @@ export interface TLiteralDef<T extends u.Primitive> extends TDef {
 
 export class TLiteral<T extends u.Primitive> extends TType<T, TLiteralDef<T>> {
   get _manifest() {
-    return manifest<T>()({
+    return TManifest<T>()({
       type: TParsedType.Literal(this.value),
       literal: u.literalize(this.value) as u.Narrow<u.Literalized<T>>,
       required: (this.value !== undefined) as u.Narrow<T extends undefined ? false : true>,

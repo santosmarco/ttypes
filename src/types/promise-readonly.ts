@@ -1,5 +1,5 @@
 import type { TDef } from '../def'
-import { manifest, type TManifest } from '../manifest'
+import { TManifest, type TManifest } from '../manifest'
 import type { TOptions } from '../options'
 import { TParsedType, type ParseContextOf, type ParseResultOf } from '../parse'
 import { TTypeName } from '../type-names'
@@ -15,10 +15,6 @@ import { TType, type InputOf, type OutputOf, type TUnwrappable, type UnwrapDeep 
  */
 export type TPromiseIO<T> = T extends Promise<unknown> ? T : Promise<T>
 
-export interface TPromiseManifest<T extends TType> extends TManifest.Wrap<T, TPromiseIO<InputOf<T>>> {
-  readonly async: true
-}
-
 export interface TPromiseDef<T extends TType> extends TDef {
   readonly typeName: TTypeName.Promise
   readonly underlying: T
@@ -30,13 +26,13 @@ export class TPromise<T extends TType>
 {
   get _manifest() {
     const underlyingManifest = this.underlying.manifest()
-    return manifest<TPromiseIO<InputOf<T>>>()({
+    return TManifest<TPromiseIO<InputOf<T>>>()({
       type: TParsedType.Promise,
       underlying: underlyingManifest,
       async: true,
-      required: manifest.extract(underlyingManifest, 'required'),
-      nullable: manifest.extract(underlyingManifest, 'nullable'),
-      readonly: manifest.extract(underlyingManifest, 'readonly'),
+      required: TManifest.extract(underlyingManifest, 'required'),
+      nullable: TManifest.extract(underlyingManifest, 'nullable'),
+      readonly: TManifest.extract(underlyingManifest, 'readonly'),
     })
   }
 

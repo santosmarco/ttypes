@@ -1,12 +1,13 @@
 import { TChecks } from '../checks'
 import type { TDef } from '../def'
-import { IssueKind, TError, type InvalidNumberIssue, type ToChecks } from '../error'
+import { TError } from '../error'
+import { IssueKind, type InvalidNumberIssue, type ToChecks } from '../issues'
 import { TManifest } from '../manifest'
 import type { TOptions } from '../options'
 import { TParsedType, type ParseContextOf, type ParseResultOf } from '../parse'
 import { TTypeName } from '../type-names'
 import { u } from '../utils'
-import { TBigInt, TType, type InputOf, type OutputOf, type TSuperDefault } from './_internal'
+import { TBigInt, TType, type OutputOf, type TSuperDefault } from './_internal'
 
 /* ----------------------------------------------------------------------------------------------------------------- - */
 /*                                                       TNumber                                                      */
@@ -15,17 +16,6 @@ import { TBigInt, TType, type InputOf, type OutputOf, type TSuperDefault } from 
 export type TNumberInput<Coerce extends boolean> = Coerce extends true ? any : number
 
 export type TNumberOutput<Cast extends boolean> = Cast extends true ? `${number}` : number
-
-export interface TNumberManifest<Coerce extends boolean>
-  extends u.Except<TManifest.Base<TNumberInput<Coerce>>, 'required' | 'nullable'> {
-  readonly min: number | null
-  readonly max: number | null
-  readonly multipleOf: number | null
-  readonly coerce: Coerce
-  readonly cast: boolean
-  readonly required: Coerce extends true ? false : true
-  readonly nullable: Coerce
-}
 
 export interface TNumberDef<Coerce extends boolean, Cast extends boolean> extends TDef {
   readonly typeName: TTypeName.Number
@@ -39,19 +29,17 @@ export class TNumber<Coerce extends boolean = false, Cast extends boolean = fals
   TNumberDef<Coerce, Cast>,
   TNumberInput<Coerce>
 > {
-  get _manifest(): TNumberManifest<Coerce> {
-    const { coerce, cast } = this._def
-
-    return TManifest.type<InputOf<this>>(this.isInteger ? TParsedType.Integer : TParsedType.Number)
-      .with({
-        min: this.minValue ?? null,
-        max: this.maxValue ?? null,
-        multipleOf: this.multipleOf ?? null,
-        coerce,
-        cast,
-      })
-      .required(!coerce as Coerce extends true ? false : true)
-      .nullable(coerce).value
+  get _manifest() {
+    return TManifest<TNumberInput<Coerce>>()({
+      type: this.isInteger ? TParsedType.Integer : TParsedType.Number,
+      min: this.minValue ?? null,
+      max: this.maxValue ?? null,
+      multipleOf: this.multipleOf ?? null,
+      coerce: this._def.coerce,
+      cast: this._def.cast,
+      required: u.invert(this._def.coerce),
+      nullable: this._def.coerce,
+    })
   }
 
   /* ---------------------------------------------------------------------------------------------------------------- */
@@ -155,7 +143,7 @@ export class TNumber<Coerce extends boolean = false, Cast extends boolean = fals
     return ctx.isValid() ? ctx.success((this._def.cast ? data.toString() : data) as OutputOf<this>) : ctx.abort()
   }
 
-  /* --------------------------------------------------- Coercion --------------------------------------------------- */
+  /* ----------------------------------------------- Coercion/Casting ----------------------------------------------- */
 
   coerce<C extends boolean = true>(value = true as C): TNumber<C, Cast> {
     return new TNumber({ ...this._def, coerce: value })
