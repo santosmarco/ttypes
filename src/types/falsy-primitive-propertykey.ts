@@ -23,6 +23,7 @@ export class TFalsy extends TType<false | '' | 0 | 0n | null | undefined, TFalsy
           TParsedType.EmptyString,
           TParsedType.Zero,
           TParsedType.BigIntZero,
+          TParsedType.NaN,
           TParsedType.Null,
           TParsedType.Undefined,
         ],

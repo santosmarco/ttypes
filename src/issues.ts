@@ -1,5 +1,4 @@
 import type { TChecks } from './checks'
-import type { Manifest } from './manifest'
 import type { ParsePath, TParsedType } from './parse'
 import type { u } from './utils'
 
@@ -61,18 +60,15 @@ export type TIssue<K extends IssueKind = IssueKind> = {
   [IssueKind.Custom]: CustomIssue
 }[K]
 
-export type ToChecks<T extends TIssue> = ReadonlyArray<
-  u.LooseStripKey<T['payload'], 'received' | `_${string}`> & { readonly message: string | undefined }
->
-
 export type IssueBase<K extends IssueKind, P extends object | null = null> = u.SimplifyDeep<
   {
     readonly kind: K
     readonly path: ParsePath
     readonly data: unknown
     readonly message: string
-    readonly manifest: Manifest
-  } & (P extends null ? { readonly payload?: never } : { readonly payload: Readonly<P> })
+  } & (P extends null ? { readonly payload?: never } : { readonly payload: Readonly<Omit<P, `_${string}`>> }) & {
+      readonly _internals: { readonly fullPayload: P }
+    }
 >
 
 export type RequiredIssue = IssueBase<IssueKind.Required>
@@ -182,11 +178,15 @@ export type InvalidArrayIssue = IssueBase<
   | TChecks.Length
   | TChecks.Make<
       'unique',
-      { readonly compareFn: ((a: unknown, b: unknown) => boolean) | undefined; readonly convert: boolean }
+      {
+        readonly _compareFn: ((a: unknown, b: unknown) => boolean) | undefined
+        readonly enforce: boolean
+        readonly received: { readonly nonUnique: readonly unknown[] }
+      }
     >
   | TChecks.Make<
       'sorted',
-      { readonly sortFn: ((a: unknown, b: unknown) => number) | undefined; readonly convert: boolean }
+      { readonly _sortFn: ((a: unknown, b: unknown) => number) | undefined; readonly enforce: boolean }
     >
 >
 

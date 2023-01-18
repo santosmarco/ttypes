@@ -1,6 +1,6 @@
 import { TChecks } from '../checks'
 import type { TDef } from '../def'
-import { IssueKind, type InvalidDateIssue, type ToChecks } from '../issues'
+import { IssueKind, type InvalidDateIssue } from '../issues'
 import { TManifest } from '../manifest'
 import type { TOptions } from '../options'
 import { TParsedType, type ParseContextOf, type ParseResultOf } from '../parse'
@@ -29,7 +29,7 @@ export const handleTDateCheckInput = (value: Date | 'now', currentDate: Date): D
 
 export interface TDateDef<Coerce extends boolean, Cast extends TDateCasting> extends TDef {
   readonly typeName: TTypeName.Date
-  readonly checks: ToChecks<InvalidDateIssue>
+  readonly checks: TChecks.FromIssue<InvalidDateIssue>
   readonly coerce: Coerce
   readonly cast: Cast
 }

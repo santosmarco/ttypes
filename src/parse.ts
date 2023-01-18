@@ -179,7 +179,7 @@ export interface ParseContextInternals {
   status: ParseStatus
   data: unknown
   readonly ownChildren: AnyParseContext[]
-  readonly ownIssues: TIssue[]
+  readonly ownIssues: Array<u.LooseStripKey<TIssue, '_internals'>>
 }
 
 export interface ParseContext<O, I = O> {
@@ -193,8 +193,8 @@ export interface ParseContext<O, I = O> {
   readonly common: ParseContextCommon
   readonly ownChildren: readonly AnyParseContext[]
   readonly allChildren: readonly AnyParseContext[]
-  readonly ownIssues: readonly TIssue[]
-  readonly allIssues: readonly TIssue[]
+  readonly ownIssues: ReadonlyArray<u.LooseStripKey<TIssue, '_internals'>>
+  readonly allIssues: ReadonlyArray<u.LooseStripKey<TIssue, '_internals'>>
   setData(data: unknown): this
   isValid(): boolean
   isInvalid(): boolean
@@ -202,7 +202,7 @@ export interface ParseContext<O, I = O> {
   child<T extends TType>(schema: T, data: unknown, path?: ReadonlyArray<ParsePath[number] | symbol>): ParseContextOf<T>
   clone<T extends TType>(schema: T, data: unknown, path?: ReadonlyArray<ParsePath[number] | symbol>): ParseContextOf<T>
   _addIssue<K extends IssueKind>(
-    issue: u.LooseStripKey<TIssue<K>, 'path' | 'data' | 'manifest'> & {
+    issue: u.LooseStripKey<TIssue<K>, 'path' | 'data' | '_internals'> & {
       readonly path?: ParsePath
       readonly fatal?: boolean
     }
@@ -341,12 +341,7 @@ export const ParseContext = <T extends TType>({
         this.setInvalid()
       }
 
-      let issueWithPath = {
-        ...issue,
-        path: this.path.concat(issue.path ?? []),
-        data: this.data,
-        manifest: this.schema.manifest(),
-      }
+      let issueWithPath = { ...issue, path: this.path.concat(issue.path ?? []), data: this.data }
 
       if (issueWithPath.payload === undefined) {
         issueWithPath = u.omit(issueWithPath, ['payload']) as typeof issueWithPath

@@ -11,8 +11,11 @@ export const bufferType = t.TBuffer.create
 export const castType = t.TCast
 export const catchType = t.TCatch.create
 export const coerceType = t.TCoerce
+export const constructorType = t.TConstructor.create
+export const dateType = t.TDate.create
 export const defaultType = t.TDefault.create
 export const definedType = t.TDefined.create
+export const deleteType = t.TDelete.create
 export const enumType = t.TEnum.create
 export const falseType = t.TFalse.create
 export const falsyType = t.TFalsy.create
@@ -50,7 +53,6 @@ export const undefinedType = t.TUndefined.create
 export const unionType = t.TUnion.create
 export const unknownType = t.TUnknown.create
 export const voidType = t.TVoid.create
-export const constructorType = t.TConstructor.create
 
 export const global = getGlobal
 
@@ -71,8 +73,12 @@ export {
   constructorType as cls,
   constructorType as constructor,
   constructorType as ctor,
+  dateType as date,
   defaultType as def,
   definedType as defined,
+  definedType as required,
+  deleteType as del,
+  deleteType as delete,
   enumType as enum,
   falseType as false,
   falsyType as falsey,

@@ -19,6 +19,7 @@ import {
   TCatch,
   TDefault,
   TDefined,
+  TDelete,
   TIntersection,
   TLazy,
   TNonNullable,
@@ -33,8 +34,10 @@ import {
   TSuperDefault,
   TTransform,
   TUnion,
+  schemaMarker,
   type EffectCtx,
   type RefinementMessage,
+  type TNotOptions,
   type TString,
 } from './_internal'
 
@@ -58,6 +61,10 @@ export abstract class TType<
   Input = Output,
   Forbidden extends readonly TType[] = []
 > {
+  get [schemaMarker]() {
+    return true
+  }
+
   declare readonly $O: Output
   declare readonly $D: Def
   declare readonly $I: Input
@@ -105,6 +112,8 @@ export abstract class TType<
     this.refine = this.refine.bind(this)
     this.superRefine = this.superRefine.bind(this)
     this.transform = this.transform.bind(this)
+    this.delete = this.delete.bind(this)
+    this.del = this.del.bind(this)
     this.clone = this.clone.bind(this)
     this.isT = this.isT.bind(this)
 
@@ -277,8 +286,8 @@ export abstract class TType<
     return TIntersection._create([this, ...intersectees], this.options())
   }
 
-  not<T extends readonly [TType, ...TType[]]>(forbidden: T): TNot<this, T> {
-    return TNot.create(this, forbidden, this.options())
+  not<T extends readonly [TType, ...TType[]]>(forbidden: T, options?: TNotOptions): TNot<this, T> {
+    return TNot.create(this, forbidden, u.merge(this.options(), options))
   }
 
   brand<B>(brand: u.Narrow<B>): TBrand<this, B> {
@@ -341,6 +350,14 @@ export abstract class TType<
 
   transform<Out>(transform: (data: Output, ctx: EffectCtx<this>) => Out | Promise<Out>): TTransform<this, Out> {
     return TTransform.create(this, transform, this.options())
+  }
+
+  delete(): TDelete<this> {
+    return TDelete.create(this)
+  }
+
+  del(): TDelete<this> {
+    return this.delete()
   }
 
   /* ---------------------------------------------------- Checks ---------------------------------------------------- */

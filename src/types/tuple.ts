@@ -5,7 +5,16 @@ import type { MakeTOptions } from '../options'
 import { TParsedType, type ParseContextOf, type ParseResultOf } from '../parse'
 import { TTypeName } from '../type-names'
 import { u } from '../utils'
-import { TArray, TNever, TType, TUnion, type OutputOf, type TDefined, type TOptional } from './_internal'
+import {
+  TArray,
+  TNever,
+  TType,
+  TUnion,
+  type AnyTDelete,
+  type OutputOf,
+  type TDefined,
+  type TOptional,
+} from './_internal'
 
 /* ----------------------------------------------------------------------------------------------------------------- - */
 /*                                                       TTuple                                                       */
@@ -40,7 +49,8 @@ export class TTuple<T extends readonly TType[], R extends TType | null = null> e
       return ctx.invalidType({ expected: TParsedType.Tuple }).abort()
     }
 
-    const { items, rest } = this._def
+    const { rest } = this._def
+    const items = this._def.items.filter((i) => !i.isT(TTypeName.Delete))
     const { data } = ctx
 
     if (data.length < items.length || (!rest && data.length > items.length)) {
@@ -292,12 +302,15 @@ export type AnyTTuple = TTuple<TTupleItems, TType | null>
 
 export type TTupleItems = readonly [] | readonly [TType, ...TType[]]
 
-export type TTupleIO<T extends readonly TType[], R extends TType | null, IO extends '$I' | '$O' = '$O'> = {
-  [K in keyof T]: T[K][IO]
-} extends infer X extends readonly unknown[]
-  ? R extends TType
-    ? [...X, ...Array<R[IO]>]
-    : X
+export type TTupleIO<T extends readonly TType[], R extends TType | null, IO extends '$I' | '$O' = '$O'> = u.Filter<
+  T,
+  AnyTDelete
+> extends infer X extends readonly TType[]
+  ? { [K in keyof X]: X[K][IO] } extends infer Y extends readonly unknown[]
+    ? R extends TType
+      ? [...Y, ...Array<R[IO]>]
+      : Y
+    : never
   : never
 
 export type PartialTTuple<T extends readonly TType[], R extends TType | null> = TTuple<

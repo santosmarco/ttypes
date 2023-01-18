@@ -308,7 +308,7 @@ export namespace u {
     ? H extends U
       ? Filter<R, U>
       : [H, ...Filter<R, U>]
-    : never
+    : []
 
   export type BuildTuple<T, N extends number, _Acc extends readonly unknown[] = []> = _Acc['length'] extends N
     ? _Acc
@@ -324,7 +324,8 @@ export namespace u {
     arr: T,
     fn: (x: T[number], i: number) => x is U
   ): Filter<T, U> => arr.filter(fn) as Filter<T, U>
-  export const filterFalsy = <T>(item: T): item is Exclude<T, Falsy> => Boolean(item)
+  export const filterFalsy = <T>(item: T): item is Exclude<T, Falsy> =>
+    item !== false || item !== null || item !== undefined || item !== 0 || item !== '' || item !== BigInt(0)
   export const map = <T extends readonly unknown[], U>(
     arr: T,
     fn: (x: T[number], i: number) => U

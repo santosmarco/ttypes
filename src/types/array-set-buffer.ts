@@ -1,28 +1,23 @@
 import _ from 'lodash'
 import { TChecks } from '../checks'
 import type { TDef } from '../def'
-import {
-  IssueKind,
-  type InvalidArrayIssue,
-  type InvalidBufferIssue,
-  type InvalidSetIssue,
-  type ToChecks,
-} from '../issues'
+import { IssueKind, type InvalidArrayIssue, type InvalidBufferIssue, type InvalidSetIssue } from '../issues'
 import { TManifest } from '../manifest'
 import type { TOptions } from '../options'
 import { TParsedType, type ParseContextOf, type ParseResultOf } from '../parse'
 import { TTypeName } from '../type-names'
 import { u } from '../utils'
 import {
+  TFalsy,
   TType,
   type InputOf,
   type OutputOf,
   type TDefined,
   type TNever,
+  type TNot,
   type TOptional,
   type TSuperDefault,
 } from './_internal'
-import { TError } from '../error'
 
 /* ------------------------------------------------------------------------------------------------------------------ */
 /*                                                       TArray                                                       */
@@ -53,7 +48,7 @@ export interface TArrayDef<
   readonly typeName: TTypeName.Array
   readonly element: T
   readonly cardinality: Card
-  readonly checks: ToChecks<InvalidArrayIssue>
+  readonly checks: TChecks.FromIssue<InvalidArrayIssue, [TChecks.Make<'compact'>]>
   readonly coerce: Coerce
   readonly cast: Cast
 }
@@ -62,28 +57,12 @@ export class TArray<
   T extends TType,
   Card extends TArrayCardinality = 'many',
   Coerce extends boolean = false,
-  Cast extends boolean = false
-> extends TType<
-  Cast extends true ? Set<OutputOf<T>> : TArrayIO<T, Card>,
-  TArrayDef<T, Card, Coerce, Cast>,
-  TArrayIO<T, Card, '$I'> | (Coerce extends true ? Set<InputOf<T>> : never)
-> {
-  get _hint(): string {
-    if (this._def.cardinality === 'none') {
-      return '[]'
-    }
-
-    const { element } = this._def
-
-    if (this._def.cardinality === 'atleastone') {
-      return `[${element._hint}, ...(${element._hint})[]]`
-    }
-
-    return `(${element._hint})[]`
-  }
-
+  Cast extends boolean = false,
+  Out = TArrayOutput<T, Card, Cast>,
+  In = TArrayInput<T, Card, Coerce>
+> extends TType<Out, TArrayDef<T, Card, Coerce, Cast>, In> {
   get _manifest() {
-    return TManifest<TArrayInput<T, Card, Coerce>>()({
+    return TManifest<In>()({
       type: TParsedType.Array,
       element: this.element.manifest(),
       cardinality: this._def.cardinality,
@@ -105,6 +84,10 @@ export class TArray<
 
     if (!u.isArray(ctx.data)) {
       return ctx.invalidType({ expected: TParsedType.Array }).abort()
+    }
+
+    if (u.last(this._getChecks('compact'))) {
+      ctx.setData(_.compact(ctx.data))
     }
 
     const { element } = this._def
@@ -137,42 +120,35 @@ export class TArray<
 
       for (const check of this._getChecks('unique', 'sorted')) {
         if (check.check === 'sorted') {
-          const { sortFn, convert, message } = check
+          const { _sortFn, enforce, message } = check
 
-          const sortedRes = [...resultArr].sort(sortFn)
+          const sortedRes = [...resultArr].sort(_sortFn)
 
-          if (convert) {
-            finalResult = sortedRes
-            isSorted = true
-          } else {
-            for (const [i, v] of sortedRes.entries()) {
-              if (v !== resultArr[i]) {
-                ctx
-                  .child(element, v, [i])
-                  .addIssue(IssueKind.InvalidArray, { check: 'sorted', sortFn, convert }, message)
-                if (ctx.common.abortEarly) {
-                  return ctx.abort()
-                }
-              }
-            }
-          }
-        } else if (check.check === 'unique') {
-          const { compareFn, convert, message } = check
-
-          const uniqueRes = compareFn
-            ? _.uniqWith(finalResult, compareFn)
-            : _[isSorted ? 'sortedUniq' : 'uniq'](finalResult)
-
-          if (convert) {
-            finalResult = uniqueRes
-          } else if (uniqueRes.length !== resultArr.length) {
-            ctx.addIssue(IssueKind.InvalidArray, { check: 'unique', compareFn, convert }, message)
+          if (enforce && sortedRes.some((v, i) => v !== resultArr[i])) {
+            ctx.addIssue(IssueKind.InvalidArray, { check: 'sorted', enforce: true }, message)
             if (ctx.common.abortEarly) {
               return ctx.abort()
             }
+          } else {
+            finalResult = sortedRes
+            isSorted = true
           }
-        } else {
-          TError.assertNever(check)
+        } else if (check.check === 'unique') {
+          const { _compareFn, enforce, message } = check
+
+          const uniqueRes = _compareFn
+            ? _.uniqWith(finalResult, _compareFn)
+            : _[isSorted ? 'sortedUniq' : 'uniq'](finalResult)
+
+          if (enforce && uniqueRes.length !== resultArr.length) {
+            const nonUnique = _.filter(uniqueRes, (val, i) => _.includes(resultArr, val, i + 1))
+            ctx.addIssue(IssueKind.InvalidArray, { check: 'unique', enforce: true, received: { nonUnique } }, message)
+            if (ctx.common.abortEarly) {
+              return ctx.abort()
+            }
+          } else {
+            finalResult = uniqueRes
+          }
         }
       }
 
@@ -273,46 +249,84 @@ export class TArray<
     })
   }
 
-  unique(options?: { readonly convert?: boolean; readonly message?: string }): this
+  compact(options?: {
+    readonly enforce?: false
+  }): TArray<T, Card, Coerce, Cast, TArrayOutput<TNot<T, [TFalsy]>, Card, Cast>>
+  compact(options?: {
+    readonly enforce: true
+    readonly message?: string
+  }): TArray<TNot<T, [TFalsy]>, Card, Coerce, Cast>
+  compact(options?: { readonly enforce?: boolean; readonly message?: string }) {
+    if (options?.enforce) {
+      return new TArray({
+        ...this._def,
+        element: this.element.not([TFalsy.create()], { messages: { forbidden: options?.message } }),
+      })
+    }
+
+    return this._addCheck({ check: 'compact', message: undefined }) as TArray<
+      T,
+      Card,
+      Coerce,
+      Cast,
+      TArrayOutput<TNot<T, [TFalsy]>, Card, Cast>
+    >
+  }
+
+  unique(
+    options?:
+      | { readonly enforce: true; readonly message?: string }
+      | { readonly enforce?: false; readonly message?: never }
+  ): this
   unique(
     compareFn: (a: OutputOf<T>, b: OutputOf<T>) => boolean,
-    options?: { readonly convert?: boolean; readonly message?: string }
+    options?:
+      | { readonly enforce: true; readonly message?: string }
+      | { readonly enforce?: false; readonly message?: never }
   ): this
   unique(
     compareFnOrOptions?:
       | ((a: OutputOf<T>, b: OutputOf<T>) => boolean)
-      | { readonly convert?: boolean; readonly message?: string },
-    maybeOptions?: { readonly convert?: boolean; readonly message?: string }
+      | { readonly enforce: true; readonly message?: string }
+      | { readonly enforce?: false; readonly message?: never },
+    maybeOptions?: { readonly enforce?: boolean; readonly message?: string }
   ): this {
     const compareFn = typeof compareFnOrOptions === 'function' ? compareFnOrOptions : undefined
     const options = typeof compareFnOrOptions === 'function' ? maybeOptions : compareFnOrOptions
 
     return this._addCheck({
       check: 'unique',
-      compareFn,
-      convert: options?.convert ?? false,
+      _compareFn: compareFn,
+      enforce: options?.enforce ?? true,
       message: options?.message,
     })
   }
 
-  sorted(options?: { readonly convert?: boolean; readonly message?: string }): this
+  sorted(
+    options?:
+      | { readonly enforce: true; readonly message?: string }
+      | { readonly enforce?: false; readonly message?: never }
+  ): this
   sorted(
     sortFn: (a: OutputOf<T>, b: OutputOf<T>) => number,
-    options?: { readonly convert?: boolean; readonly message?: string }
+    options?:
+      | { readonly enforce: true; readonly message?: string }
+      | { readonly enforce?: false; readonly message?: never }
   ): this
   sorted(
     sortFnOrOptions?:
       | ((a: OutputOf<T>, b: OutputOf<T>) => number)
-      | { readonly convert?: boolean; readonly message?: string },
-    maybeOptions?: { readonly convert?: boolean; readonly message?: string }
+      | { readonly enforce: true; readonly message?: string }
+      | { readonly enforce?: false; readonly message?: never },
+    maybeOptions?: { readonly enforce?: boolean; readonly message?: string }
   ): this {
     const sortFn = typeof sortFnOrOptions === 'function' ? sortFnOrOptions : undefined
     const options = typeof sortFnOrOptions === 'function' ? maybeOptions : sortFnOrOptions
 
     return this._addCheck({
       check: 'sorted',
-      sortFn,
-      convert: options?.convert ?? false,
+      _sortFn: sortFn,
+      enforce: options?.enforce ?? true,
       message: options?.message,
     })
   }
@@ -420,7 +434,7 @@ export class TArray<
   }
 }
 
-export type AnyTArray = TArray<TType, TArrayCardinality, boolean, boolean>
+export type AnyTArray = TArray<TType, TArrayCardinality, boolean, boolean, any, any>
 
 /* ------------------------------------------------------------------------------------------------------------------ */
 
@@ -428,11 +442,13 @@ export type FlattenTArray<T extends AnyTArray, D extends 'flat' | 'deep' = 'flat
   infer El,
   infer Card,
   infer Coerce,
-  infer Cast
+  infer Cast,
+  infer Out,
+  infer In
 >
   ? D extends 'deep'
-    ? FlattenTArray<TArray<El, Card, Coerce, Cast>, 'deep'>
-    : TArray<El, Card, Coerce, Cast>
+    ? FlattenTArray<TArray<El, Card, Coerce, Cast, Out, In>, 'deep'>
+    : TArray<El, Card, Coerce, Cast, Out, In>
   : T
 
 const flattenTArrayElement = <T extends AnyTArray, D extends 'flat' | 'deep' = 'flat'>(
@@ -460,7 +476,7 @@ export type TSetOutput<T extends TType, Cast extends boolean> = Cast extends tru
 export interface TSetDef<T extends TType, Coerce extends boolean, Cast extends boolean> extends TDef {
   readonly typeName: TTypeName.Set
   readonly element: T
-  readonly checks: ToChecks<InvalidSetIssue>
+  readonly checks: TChecks.FromIssue<InvalidSetIssue>
   readonly coerce: Coerce
   readonly cast: Cast
 }
@@ -673,7 +689,7 @@ export class TSet<T extends TType, Coerce extends boolean = false, Cast extends 
   }
 }
 
-export type AnyTSet = TSet<TType, boolean>
+export type AnyTSet = TSet<TType, boolean, boolean>
 
 /* ------------------------------------------------------------------------------------------------------------------ */
 /*                                                       TBuffer                                                      */
@@ -685,7 +701,7 @@ export type TBufferOutput<Cast extends boolean> = Cast extends true ? string : B
 
 export interface TBufferDef<Coerce extends boolean, Cast extends boolean> extends TDef {
   readonly typeName: TTypeName.Buffer
-  readonly checks: ToChecks<InvalidBufferIssue>
+  readonly checks: TChecks.FromIssue<InvalidBufferIssue>
   readonly coerce: Coerce
   readonly cast: Cast
 }
@@ -806,3 +822,5 @@ export class TBuffer<Coerce extends boolean = false, Cast extends boolean = fals
     })
   }
 }
+
+export type AnyTBuffer = TBuffer<boolean, boolean>

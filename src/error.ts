@@ -20,7 +20,7 @@ export const DEFAULT_ERROR_FORMATTER: TErrorFormatter = (issues) =>
     sorted: true,
   })
 
-export type ErrorMapIssueInput = u.StripKey<TIssue, 'message'>
+export type ErrorMapIssueInput = u.StripKey<TIssue, 'message' | '_internals'>
 export type TErrorMapFn = (issue: ErrorMapIssueInput) => string
 export type TErrorMapDict = { readonly [K in IssueKind]?: (issue: Extract<ErrorMapIssueInput, { kind: K }>) => string }
 export type TErrorMap = TErrorMapFn | TErrorMapDict
@@ -241,7 +241,7 @@ export class TError<I, T extends TType<unknown, TDef, I> = TType<unknown, TDef, 
     return new TError(ctx.root.schema as T, ctx.allIssues)
   }
 
-  static assertNever(_x: never): never {
+  static assertNever(_x?: never): never {
     throw new Error('Impossible')
   }
 

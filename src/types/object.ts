@@ -14,6 +14,7 @@ import {
   TString,
   TType,
   TUnion,
+  type AnyTDelete,
   type AnyTRef,
   type OutputOf,
   type ReachSchema,
@@ -36,7 +37,7 @@ export type TObjectIO<
   IO extends '$I' | '$O' = '$O'
 > = S extends unknown
   ? u.SimplifyDeep<
-      u.EnforceOptional<{ [K in keyof S]: S[K][IO] }> &
+      u.EnforceOptional<{ [K in keyof S as S[K] extends AnyTDelete ? never : K]: S[K][IO] }> &
         (C extends TType
           ? Record<string, C[IO]>
           : UK extends 'passthrough'
@@ -218,7 +219,8 @@ export class TObject<
       }
     }
 
-    const { shape, unknownKeys, catchall } = (parser as SomeTObject)._def
+    const { unknownKeys, catchall } = (parser as SomeTObject)._def
+    const shape = u.fromEntries(u.entries(this._def.shape).filter(([_, v]) => !v.isT(TTypeName.Delete)))
 
     const extraKeys: PropertyKey[] = []
     if (!catchall || unknownKeys !== 'strip') {

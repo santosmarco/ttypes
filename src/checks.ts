@@ -1,3 +1,4 @@
+import { type TIssue } from './issues'
 import type { TType } from './types/_internal'
 import type { u } from './utils'
 
@@ -40,6 +41,11 @@ export namespace TChecks {
   export type Format<K extends string, P extends u.AnyRecord | null = null> = Make<K, P>
 
   /* ---------------------------------------------------------------------------------------------------------------- */
+
+  export type FromIssue<T extends TIssue, Extra extends readonly Base[] = []> = ReadonlyArray<
+    | (u.LooseStripKey<T['_internals']['fullPayload'], 'received'> & { readonly message: string | undefined })
+    | Extra[number]
+  >
 
   export type Of<T extends TType> = NonNullable<T['$D']['checks']>[number]
 

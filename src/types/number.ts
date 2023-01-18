@@ -1,7 +1,7 @@
 import { TChecks } from '../checks'
 import type { TDef } from '../def'
 import { TError } from '../error'
-import { IssueKind, type InvalidNumberIssue, type ToChecks } from '../issues'
+import { IssueKind, type InvalidNumberIssue } from '../issues'
 import { TManifest } from '../manifest'
 import type { TOptions } from '../options'
 import { TParsedType, type ParseContextOf, type ParseResultOf } from '../parse'
@@ -19,7 +19,7 @@ export type TNumberOutput<Cast extends boolean> = Cast extends true ? `${number}
 
 export interface TNumberDef<Coerce extends boolean, Cast extends boolean> extends TDef {
   readonly typeName: TTypeName.Number
-  readonly checks: ToChecks<InvalidNumberIssue>
+  readonly checks: TChecks.FromIssue<InvalidNumberIssue>
   readonly coerce: Coerce
   readonly cast: Cast
 }

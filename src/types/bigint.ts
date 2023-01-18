@@ -1,7 +1,7 @@
 import { TChecks } from '../checks'
 import type { TDef } from '../def'
 import { TError } from '../error'
-import { IssueKind, type InvalidBigIntIssue, type ToChecks } from '../issues'
+import { IssueKind, type InvalidBigIntIssue } from '../issues'
 import { TManifest } from '../manifest'
 import type { TOptions } from '../options'
 import { TParsedType, type ParseContextOf, type ParseResultOf } from '../parse'
@@ -25,7 +25,7 @@ export type TBigIntOutput<Cast extends TBigIntCasting> = Cast extends 'bigint'
 
 export interface TBigIntDef<Coerce extends boolean, Cast extends TBigIntCasting> extends TDef {
   readonly typeName: TTypeName.BigInt
-  readonly checks: ToChecks<InvalidBigIntIssue>
+  readonly checks: TChecks.FromIssue<InvalidBigIntIssue>
   readonly coerce: Coerce
   readonly cast: Cast
 }

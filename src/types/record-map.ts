@@ -1,5 +1,6 @@
+import { type TChecks } from '../checks'
 import type { TDef } from '../def'
-import { IssueKind, type InvalidRecordIssue, type ToChecks } from '../issues'
+import { IssueKind, type InvalidRecordIssue } from '../issues'
 import { TManifest } from '../manifest'
 import type { TOptions } from '../options'
 import { TParsedType, type ParseContextOf, type ParseResultOf } from '../parse'
@@ -27,7 +28,7 @@ export interface TRecordDef<K extends TType<PropertyKey, TDef, PropertyKey>, V e
   readonly typeName: TTypeName.Record
   readonly keys: K
   readonly values: V
-  readonly checks: ToChecks<InvalidRecordIssue>
+  readonly checks: TChecks.FromIssue<InvalidRecordIssue>
   readonly coerce: Coerce
 }
 

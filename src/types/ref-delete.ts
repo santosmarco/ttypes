@@ -1,13 +1,19 @@
+import { type TDef } from '../def'
+import { type ParseContextOf, type ParseResultOf } from '../parse'
 import { TTypeName } from '../type-names'
 import type { u } from '../utils'
-import type {
-  AnyTObject,
-  AnyTTuple,
-  AnyTUnion,
-  FlattenMembers,
-  TObjectShapeWithRefs,
+import {
   TType,
-  UnwrapUntil,
+  deleteMarker,
+  refMarker,
+  type AnyTObject,
+  type AnyTTuple,
+  type AnyTUnion,
+  type FlattenMembers,
+  type InputOf,
+  type OutputOf,
+  type TObjectShapeWithRefs,
+  type UnwrapUntil,
 } from './_internal'
 
 /* ----------------------------------------------------------------------------------------------------------------- - */
@@ -92,7 +98,13 @@ export type _ReachSchema<R extends string, Ctx extends TRefContext> = u.ReplaceA
 export type ReachSchema<R extends string, Ctx extends TRefContext> = u.Try<_ReachSchema<R, Ctx>, TType>
 
 export class TRef<Ref extends string> {
+  get [refMarker]() {
+    return true
+  }
+
   private constructor(private readonly ref: Ref) {}
+
+  /* ---------------------------------------------------------------------------------------------------------------- */
 
   resolve(ctx: TRefContext): TType {
     if (!ctx) {
@@ -152,3 +164,32 @@ export class TRef<Ref extends string> {
 }
 
 export type AnyTRef = TRef<string>
+
+/* ------------------------------------------------------------------------------------------------------------------ */
+/*                                                       TDelete                                                      */
+/* ------------------------------------------------------------------------------------------------------------------ */
+
+export interface TDeleteDef<T extends TType> extends TDef {
+  readonly typeName: TTypeName.Delete
+  readonly underlying: T
+}
+
+export class TDelete<T extends TType> extends TType<OutputOf<T>, TDeleteDef<T>, InputOf<T>> {
+  get [deleteMarker]() {
+    return true
+  }
+
+  get _manifest() {
+    return this._def.underlying.manifest()
+  }
+
+  _parse(ctx: ParseContextOf<this>): ParseResultOf<this> {
+    return this._def.underlying._parse(ctx)
+  }
+
+  static create<T extends TType>(type: T): TDelete<T> {
+    return new TDelete({ typeName: TTypeName.Delete, underlying: type, options: type.options() })
+  }
+}
+
+export type AnyTDelete = TDelete<TType>
