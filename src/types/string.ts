@@ -1,3 +1,4 @@
+import _ from 'lodash'
 import { TChecks } from '../checks'
 import type { TDef } from '../def'
 import { TError } from '../error'
@@ -49,14 +50,14 @@ export type TStringOutput<
 
 export type TStringManifestFormat =
   | 'alphanumeric'
-  | 'numeric'
+  | 'base64'
   | 'cuid'
-  | 'uuid'
   | 'email'
-  | 'url'
   | 'iso_date'
   | 'iso_duration'
-  | 'base64'
+  | 'numeric'
+  | 'url'
+  | 'uuid'
 
 export interface TStringDef<Coerce extends boolean = boolean> extends TDef {
   readonly typeName: TTypeName.String
@@ -71,24 +72,22 @@ export class TString<
   Coerce extends boolean = false
 > extends TType<TStringOutput<Transforms, OutputFormat>, TStringDef<Coerce>, TStringInput<Coerce>> {
   get _manifest() {
-    const formats = (
-      [
-        this.isAlphanumeric && 'alphanumeric',
-        this.isNumeric && 'numeric',
-        this.isCuid && 'cuid',
-        this.isUuid && 'uuid',
-        this.isEmail && 'email',
-        this.isUrl && 'url',
-        this.isIsoDate && 'iso_date',
-        this.isIsoDuration && 'iso_duration',
-        this.isBase64 && 'base64',
-      ] as const
-    ).filter(u.filterFalsy)
+    const formats = _.compact([
+      this.isAlphanumeric && 'alphanumeric',
+      this.isBase64 && 'base64',
+      this.isCuid && 'cuid',
+      this.isEmail && 'email',
+      this.isIsoDate && 'iso_date',
+      this.isIsoDuration && 'iso_duration',
+      this.isNumeric && 'numeric',
+      this.isUrl && 'url',
+      this.isUuid && 'uuid',
+    ])
 
     return TManifest<TStringInput<Coerce>>()({
-      type: TParsedType.String,
-      minLength: this.minLength ?? null,
-      maxLength: this.maxLength ?? null,
+      type: this._def.coerce ? TParsedType.Any : TParsedType.String,
+      min: this.minLength ?? null,
+      max: this.maxLength ?? null,
       formats: formats.length ? formats : null,
       transforms: this._def.transforms.length ? this._def.transforms.map((t) => t.kind) : null,
       patterns: this.patterns,
@@ -96,7 +95,7 @@ export class TString<
       suffix: this.suffix ?? null,
       substrings: this.substrings,
       coerce: this._def.coerce,
-      required: u.invert(this._def.coerce),
+      required: !this._def.coerce as Coerce extends true ? false : true,
       nullable: this._def.coerce,
     })
   }
@@ -509,23 +508,7 @@ export class TString<
 
   /* ---------------------------------------------------------------------------------------------------------------- */
 
-  static readonly _internals: {
-    readonly rx: Readonly<Record<'alphanum' | 'cuid' | 'uuid' | 'email' | 'iso_date' | 'iso_duration', RegExp>> & {
-      readonly base64: {
-        // paddingRequired
-        readonly true: {
-          // urlSafe
-          readonly true: RegExp
-          readonly false: RegExp
-        }
-        readonly false: {
-          readonly true: RegExp
-          readonly false: RegExp
-        }
-      }
-    }
-    validateIsoDate(data: string): string | null
-  } = {
+  static readonly _internals = {
     rx: {
       alphanum: /^[a-zA-Z0-9]+$/,
       cuid: /^c[^\s-]{8,}$/i,
@@ -547,7 +530,7 @@ export class TString<
       },
     },
 
-    validateIsoDate(value) {
+    validateIsoDate(value: string) {
       if (!TString._internals.rx.iso_date.test(value)) {
         return null
       }
@@ -563,7 +546,7 @@ export class TString<
 
       return date.toISOString()
     },
-  }
+  } as const
 }
 
 export type AnyTString = TString<Array<TStringTransform['kind']>, string, boolean>

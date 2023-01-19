@@ -86,6 +86,13 @@ export namespace u {
   export type $TTypeError<Msg extends string> = TType<$TypeError<Msg>>
 
   export const invert = <T extends boolean>(x: T): T extends true ? false : true => !x as T extends true ? false : true
+
+  export const ifExtends = <T, U, Then, Otherwise>(
+    x: T,
+    y: Narrow<U>,
+    then: Narrow<Then>,
+    otherwise: Narrow<Otherwise>
+  ) => (x === y ? then : otherwise) as T extends U ? Then : Otherwise
 }
 
 export namespace u {

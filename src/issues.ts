@@ -1,4 +1,5 @@
 import type { TChecks } from './checks'
+import { type ManifestType } from './manifest'
 import type { ParsePath, TParsedType } from './parse'
 import type { u } from './utils'
 
@@ -75,7 +76,7 @@ export type RequiredIssue = IssueBase<IssueKind.Required>
 
 export type InvalidTypeIssue = IssueBase<
   IssueKind.InvalidType,
-  { readonly expected: TParsedType; readonly received: TParsedType }
+  { readonly expected: ManifestType; readonly received: TParsedType }
 >
 
 export type InvalidLiteralIssue = IssueBase<

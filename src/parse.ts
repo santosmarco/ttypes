@@ -2,6 +2,7 @@ import type { TDef } from './def'
 import { TError, resolveErrorMaps } from './error'
 import { getGlobal } from './global'
 import { IssueKind, type TIssue } from './issues'
+import { type ManifestType } from './manifest'
 import { type ParseOptions } from './options'
 import { emptyMarker, type InputOf, type OutputOf, type TType } from './types/_internal'
 import { u } from './utils'
@@ -213,7 +214,7 @@ export interface ParseContext<O, I = O> {
       ? [message: string | undefined]
       : [payload: TIssue<K>['payload'], message: string | undefined]
   ): this
-  invalidType(payload: { readonly expected: TParsedType }): this
+  invalidType(payload: { readonly expected: ManifestType }): this
   success<T>(data: T): SuccessfulParseResult<T>
   abort(): FailedParseResult<I>
 }

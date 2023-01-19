@@ -1,7 +1,7 @@
 import _ from 'lodash'
 import { TError } from '../out'
 import { TParsedType } from './parse'
-import type { ManifestOf, TObjectShape, TType } from './types/_internal'
+import type { InputOf, ManifestOf, TObjectShape, TType } from './types/_internal'
 import { u } from './utils'
 
 /* ---------------------------------------------------- Manifest ---------------------------------------------------- */
@@ -59,6 +59,19 @@ export const TManifest =
     ) as MakeManifest<T, P>
 
 TManifest.extract = <T extends Manifest, K extends keyof T>(manifest: T, key: K): T[K] => manifest[key]
+
+TManifest.pickPublic = <T extends TType>(type: T): PublicManifest<InputOf<T>> =>
+  _.pick(type.manifest(), [
+    'title',
+    'summary',
+    'description',
+    'examples',
+    'tags',
+    'notes',
+    'unit',
+    'deprecated',
+    'meta',
+  ])
 
 TManifest.map = <T extends readonly TType[]>(types: T): [...{ [P in keyof T]: ManifestOf<T[P]> }] =>
   types.map((t) => t.manifest()) as [...{ [P in keyof T]: ManifestOf<T[P]> }]
