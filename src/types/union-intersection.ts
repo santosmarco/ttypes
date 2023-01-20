@@ -243,17 +243,14 @@ export type FlattenMembers<M extends readonly TType[], Compare extends { readonl
   readonly TType[]
 >
 
-const flattenMembers = <M extends readonly TType[], TN extends TTypeName>(
+const flattenMembers = <M extends readonly TType[], TN extends TTypeName.Union | TTypeName.Intersection>(
   members: M,
   typeName: TN
 ): FlattenMembers<M, TTypeNameMap<TN>> =>
-  members.reduce(
-    (acc, m) => [
-      ...acc,
-      ...(m.isT(typeName) ? flattenMembers((m as AnyTUnion | AnyTIntersection).members, typeName) : [m]),
-    ],
+  members.reduce<TType[]>(
+    (acc, m) => [...acc, ...(m.isT(typeName) ? flattenMembers(m.members, typeName) : [m])] as TType[],
     []
-  ) as unknown as FlattenMembers<M, TTypeNameMap<TN>>
+  ) as FlattenMembers<M, TTypeNameMap<TN>>
 
 /* ------------------------------------------------------------------------------------------------------------------ */
 

@@ -7,17 +7,17 @@ import type { TOptions } from '../options'
 import { TParsedType, type ParseContextOf, type ParseResultOf } from '../parse'
 import { TTypeName } from '../type-names'
 import type { u } from '../utils'
-import { TNumber, TType, type TSuperDefault } from './_internal'
+import { TNumber, TType, type TSuperDefault, unsetMarker, type OutputOf } from './_internal'
 
 /* ------------------------------------------------------------------------------------------------------------------ */
 /*                                                       TBigInt                                                      */
 /* ------------------------------------------------------------------------------------------------------------------ */
 
-export type TBigIntCasting = 'bigint' | 'string' | 'number'
+export type TBigIntCasting = unsetMarker | 'number' | 'string'
 
-export type TBigIntInput<Coerce extends boolean> = Coerce extends true ? bigint | string | number | boolean : bigint
+export type TBigIntInput<Coerce extends boolean> = Coerce extends true ? bigint | boolean | number | string : bigint
 
-export type TBigIntOutput<Cast extends TBigIntCasting> = Cast extends 'bigint'
+export type TBigIntOutput<Cast extends TBigIntCasting> = Cast extends unsetMarker
   ? bigint
   : Cast extends 'string'
   ? `${bigint}`
@@ -30,7 +30,7 @@ export interface TBigIntDef<Coerce extends boolean, Cast extends TBigIntCasting>
   readonly cast: Cast
 }
 
-export class TBigInt<Coerce extends boolean = false, Cast extends TBigIntCasting = 'bigint'> extends TType<
+export class TBigInt<Coerce extends boolean = false, Cast extends TBigIntCasting = unsetMarker> extends TType<
   TBigIntOutput<Cast>,
   TBigIntDef<Coerce, Cast>,
   TBigIntInput<Coerce>
@@ -97,17 +97,11 @@ export class TBigInt<Coerce extends boolean = false, Cast extends TBigIntCasting
       }
     }
 
-    return (
-      ctx.isValid()
-        ? ctx.success(
-            {
-              bigint: data,
-              string: data.toString(),
-              number: Number(data),
-            }[this._def.cast]
-          )
-        : ctx.abort()
-    ) as ParseResultOf<this>
+    return ctx.isValid()
+      ? ctx.success(
+          { [unsetMarker]: () => data, string: String, number: Number }[this._def.cast](ctx.data) as OutputOf<this>
+        )
+      : ctx.abort()
   }
 
   /* ----------------------------------------------- Coercion/Casting ----------------------------------------------- */
@@ -212,7 +206,7 @@ export class TBigInt<Coerce extends boolean = false, Cast extends TBigIntCasting
   ensure(this: TBigInt<Coerce, 'string'>): TSuperDefault<this, ''>
   ensure(this: TBigInt<Coerce, 'number'>): TSuperDefault<this, 0>
   ensure(this: TBigInt<Coerce>): TSuperDefault<this, 0n>
-  ensure(): TSuperDefault<this, '' | 0 | 0n> {
+  ensure() {
     if (this._def.cast === 'string') {
       return this.superDefault('')
     }
@@ -298,7 +292,7 @@ export class TBigInt<Coerce extends boolean = false, Cast extends TBigIntCasting
       typeName: TTypeName.BigInt,
       checks: [],
       coerce: false,
-      cast: 'bigint',
+      cast: unsetMarker,
       options: { ...options },
     })
   }

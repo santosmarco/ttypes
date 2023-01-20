@@ -1,44 +1,36 @@
-/* eslint-disable @typescript-eslint/no-explicit-any */
+import { type Manifest } from './manifest'
+import { type AnyParseContext, type ParseResultOf } from './parse'
+import type { TType } from './types/_internal'
 
 export const BindAll = () => {
-  return <T extends new (...args: any[]) => any>(target: T): T => {
-    class _ extends target {
-      constructor(...args: any[]) {
-        super(...args)
-
-        Object.defineProperties(
-          this,
-          Object.fromEntries(
-            Object.entries(Object.getOwnPropertyDescriptors(target.prototype))
-              .filter(([k]) => k !== 'constructor')
-              .map(([k, d]): [typeof k, typeof d] => {
-                const originalValue = this[k]
-
-                if (!(typeof originalValue === 'function')) {
-                  return [k, d]
-                }
-
-                const updatedFn = function (...args: any[]): any {
-                  const originalReturn = originalValue.bind(this)(...args)
-
-                  if (originalReturn instanceof target) {
-                    return this._construct(originalReturn._def)
-                  }
-
-                  return originalReturn
-                }
-
-                Object.defineProperty(updatedFn, 'name', { value: originalValue.name })
-
-                return [k, { ...d, value: updatedFn.bind(this), enumerable: true }]
-              })
-          )
-        )
-      }
+  return <
+    T extends TType,
+    Ctor extends new (...args: any[]) => T & {
+      readonly _parse: (ctx: AnyParseContext) => ParseResultOf<TType>
+      readonly _manifest: Manifest
     }
+  >(
+    target: Ctor
+  ) => {
+    Object.defineProperties(
+      target.prototype,
+      Object.fromEntries(
+        Object.entries(Object.getOwnPropertyDescriptors(target.prototype))
+          .filter(([k]) => k !== 'constructor')
+          .map(([k, d]) => {
+            const value = target.prototype[k] as T[keyof T]
 
-    Object.defineProperty(_, 'name', { value: target.name })
+            if (!(typeof value === 'function')) {
+              return [k, { ...d, enumerable: true }]
+            }
 
-    return _
+            const updatedFn = function (this: T, ...args: readonly unknown[]): unknown {
+              return value.call(this, ...args)
+            }
+
+            return [k, { ...d, value: updatedFn, enumerable: true }] as const
+          })
+      )
+    )
   }
 }

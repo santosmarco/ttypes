@@ -7,10 +7,11 @@ import { TManifest } from '../manifest'
 import type { TOptions } from '../options'
 import { TParsedType, type ParseContext, type ParseContextOf, type ParseResult, type ParseResultOf } from '../parse'
 import { TTypeName } from '../type-names'
-import { u } from '../utils'
+import { type u } from '../utils'
 import {
   TFalsy,
   TType,
+  unsetMarker,
   type InputOf,
   type OutputOf,
   type TDefined,
@@ -24,7 +25,10 @@ import {
 /*                                                       TArray                                                       */
 /* ------------------------------------------------------------------------------------------------------------------ */
 
-export type TArrayCardinality = 'none' | 'atleastone' | 'many'
+export type TArrayCardinality = 'atleastone' | 'many' | 'none'
+
+export type TArrayCoercion = unsetMarker | 'fromSet'
+export type TArrayCasting = unsetMarker | 'toSet'
 
 export type TArrayIO<T extends TType, Card extends TArrayCardinality, IO extends '$I' | '$O' = '$O'> = {
   none: []
@@ -32,52 +36,46 @@ export type TArrayIO<T extends TType, Card extends TArrayCardinality, IO extends
   many: Array<T[IO]>
 }[Card]
 
-export type TArrayInput<T extends TType, Card extends TArrayCardinality, Coerce extends 'off' | 'fromSet'> = {
-  off: TArrayIO<T, Card, '$I'>
-  fromSet: TArrayIO<T, Card, '$I'> | Set<InputOf<T>>
+export type TArrayInput<T extends TType, Card extends TArrayCardinality, Coerce extends TArrayCoercion> = {
+  [unsetMarker]: TArrayIO<T, Card, '$I'>
+  fromSet: Set<InputOf<T>> | TArrayIO<T, Card, '$I'>
 }[Coerce]
 
-export type TArrayOutput<T extends TType, Card extends TArrayCardinality, Cast extends 'off' | 'toSet'> = {
-  off: TArrayIO<T, Card>
+export type TArrayOutput<T extends TType, Card extends TArrayCardinality, Cast extends TArrayCasting> = {
+  [unsetMarker]: TArrayIO<T, Card>
   toSet: Set<OutputOf<T>>
 }[Cast]
 
-export interface TArrayDef<
-  T extends TType,
-  Card extends TArrayCardinality,
-  Coerce extends 'off' | 'fromSet',
-  Cast extends 'off' | 'toSet'
-> extends TDef {
+export interface TArrayDef<T extends TType, Card extends TArrayCardinality> extends TDef {
   readonly typeName: TTypeName.Array
   readonly element: T
   readonly cardinality: Card
   readonly checks: TChecks.FromIssue<InvalidArrayIssue, [TChecks.Make<'compact'>]>
-  readonly coerce: Coerce
-  readonly cast: Cast
+  readonly coerce: TArrayCoercion
+  readonly cast: TArrayCasting
 }
 
 export class TArray<
   T extends TType,
   Card extends TArrayCardinality = 'many',
-  Coerce extends 'off' | 'fromSet' = 'off',
-  Cast extends 'off' | 'toSet' = 'off',
+  Coerce extends TArrayCoercion = unsetMarker,
+  Cast extends TArrayCasting = unsetMarker,
   Out = TArrayOutput<T, Card, Cast>,
   In = TArrayInput<T, Card, Coerce>
-> extends TType<Out, TArrayDef<T, Card, Coerce, Cast>, In> {
+> extends TType<Out, TArrayDef<T, Card>, In> {
   get _manifest() {
+    const { element, cardinality, coerce, cast } = this._def
+
     return TManifest<In>()({
-      type: (this._def.coerce === 'fromSet' ? { anyOf: [TParsedType.Set, TParsedType.Array] } : TParsedType.Array) as {
-        off: TParsedType.Array
-        fromSet: { anyOf: [TParsedType.Set, TParsedType.Array] }
-      }[Coerce],
-      element: this.element.manifest(),
-      cardinality: this._def.cardinality,
+      type: coerce === 'fromSet' ? TParsedType.AnyOf(TParsedType.Array, TParsedType.Set) : TParsedType.Array,
+      element: element.manifest(),
+      cardinality,
       min: this.minItems ?? null,
       max: this.maxItems ?? null,
       unique: this.isUnique,
       sorted: this.isSorted,
-      coerce: this._def.coerce,
-      cast: this._def.cast,
+      coerce,
+      cast,
     })
   }
 
@@ -85,14 +83,14 @@ export class TArray<
 
   _parse(ctx: ParseContext<Out, In>): ParseResult<Out, In> {
     if (this._def.coerce === 'fromSet') {
-      if (_.isSet(ctx.data)) {
+      if (ctx.data instanceof Set) {
         ctx.setData([...ctx.data])
-      } else if (!_.isArray(ctx.data)) {
-        return ctx.invalidType({ expected: { anyOf: [TParsedType.Set, TParsedType.Array] } }).abort()
+      } else if (!Array.isArray(ctx.data)) {
+        return ctx.invalidType({ expected: TParsedType.AnyOf(TParsedType.Array, TParsedType.Set) }).abort()
       }
     }
 
-    if (!_.isArray(ctx.data)) {
+    if (!Array.isArray(ctx.data)) {
       return ctx.invalidType({ expected: TParsedType.Array }).abort()
     }
 
@@ -129,12 +127,14 @@ export class TArray<
       let isSorted = false
 
       for (const check of this._getChecks('unique', 'sorted')) {
+        const currResult = finalResult
+
         if (check.check === 'sorted') {
           const { _sortFn, enforce, message } = check
 
-          const sorted = [...finalResult].sort(_sortFn)
+          const sorted = currResult.sort(_sortFn)
 
-          if (enforce && sorted.some((v, i) => v !== finalResult[i])) {
+          if (enforce && sorted.some((v, i) => v !== currResult[i])) {
             ctx.addIssue(IssueKind.InvalidArray, { check: 'sorted', enforce: true }, message)
             if (ctx.common.abortEarly) {
               return ctx.abort()
@@ -147,11 +147,11 @@ export class TArray<
           const { _compareFn, enforce, message } = check
 
           const unique = _compareFn
-            ? _.uniqWith(finalResult, _compareFn)
-            : _[isSorted ? 'sortedUniq' : 'uniq'](finalResult)
+            ? _.uniqWith(currResult, _compareFn)
+            : _[isSorted ? 'sortedUniq' : 'uniq'](currResult)
 
-          if (enforce && unique.length !== finalResult.length) {
-            const nonUnique = _.filter(unique, (v, i) => _.includes(finalResult, v, i + 1))
+          if (enforce && unique.length !== currResult.length) {
+            const nonUnique = unique.filter((v, i) => currResult.includes(v, i + 1))
             ctx.addIssue(IssueKind.InvalidArray, { check: 'unique', enforce: true, received: { nonUnique } }, message)
             if (ctx.common.abortEarly) {
               return ctx.abort()
@@ -165,7 +165,7 @@ export class TArray<
       }
 
       return ctx.isValid()
-        ? ctx.success({ off: finalResult, toSet: new Set(finalResult) }[this._def.cast] as Out)
+        ? ctx.success({ [unsetMarker]: finalResult, toSet: new Set(finalResult) }[this._def.cast] as Out)
         : ctx.abort()
     }
 
@@ -214,15 +214,12 @@ export class TArray<
 
   /* ----------------------------------------------- Coercion/Casting ----------------------------------------------- */
 
-  coerce<C extends boolean = true>(value = true as C): TArray<T, Card, C extends true ? 'fromSet' : 'off', Cast> {
-    return new TArray({
-      ...this._def,
-      coerce: (value === true ? 'fromSet' : 'off') as C extends true ? 'fromSet' : 'off',
-    })
+  coerce<C extends boolean = true>(value = true as C): TArray<T, Card, C extends true ? 'fromSet' : unsetMarker, Cast> {
+    return new TArray({ ...this._def, coerce: value === true ? 'fromSet' : unsetMarker })
   }
 
-  cast<C extends boolean = true>(value = true as C): TArray<T, Card, Coerce, C extends true ? 'toSet' : 'off'> {
-    return new TArray({ ...this._def, cast: (value === true ? 'toSet' : 'off') as C extends true ? 'toSet' : 'off' })
+  cast<C extends boolean = true>(value = true as C): TArray<T, Card, Coerce, C extends true ? 'toSet' : unsetMarker> {
+    return new TArray({ ...this._def, cast: value === true ? 'toSet' : unsetMarker })
   }
 
   /* ---------------------------------------------------- Checks ---------------------------------------------------- */
@@ -230,7 +227,7 @@ export class TArray<
   min<V extends number>(
     value: u.NonNegativeInteger<V>,
     options?: { readonly inclusive?: boolean; readonly message?: string }
-  ) {
+  ): this {
     return this._addCheck({
       check: 'min',
       expected: { value, inclusive: options?.inclusive ?? true },
@@ -241,7 +238,7 @@ export class TArray<
   max<V extends number>(
     value: u.NonNegativeInteger<V>,
     options?: { readonly inclusive?: boolean; readonly message?: string }
-  ) {
+  ): this {
     return this._addCheck({
       check: 'max',
       expected: { value, inclusive: options?.inclusive ?? true },
@@ -249,7 +246,7 @@ export class TArray<
     })
   }
 
-  length<V extends number>(value: u.NonNegativeInteger<V>, options?: { readonly message?: string }) {
+  length<V extends number>(value: u.NonNegativeInteger<V>, options?: { readonly message?: string }): this {
     return this._addCheck({
       check: 'length',
       expected: { value, inclusive: true },
@@ -268,6 +265,7 @@ export class TArray<
 
   compact(options?: {
     readonly enforce?: false
+    readonly message?: never
   }): TArray<T, Card, Coerce, Cast, TArrayOutput<TNot<T, [TFalsy]>, Card, Cast>>
   compact(options?: {
     readonly enforce: true
@@ -275,7 +273,7 @@ export class TArray<
   }): TArray<TNot<T, [TFalsy]>, Card, Coerce, Cast>
   compact(options?: { readonly enforce?: boolean; readonly message?: string }) {
     if (options?.enforce) {
-      return new TArray({
+      return new TArray<TNot<T, [TFalsy]>, Card, Coerce, Cast>({
         ...this._def,
         element: this.element.not([TFalsy.create()], { messages: { forbidden: options?.message } }),
       })
@@ -351,7 +349,10 @@ export class TArray<
   sparse(enabled?: true): TArray<TOptional<T>, Card, Coerce, Cast>
   sparse(enabled: false): TArray<TDefined<T>, Card, Coerce, Cast>
   sparse(enabled = true) {
-    return new TArray(u.merge(this._def, { element: this.element[enabled ? 'optional' : 'defined']() }))
+    return new TArray<TDefined<T> | TOptional<T>, Card, Coerce, Cast>({
+      ...this._def,
+      element: this.element[enabled ? 'optional' : 'defined'](),
+    })
   }
 
   partial(): TArray<TOptional<T>, Card, Coerce, Cast> {
@@ -364,8 +365,8 @@ export class TArray<
 
   /* ---------------------------------------------------------------------------------------------------------------- */
 
-  ensure(this: TArray<T, Card, Coerce, 'toSet'>): TSuperDefault<this, Set<never>>
-  ensure(this: TArray<T, Card, Coerce>): TSuperDefault<this, []>
+  ensure(this: TArray<T, Card, Coerce, 'toSet', unknown, unknown>): TSuperDefault<this, Set<never>>
+  ensure(this: TArray<T, Card, Coerce, unsetMarker, unknown, unknown>): TSuperDefault<this, []>
   ensure() {
     if (this._def.cast) {
       return this.superDefault(new Set<never>())
@@ -379,17 +380,20 @@ export class TArray<
   flatten<D extends boolean = false>(options?: {
     readonly deep?: D
   }): FlattenTArray<this, D extends true ? 'deep' : 'flat'> {
-    return new TArray(
-      u.merge(this._def, { element: flattenTArrayElement(this, options?.deep ? 'deep' : 'flat') })
-    ) as FlattenTArray<this, D extends true ? 'deep' : 'flat'>
+    return new TArray({
+      ...this._def,
+      element: flattenTArrayElement(this, options?.deep ? 'deep' : 'flat'),
+    }) as FlattenTArray<this, D extends true ? 'deep' : 'flat'>
   }
 
   /* ---------------------------------------------------------------------------------------------------------------- */
 
-  toSet(): TSet<T, { off: 'off'; fromSet: 'fromArray' }[Coerce], { off: 'off'; toSet: 'toArray' }[Cast]> {
-    const checks: [
-      ...TSetDef<T, { off: 'off'; fromSet: 'fromArray' }[Coerce], { off: 'off'; toSet: 'toArray' }[Cast]>['checks']
-    ] = []
+  toSet(): TSet<
+    T,
+    { [unsetMarker]: unsetMarker; fromSet: 'fromArray' }[Coerce],
+    { [unsetMarker]: unsetMarker; toSet: 'toArray' }[Cast]
+  > {
+    const checks: [...TSetDef<T>['checks']] = []
 
     for (const check of this._getChecks('min', 'max', 'length')) {
       if (check.check === 'length') {
@@ -405,14 +409,14 @@ export class TArray<
       typeName: TTypeName.Set,
       element: this.element,
       checks,
-      coerce: (this._def.coerce === 'off' ? 'off' : 'fromArray') as { off: 'off'; fromSet: 'fromArray' }[Coerce],
-      cast: (this._def.cast === 'off' ? 'off' : 'toArray') as { off: 'off'; toSet: 'toArray' }[Cast],
+      coerce: this._def.coerce === unsetMarker ? unsetMarker : 'fromArray',
+      cast: this._def.cast === unsetMarker ? unsetMarker : 'toArray',
       options: this.options(),
       manifest: {
         ...manifest,
         ...(examples
-          ? this._def.coerce === 'off'
-            ? { examples: examples.filter(_.isArray).map((ex) => new Set(ex as unknown[])) }
+          ? this._def.coerce === unsetMarker
+            ? { examples: examples.filter(Array.isArray).map((ex) => new Set(ex as unknown[])) }
             : { examples }
           : {}),
       },
@@ -453,18 +457,18 @@ export class TArray<
       element,
       cardinality: element.isT(TTypeName.Never) ? 'none' : 'many',
       checks: [],
-      coerce: 'off',
-      cast: 'off',
+      coerce: unsetMarker,
+      cast: unsetMarker,
       options: { ...options },
     })
   }
 }
 
-export type AnyTArray = TArray<TType, TArrayCardinality, 'off' | 'fromSet', 'off' | 'toSet', unknown, unknown>
+export type AnyTArray = TArray<TType, TArrayCardinality, TArrayCoercion, TArrayCasting, unknown, unknown>
 
 /* ------------------------------------------------------------------------------------------------------------------ */
 
-export type FlattenTArray<T extends AnyTArray, D extends 'flat' | 'deep' = 'flat'> = T['element'] extends TArray<
+export type FlattenTArray<T extends AnyTArray, D extends 'deep' | 'flat' = 'flat'> = T['element'] extends TArray<
   infer El,
   infer Card,
   infer Coerce,
@@ -477,7 +481,7 @@ export type FlattenTArray<T extends AnyTArray, D extends 'flat' | 'deep' = 'flat
     : TArray<El, Card, Coerce, Cast, Out, In>
   : T
 
-const flattenTArrayElement = <T extends AnyTArray, D extends 'flat' | 'deep' = 'flat'>(
+const flattenTArrayElement = <T extends AnyTArray, D extends 'deep' | 'flat' = 'flat'>(
   array: T,
   depth?: D
 ): FlattenTArray<T, D> =>
@@ -491,41 +495,42 @@ const flattenTArrayElement = <T extends AnyTArray, D extends 'flat' | 'deep' = '
 /*                                                        TSet                                                        */
 /* ------------------------------------------------------------------------------------------------------------------ */
 
-export type TSetInput<T extends TType, Coerce extends 'off' | 'fromArray'> = {
-  off: Set<InputOf<T>>
+export type TSetCoercion = unsetMarker | 'fromArray'
+export type TSetCasting = unsetMarker | 'toArray'
+
+export type TSetInput<T extends TType, Coerce extends TSetCoercion> = {
+  [unsetMarker]: Set<InputOf<T>>
   fromArray: Set<InputOf<T>> | TArrayIO<T, 'many', '$I'>
 }[Coerce]
 
-export type TSetOutput<T extends TType, Cast extends 'off' | 'toArray'> = {
-  off: Set<OutputOf<T>>
+export type TSetOutput<T extends TType, Cast extends TSetCasting> = {
+  [unsetMarker]: Set<OutputOf<T>>
   toArray: TArrayIO<T, 'many'>
 }[Cast]
 
-export interface TSetDef<T extends TType, Coerce extends 'off' | 'fromArray', Cast extends 'off' | 'toArray'>
-  extends TDef {
+export interface TSetDef<T extends TType> extends TDef {
   readonly typeName: TTypeName.Set
   readonly element: T
   readonly checks: TChecks.FromIssue<InvalidSetIssue>
-  readonly coerce: Coerce
-  readonly cast: Cast
+  readonly coerce: TSetCoercion
+  readonly cast: TSetCasting
 }
 
 export class TSet<
   T extends TType,
-  Coerce extends 'off' | 'fromArray' = 'off',
-  Cast extends 'off' | 'toArray' = 'off'
-> extends TType<TSetOutput<T, Cast>, TSetDef<T, Coerce, Cast>, TSetInput<T, Coerce>> {
+  Coerce extends TSetCoercion = unsetMarker,
+  Cast extends TSetCasting = unsetMarker
+> extends TType<TSetOutput<T, Cast>, TSetDef<T>, TSetInput<T, Coerce>> {
   get _manifest() {
+    const { coerce, cast } = this._def
+
     return TManifest<TSetInput<T, Coerce>>()({
-      type: (this._def.coerce === 'fromArray' ? { anyOf: [TParsedType.Set, TParsedType.Array] } : TParsedType.Set) as {
-        off: TParsedType.Set
-        fromArray: { anyOf: [TParsedType.Set, TParsedType.Array] }
-      }[Coerce],
+      type: coerce === 'fromArray' ? TParsedType.AnyOf(TParsedType.Set, TParsedType.Array) : TParsedType.Set,
       element: this.element.manifest(),
       min: this.minItems ?? null,
       max: this.maxItems ?? null,
-      coerce: this._def.coerce,
-      cast: this._def.cast,
+      coerce,
+      cast,
     })
   }
 
@@ -533,14 +538,14 @@ export class TSet<
 
   _parse(ctx: ParseContextOf<this>): ParseResultOf<this> {
     if (this._def.coerce === 'fromArray') {
-      if (_.isArray(ctx.data)) {
+      if (Array.isArray(ctx.data)) {
         ctx.setData(new Set(ctx.data))
-      } else if (!_.isSet(ctx.data)) {
-        return ctx.invalidType({ expected: { anyOf: [TParsedType.Set, TParsedType.Array] } }).abort()
+      } else if (!(ctx.data instanceof Set)) {
+        return ctx.invalidType({ expected: TParsedType.AnyOf(TParsedType.Set, TParsedType.Array) }).abort()
       }
     }
 
-    if (!_.isSet(ctx.data)) {
+    if (!(ctx.data instanceof Set)) {
       return ctx.invalidType({ expected: TParsedType.Set }).abort()
     }
 
@@ -584,7 +589,7 @@ export class TSet<
           }
 
           return ctx.isValid()
-            ? ctx.success({ off: result, toArray: [...result] }[this._def.cast] as OutputOf<this>)
+            ? ctx.success({ [unsetMarker]: result, toArray: [...result] }[this._def.cast] as OutputOf<this>)
             : ctx.abort()
         }
       )
@@ -603,7 +608,7 @@ export class TSet<
     }
 
     return ctx.isValid()
-      ? ctx.success({ off: result, toArray: [...result] }[this._def.cast] as OutputOf<this>)
+      ? ctx.success({ [unsetMarker]: result, toArray: [...result] }[this._def.cast] as OutputOf<this>)
       : ctx.abort()
   }
 
@@ -619,18 +624,12 @@ export class TSet<
 
   /* ----------------------------------------------- Coercion/Casting ----------------------------------------------- */
 
-  coerce<C extends boolean = true>(value = true as C): TSet<T, C extends true ? 'fromArray' : 'off', Cast> {
-    return new TSet({
-      ...this._def,
-      coerce: (value === true ? 'fromArray' : 'off') as C extends true ? 'fromArray' : 'off',
-    })
+  coerce<C extends boolean = true>(value = true as C): TSet<T, C extends true ? 'fromArray' : unsetMarker, Cast> {
+    return new TSet({ ...this._def, coerce: value === true ? 'fromArray' : unsetMarker })
   }
 
-  cast<C extends boolean = true>(value = true as C): TSet<T, Coerce, C extends true ? 'toArray' : 'off'> {
-    return new TSet({
-      ...this._def,
-      cast: (value === true ? 'toArray' : 'off') as C extends true ? 'toArray' : 'off',
-    })
+  cast<C extends boolean = true>(value = true as C): TSet<T, Coerce, C extends true ? 'toArray' : unsetMarker> {
+    return new TSet({ ...this._def, cast: value === true ? 'toArray' : unsetMarker })
   }
 
   /* ---------------------------------------------------- Checks ---------------------------------------------------- */
@@ -670,7 +669,10 @@ export class TSet<
   sparse(enabled?: true): TSet<TOptional<T>, Coerce, Cast>
   sparse(enabled: false): TSet<TDefined<T>, Coerce, Cast>
   sparse(enabled = true) {
-    return new TSet({ ...this._def, element: this.element[enabled ? 'optional' : 'defined']() })
+    return new TSet<TDefined<T> | TOptional<T>, Coerce, Cast>({
+      ...this._def,
+      element: this.element[enabled ? 'optional' : 'defined'](),
+    })
   }
 
   partial(): TSet<TOptional<T>, Coerce, Cast> {
@@ -683,15 +685,13 @@ export class TSet<
 
   /* ---------------------------------------------------------------------------------------------------------------- */
 
-  toArray(): TArray<T, 'many', { off: 'off'; fromArray: 'fromSet' }[Coerce], { off: 'off'; toArray: 'toSet' }[Cast]> {
-    const checks: [
-      ...TArrayDef<
-        T,
-        'many',
-        { off: 'off'; fromArray: 'fromSet' }[Coerce],
-        { off: 'off'; toArray: 'toSet' }[Cast]
-      >['checks']
-    ] = []
+  toArray(): TArray<
+    T,
+    'many',
+    { [unsetMarker]: unsetMarker; fromArray: 'fromSet' }[Coerce],
+    { [unsetMarker]: unsetMarker; toArray: 'toSet' }[Cast]
+  > {
+    const checks: [...TArrayDef<T, 'many'>['checks']] = []
 
     for (const check of this._getChecks('min', 'max', 'size')) {
       if (check.check === 'size') {
@@ -708,14 +708,14 @@ export class TSet<
       element: this.element,
       cardinality: 'many',
       checks,
-      coerce: (this._def.coerce === 'off' ? 'off' : 'fromSet') as { off: 'off'; fromArray: 'fromSet' }[Coerce],
-      cast: (this._def.cast === 'off' ? 'off' : 'toSet') as { off: 'off'; toArray: 'toSet' }[Cast],
+      coerce: this._def.coerce === unsetMarker ? unsetMarker : 'fromSet',
+      cast: this._def.cast === unsetMarker ? unsetMarker : 'toSet',
       options: this.options(),
       manifest: {
         ...manifest,
         ...(examples
-          ? this._def.coerce === 'off'
-            ? { examples: examples.filter(_.isSet).map((ex) => [...ex] as unknown[]) }
+          ? this._def.coerce === unsetMarker
+            ? { examples: examples.filter((ex) => ex instanceof Set).map((ex) => [...ex] as unknown[]) }
             : { examples }
           : {}),
       },
@@ -745,30 +745,31 @@ export class TSet<
       typeName: TTypeName.Set,
       element,
       checks: [],
-      coerce: 'off',
-      cast: 'off',
+      coerce: unsetMarker,
+      cast: unsetMarker,
       options: { ...options },
     })
   }
 }
 
-export type AnyTSet = TSet<TType, 'off' | 'fromArray', 'off' | 'toArray'>
+export type AnyTSet = TSet<TType, TSetCoercion, TSetCasting>
 
 /* ------------------------------------------------------------------------------------------------------------------ */
 /*                                                       TBuffer                                                      */
 /* ------------------------------------------------------------------------------------------------------------------ */
 
-export type TBufferInput<Coerce extends 'off' | 'fromString'> = {
-  off: Buffer
+export type TBufferInput<Coerce extends unsetMarker | 'fromString'> = {
+  [unsetMarker]: Buffer
   fromString: Buffer | string
 }[Coerce]
 
-export type TBufferOutput<Cast extends 'off' | 'toString'> = {
-  off: Buffer
+export type TBufferOutput<Cast extends unsetMarker | 'toString'> = {
+  [unsetMarker]: Buffer
   toString: string
 }[Cast]
 
-export interface TBufferDef<Coerce extends 'off' | 'fromString', Cast extends 'off' | 'toString'> extends TDef {
+export interface TBufferDef<Coerce extends unsetMarker | 'fromString', Cast extends unsetMarker | 'toString'>
+  extends TDef {
   readonly typeName: TTypeName.Buffer
   readonly checks: TChecks.FromIssue<InvalidBufferIssue>
   readonly coerce: Coerce
@@ -776,19 +777,13 @@ export interface TBufferDef<Coerce extends 'off' | 'fromString', Cast extends 'o
 }
 
 export class TBuffer<
-  Coerce extends 'off' | 'fromString' = 'off',
-  Cast extends 'off' | 'toString' = 'off'
+  Coerce extends unsetMarker | 'fromString' = unsetMarker,
+  Cast extends unsetMarker | 'toString' = unsetMarker
 > extends TType<TBufferOutput<Cast>, TBufferDef<Coerce, Cast>, TBufferInput<Coerce>> {
   get _manifest() {
-    const type = (
-      this._def.coerce === 'fromString' ? { anyOf: [TParsedType.Buffer, TParsedType.String] } : TParsedType.Buffer
-    ) as {
-      off: TParsedType.Buffer
-      fromString: { anyOf: [TParsedType.Buffer, TParsedType.String] }
-    }[Coerce]
-
     return TManifest<TBufferInput<Coerce>>()({
-      type,
+      type:
+        this._def.coerce === 'fromString' ? { anyOf: [TParsedType.Buffer, TParsedType.String] } : TParsedType.Buffer,
       min: this.minBytes ?? null,
       max: this.maxBytes ?? null,
       coerce: this._def.coerce,
@@ -800,18 +795,18 @@ export class TBuffer<
 
   _parse(ctx: ParseContextOf<this>): ParseResultOf<this> {
     if (this._def.coerce === 'fromString') {
-      if (_.isString(ctx.data)) {
+      if (typeof ctx.data === 'string') {
         ctx.setData(Buffer.from(ctx.data))
-      } else if (!_.isBuffer(ctx.data)) {
+      } else if (!Buffer.isBuffer(ctx.data)) {
         return ctx.invalidType({ expected: { anyOf: [TParsedType.Buffer, TParsedType.String] } }).abort()
       }
     }
 
-    if (!_.isBuffer(ctx.data)) {
+    if (!Buffer.isBuffer(ctx.data)) {
       return ctx.invalidType({ expected: TParsedType.Buffer }).abort()
     }
 
-    const data = ctx.data as Buffer
+    const { data } = ctx
 
     for (const check of this._def.checks) {
       if (
@@ -833,23 +828,23 @@ export class TBuffer<
     }
 
     return ctx.isValid()
-      ? ctx.success({ off: data, toString: data.toString() }[this._def.cast] as OutputOf<this>)
+      ? ctx.success({ [unsetMarker]: data, toString: data.toString() }[this._def.cast] as OutputOf<this>)
       : ctx.abort()
   }
 
   /* ----------------------------------------------- Coercion/Casting ----------------------------------------------- */
 
-  coerce<C extends boolean = true>(value = true as C): TBuffer<C extends true ? 'fromString' : 'off', Cast> {
+  coerce<C extends boolean = true>(value = true as C): TBuffer<C extends true ? 'fromString' : unsetMarker, Cast> {
     return new TBuffer({
       ...this._def,
-      coerce: (value === true ? 'fromString' : 'off') as C extends true ? 'fromString' : 'off',
+      coerce: (value === true ? 'fromString' : unsetMarker) as C extends true ? 'fromString' : unsetMarker,
     })
   }
 
-  cast<C extends boolean = true>(value = true as C): TBuffer<Coerce, C extends true ? 'toString' : 'off'> {
+  cast<C extends boolean = true>(value = true as C): TBuffer<Coerce, C extends true ? 'toString' : unsetMarker> {
     return new TBuffer({
       ...this._def,
-      cast: (value === true ? 'toString' : 'off') as C extends true ? 'toString' : 'off',
+      cast: (value === true ? 'toString' : unsetMarker) as C extends true ? 'toString' : unsetMarker,
     })
   }
 
@@ -903,11 +898,11 @@ export class TBuffer<
     return new TBuffer({
       typeName: TTypeName.Buffer,
       checks: [],
-      coerce: 'off',
-      cast: 'off',
+      coerce: unsetMarker,
+      cast: unsetMarker,
       options: { ...options },
     })
   }
 }
 
-export type AnyTBuffer = TBuffer<'off' | 'fromString', 'off' | 'toString'>
+export type AnyTBuffer = TBuffer<unsetMarker | 'fromString', unsetMarker | 'toString'>

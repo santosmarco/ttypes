@@ -13,9 +13,12 @@ import { TType, type OutputOf } from './_internal'
 
 export type TBooleanCoercion =
   | boolean
-  | { readonly truthy?: readonly u.Primitive[]; readonly falsy?: readonly u.Primitive[] }
+  | {
+      readonly truthy?: readonly [u.Primitive, ...u.Primitive[]]
+      readonly falsy?: readonly [u.Primitive, ...u.Primitive[]]
+    }
 
-export type TBooleanCasting = 'boolean' | 'string' | 'number'
+export type TBooleanCasting = 'boolean' | 'number' | 'string'
 
 export type TBooleanInput<Coerce extends TBooleanCoercion> = Coerce extends true
   ? any
@@ -32,10 +35,22 @@ export type TBooleanInput<Coerce extends TBooleanCoercion> = Coerce extends true
 export type TBooleanOutput<Cast extends TBooleanCasting> = Cast extends 'boolean'
   ? boolean
   : Cast extends 'string'
-  ? 'true' | 'false'
+  ? 'false' | 'true'
   : Cast extends 'number'
   ? 0 | 1
   : never
+
+function getExpectedLiterals(coercion: Exclude<TBooleanCoercion, boolean>) {
+  return [...(coercion.truthy ?? [])].concat(coercion.falsy ?? []).sort((a, b) => String(b).localeCompare(String(a)))
+}
+
+function getExpectedType(coercion: TBooleanCoercion) {
+  return coercion === true
+    ? TParsedType.Any
+    : coercion === false
+    ? TParsedType.Boolean
+    : TParsedType.AnyOf(...getExpectedLiterals(coercion).map((x) => TParsedType.Literal(x)))
+}
 
 export interface TBooleanDef extends TDef {
   readonly typeName: TTypeName.Boolean
@@ -51,32 +66,15 @@ export class TBoolean<Coerce extends TBooleanCoercion = false, Cast extends TBoo
   get _manifest() {
     const { coerce, cast } = this._def
 
-    type Required = Coerce extends true
-      ? false
-      : Coerce extends Record<string, unknown>
-      ? undefined extends Coerce['truthy' | 'falsy']
-        ? false
-        : true
-      : true
-
-    type Nullable = Coerce extends true
-      ? true
-      : Coerce extends Record<string, unknown>
-      ? null extends Coerce['truthy' | 'falsy']
-        ? true
-        : false
-      : false
-
     return TManifest<TBooleanInput<Coerce>>()({
-      type: TParsedType.Boolean,
+      type: getExpectedType(coerce),
       coerce,
       cast,
       required: !(
         coerce === true ||
         (typeof coerce !== 'boolean' && u.values(coerce).some((v) => v?.includes(undefined)))
-      ) as u.Narrow<Required>,
-      nullable: (coerce === true ||
-        (typeof coerce !== 'boolean' && u.values(coerce).some((v) => v?.includes(null)))) as u.Narrow<Nullable>,
+      ),
+      nullable: coerce === true || (typeof coerce !== 'boolean' && u.values(coerce).some((v) => v?.includes(null))),
     })
   }
 
@@ -88,26 +86,31 @@ export class TBoolean<Coerce extends TBooleanCoercion = false, Cast extends TBoo
     if (coerce) {
       if (coerce === true) {
         ctx.setData(Boolean(ctx.data))
-      } else if (coerce.truthy?.includes(ctx.data as u.Primitive)) {
-        ctx.setData(true)
-      } else if (coerce.falsy?.includes(ctx.data as u.Primitive)) {
-        ctx.setData(false)
-      } else if (u.isPrimitive(ctx.data)) {
-        const expected = [...(coerce.truthy ?? [])]
-          .concat(coerce.falsy ?? [])
-          .sort((a, b) => String(a).localeCompare(String(b)))
-        return ctx
-          .addIssue(
-            IssueKind.InvalidEnumValue,
-            {
-              expected: { values: expected, formatted: expected.map(u.literalize) },
-              received: { value: ctx.data, formatted: u.literalize(ctx.data) },
-            },
-            this.options().messages?.invalidType
-          )
-          .abort()
       } else {
-        return ctx.invalidType({ expected: TParsedType.Primitive }).abort()
+        const expectedLiterals = getExpectedLiterals(coerce)
+
+        if (!u.isPrimitive(ctx.data)) {
+          return ctx.invalidType({ expected: getExpectedType(coerce) }).abort()
+        }
+
+        if (!expectedLiterals.includes(ctx.data)) {
+          return ctx
+            .addIssue(
+              IssueKind.InvalidEnumValue,
+              {
+                expected: { values: expectedLiterals, formatted: expectedLiterals.map((x) => u.literalize(x)) },
+                received: { value: ctx.data, formatted: u.literalize(ctx.data) },
+              },
+              this.options().messages?.invalidType
+            )
+            .abort()
+        }
+
+        if (coerce.truthy?.includes(ctx.data)) {
+          ctx.setData(true)
+        } else if (coerce.falsy?.includes(ctx.data)) {
+          ctx.setData(false)
+        }
       }
     }
 
@@ -115,9 +118,7 @@ export class TBoolean<Coerce extends TBooleanCoercion = false, Cast extends TBoo
       return ctx.invalidType({ expected: TParsedType.Boolean }).abort()
     }
 
-    return ctx.success(
-      (cast === 'boolean' ? ctx.data : cast === 'number' ? Number(ctx.data) : String(ctx.data)) as OutputOf<this>
-    )
+    return ctx.success({ boolean: Boolean, number: Number, string: String }[cast](ctx.data) as OutputOf<this>)
   }
 
   /* ----------------------------------------------- Coercion/Casting ----------------------------------------------- */
@@ -134,10 +135,7 @@ export class TBoolean<Coerce extends TBooleanCoercion = false, Cast extends TBoo
 
   truthy<T extends readonly [u.Primitive, ...u.Primitive[]]>(
     ...values: T
-  ): TBoolean<
-    Coerce extends Record<string, unknown> ? u.Simplify<u.Merge<Coerce, { truthy: T }>> : { truthy: T },
-    Cast
-  > {
+  ): TBoolean<Coerce extends Record<string, unknown> ? u.Merge<Coerce, { truthy: T }> : { truthy: T }, Cast> {
     return new TBoolean({
       ...this._def,
       coerce: { ...(typeof this._def.coerce === 'object' ? this._def.coerce : {}), truthy: values },
@@ -146,7 +144,7 @@ export class TBoolean<Coerce extends TBooleanCoercion = false, Cast extends TBoo
 
   falsy<F extends readonly [u.Primitive, ...u.Primitive[]]>(
     ...values: F
-  ): TBoolean<Coerce extends Record<string, unknown> ? u.Simplify<u.Merge<Coerce, { falsy: F }>> : { falsy: F }, Cast> {
+  ): TBoolean<Coerce extends Record<string, unknown> ? u.Merge<Coerce, { falsy: F }> : { falsy: F }, Cast> {
     return new TBoolean({
       ...this._def,
       coerce: { ...(typeof this._def.coerce === 'object' ? this._def.coerce : {}), falsy: values },
@@ -163,10 +161,25 @@ export class TBoolean<Coerce extends TBooleanCoercion = false, Cast extends TBoo
     return new TFalse({ ...this._def, typeName: TTypeName.False })
   }
 
+  /* ---------------------------------------------------- Getters --------------------------------------------------- */
+
+  get truthyValues(): readonly [] | readonly [u.Primitive, ...u.Primitive[]] {
+    return typeof this._def.coerce === 'object' ? this._def.coerce.truthy ?? [] : []
+  }
+
+  get falsyValues(): readonly [] | readonly [u.Primitive, ...u.Primitive[]] {
+    return typeof this._def.coerce === 'object' ? this._def.coerce.falsy ?? [] : []
+  }
+
   /* ---------------------------------------------------------------------------------------------------------------- */
 
   static create(options?: TOptions): TBoolean {
-    return new TBoolean({ typeName: TTypeName.Boolean, coerce: false, cast: 'boolean', options: { ...options } })
+    return new TBoolean({
+      typeName: TTypeName.Boolean,
+      coerce: false,
+      cast: 'boolean',
+      options: { ...options },
+    })
   }
 }
 
@@ -180,13 +193,29 @@ export interface TTrueDef extends TDef {
 
 export class TTrue extends TType<true, TTrueDef> {
   get _manifest() {
-    return TManifest<true>()({ type: TParsedType.True, literal: u.literalize(true) })
+    return TManifest<true>()({
+      type: TParsedType.True,
+      literal: u.literalize(true),
+    })
   }
 
   /* ---------------------------------------------------------------------------------------------------------------- */
 
   _parse(ctx: ParseContextOf<this>): ParseResultOf<this> {
-    return ctx.data === true ? ctx.success(ctx.data) : ctx.invalidType({ expected: TParsedType.True }).abort()
+    return ctx.data === true
+      ? ctx.success(ctx.data)
+      : ctx.data === false
+      ? ctx
+          .addIssue(
+            IssueKind.InvalidLiteral,
+            {
+              expected: { value: true, formatted: u.literalize(true) },
+              received: { value: false, formatted: u.literalize(false) },
+            },
+            this.options().messages?.invalidType
+          )
+          .abort()
+      : ctx.invalidType({ expected: TParsedType.True }).abort()
   }
 
   /* ---------------------------------------------------------------------------------------------------------------- */
@@ -210,13 +239,29 @@ export interface TFalseDef extends TDef {
 
 export class TFalse extends TType<false, TFalseDef> {
   get _manifest() {
-    return TManifest<false>()({ type: TParsedType.False, literal: u.literalize(false) })
+    return TManifest<false>()({
+      type: TParsedType.False,
+      literal: u.literalize(false),
+    })
   }
 
   /* ---------------------------------------------------------------------------------------------------------------- */
 
   _parse(ctx: ParseContextOf<this>): ParseResultOf<this> {
-    return ctx.data === false ? ctx.success(ctx.data) : ctx.invalidType({ expected: TParsedType.False }).abort()
+    return ctx.data === false
+      ? ctx.success(ctx.data)
+      : ctx.data === true
+      ? ctx
+          .addIssue(
+            IssueKind.InvalidLiteral,
+            {
+              expected: { value: false, formatted: u.literalize(false) },
+              received: { value: true, formatted: u.literalize(true) },
+            },
+            this.options().messages?.invalidType
+          )
+          .abort()
+      : ctx.invalidType({ expected: TParsedType.False }).abort()
   }
 
   /* ---------------------------------------------------------------------------------------------------------------- */

@@ -1,5 +1,4 @@
-import _ from 'lodash'
-import { TError } from '../out'
+import { TError } from './error'
 import { TParsedType } from './parse'
 import type { InputOf, ManifestOf, TObjectShape, TType } from './types/_internal'
 import { u } from './utils'
@@ -19,8 +18,8 @@ export interface PublicManifest<T = unknown> {
 }
 
 export type ManifestType =
-  | string
-  | u.RequireExactlyOne<Readonly<Record<'anyOf' | 'allOf' | 'not', readonly ManifestType[]>>>
+  | u.LiteralUnion<TParsedType | `${TParsedType}`, string>
+  | u.RequireExactlyOne<Readonly<Record<'allOf' | 'anyOf' | 'not', readonly ManifestType[]>>>
 
 export interface Manifest<T = unknown> extends PublicManifest<T> {
   readonly type: ManifestType
@@ -29,19 +28,16 @@ export interface Manifest<T = unknown> extends PublicManifest<T> {
   readonly readonly: boolean
 }
 
-export type BrandedManifest<T = unknown> = u.Brand<Manifest<T>, 'TManifest'>
-
-export type MakeManifest<T, P extends Partial<Manifest<T>> & { readonly type: ManifestType }> = u.Brand<
-  u.ReadonlyDeep<
-    {
-      readonly type: P['type']
-      readonly required: 'required' extends keyof P ? P['required'] : true
-      readonly nullable: 'nullable' extends keyof P ? P['nullable'] : false
-      readonly readonly: 'readonly' extends keyof P ? P['readonly'] : false
-    } & u.Except<P, 'type' | 'required' | 'nullable' | 'readonly'>
-  > &
-    PublicManifest<T>,
-  'TManifest'
+export type MakeManifest<T, P extends Partial<Manifest<T>> & { readonly type: ManifestType }> = u.Simplify<
+  PublicManifest<T> &
+    u.ReadonlyDeep<
+      u.Except<P, 'nullable' | 'readonly' | 'required' | 'type'> & {
+        readonly type: P['type']
+        readonly required: 'required' extends keyof P ? P['required'] : true
+        readonly nullable: 'nullable' extends keyof P ? P['nullable'] : false
+        readonly readonly: 'readonly' extends keyof P ? P['readonly'] : false
+      }
+    >
 >
 
 /* ------------------------------------------------------------------------------------------------------------------ */
@@ -53,15 +49,20 @@ export const TManifest =
   <P extends Partial<Manifest<T>> & { readonly type: ManifestType }>(manifest: {
     [K in keyof P]: P[K] | u.Narrow<P[K]>
   }): MakeManifest<T, P> =>
-    u.enbrand(
-      u.readonlyDeep(_.defaults(manifest as P, { required: true, nullable: false, readonly: false })),
-      'TManifest'
-    ) as MakeManifest<T, P>
+    ({
+      ...(manifest as P),
+      required: 'required' in manifest ? manifest.required : true,
+      nullable: 'nullable' in manifest ? manifest.nullable : false,
+      readonly: 'readonly' in manifest ? manifest.readonly : false,
+    } as MakeManifest<T, P>)
+
+TManifest.get = <T extends u.Nullish<TType>>(maybeType: T) =>
+  maybeType?.manifest() as T extends TType ? ManifestOf<T> : T
 
 TManifest.extract = <T extends Manifest, K extends keyof T>(manifest: T, key: K): T[K] => manifest[key]
 
 TManifest.pickPublic = <T extends TType>(type: T): PublicManifest<InputOf<T>> =>
-  _.pick(type.manifest(), [
+  u.pick(type.manifest(), [
     'title',
     'summary',
     'description',
@@ -85,10 +86,10 @@ TManifest.mapKey = <T extends readonly TType[], K extends keyof Manifest>(
 TManifest.mapShape = <T extends TObjectShape>(shape: T): { [K in keyof T]: ManifestOf<T[K]> } =>
   u.fromEntries(u.entries(shape).map(([k, v]) => [k, v.manifest()]))
 
-TManifest.unwrapType = (types: readonly ManifestType[], mode: 'union' | 'intersection' | 'not'): string => {
+TManifest.unwrapType = (types: readonly ManifestType[], mode: 'intersection' | 'not' | 'union'): string => {
   const unwrapInner = (
     types: readonly ManifestType[],
-    mode: 'union' | 'intersection' | 'not'
+    mode: 'intersection' | 'not' | 'union'
   ): {
     readonly union: Set<ManifestType>
     readonly intersection: Set<ManifestType>
@@ -144,8 +145,6 @@ TManifest.unwrapType = (types: readonly ManifestType[], mode: 'union' | 'interse
     union.clear()
     union.add(TParsedType.Unknown)
   }
-
-  console.log(union, not)
 
   not.forEach((t) => union.delete(t))
 

@@ -1,12 +1,11 @@
 import memoize from 'micro-memoize'
 import { nanoid } from 'nanoid'
 import type { TChecks } from '../checks'
-import type { BrandedManifest, Manifest, PublicManifest } from '../manifest'
+import type { Manifest, PublicManifest } from '../manifest'
 import type { ParseOptions, TOptions } from '../options'
 import {
   AsyncParseContext,
   SyncParseContext,
-  type AsyncParseResultOf,
   type ParseContextOf,
   type ParseResultOf,
   type SyncParseResultOf,
@@ -34,11 +33,13 @@ import {
   TSuperDefault,
   TTransform,
   TUnion,
-  schemaMarker,
+  ttype,
   type EffectCtx,
   type RefinementMessage,
+  type TIntersectionOptions,
   type TNotOptions,
   type TString,
+  type TUnionOptions,
 } from './_internal'
 
 /* ------------------------------------------------------------------------------------------------------------------ */
@@ -55,13 +56,8 @@ export interface TDef {
 /*                                                        TType                                                       */
 /* ------------------------------------------------------------------------------------------------------------------ */
 
-export abstract class TType<
-  Output = unknown,
-  Def extends TDef = TDef,
-  Input = Output,
-  Forbidden extends readonly TType[] = []
-> {
-  get [schemaMarker]() {
+export abstract class TType<Output = unknown, Def extends TDef = TDef, Input = Output> {
+  get [ttype]() {
     return true
   }
 
@@ -69,9 +65,9 @@ export abstract class TType<
   declare readonly $D: Def
   declare readonly $I: Input
 
-  protected readonly _def: Def & { readonly manifest: Partial<Manifest> }
+  readonly _def: Def & { readonly manifest: Partial<Manifest> }
 
-  abstract get _manifest(): BrandedManifest<Input>
+  abstract get _manifest(): Manifest
 
   abstract _parse(ctx: ParseContextOf<this>): ParseResultOf<this>
 
@@ -143,7 +139,7 @@ export abstract class TType<
   }
 
   /** @internal */
-  async _parseAsync(ctx: ParseContextOf<this>): AsyncParseResultOf<this> {
+  async _parseAsync(ctx: ParseContextOf<this>): Promise<SyncParseResultOf<this>> {
     const result = this._parse(ctx)
     return Promise.resolve(result)
   }
@@ -171,7 +167,7 @@ export abstract class TType<
     return result.data
   }
 
-  async safeParseAsync(data: unknown, options?: ParseOptions): AsyncParseResultOf<this> {
+  async safeParseAsync(data: unknown, options?: ParseOptions): Promise<SyncParseResultOf<this>> {
     const ctx = AsyncParseContext.of(this, data, options)
     return this._parseAsync(ctx)
   }
@@ -278,16 +274,19 @@ export abstract class TType<
     return this.or([this.promise()])
   }
 
-  or<T extends readonly [TType, ...TType[]]>(alternatives: T): TUnion<[this, ...T]> {
-    return TUnion._create([this, ...alternatives], this.options())
+  or<T extends readonly [TType, ...TType[]]>(alternatives: T, options?: TUnionOptions): TUnion<[this, ...T]> {
+    return TUnion._create([this, ...alternatives], u.merge(this.options(), options))
   }
 
-  and<T extends readonly [TType, ...TType[]]>(intersectees: T): TIntersection<[this, ...T]> {
-    return TIntersection._create([this, ...intersectees], this.options())
+  and<T extends readonly [TType, ...TType[]]>(
+    intersectees: T,
+    options?: TIntersectionOptions
+  ): TIntersection<[this, ...T]> {
+    return TIntersection._create([this, ...intersectees], u.merge(this.options(), options))
   }
 
-  not<T extends readonly [TType, ...TType[]]>(forbidden: T, options?: TNotOptions): TNot<this, T> {
-    return TNot.create(this, forbidden, u.merge(this.options(), options))
+  not<T extends readonly [TType, ...TType[]]>(forbid: T, options?: TNotOptions): TNot<this, T> {
+    return TNot.create(this, forbid, u.merge(this.options(), options))
   }
 
   brand<B>(brand: u.Narrow<B>): TBrand<this, B> {
@@ -320,35 +319,30 @@ export abstract class TType<
     return TPipeline.create(this, type, this.options())
   }
 
-  preprocess<In extends Input>(preprocess: (data: unknown) => In): TPreprocess<this, In> {
+  preprocess<ProcessedIn extends Input>(preprocess: (data: unknown) => ProcessedIn): TPreprocess<this, ProcessedIn> {
     return TPreprocess.create(preprocess, this, this.options())
   }
 
-  refine<Out extends Output>(
-    refinement: (data: Output) => data is Out,
+  refine<RefinedOut extends Output>(
+    refinement: (data: Output) => data is RefinedOut,
     message?: RefinementMessage<this>
-  ): TRefinement<this, Out>
-  refine(
-    refinement: ((data: Output) => boolean | Promise<boolean>) | ((data: Output) => unknown),
-    message?: RefinementMessage<this>
-  ): TRefinement<this>
+  ): TRefinement<this, RefinedOut>
+  refine(refinement: (data: Output) => unknown, message?: RefinementMessage<this>): TRefinement<this>
   refine(refinement: (data: Output) => unknown, message?: RefinementMessage<this>): TRefinement<this> {
     return TRefinement.create(this, refinement, { ...this.options(), refinementMessage: message })
   }
 
-  superRefine<Out extends Output>(
-    refinement: (data: Output, ctx: EffectCtx<this>) => data is Out
-  ): TRefinement<this, Out>
-  superRefine(
-    refinement:
-      | ((data: Output, ctx: EffectCtx<this>) => boolean | Promise<boolean>)
-      | ((data: Output, ctx: EffectCtx<this>) => unknown)
-  ): TRefinement<this>
+  superRefine<RefinedOut extends Output>(
+    refinement: (data: Output, ctx: EffectCtx<this>) => data is RefinedOut
+  ): TRefinement<this, RefinedOut>
+  superRefine(refinement: (data: Output, ctx: EffectCtx<this>) => unknown): TRefinement<this>
   superRefine(refinement: (data: Output, ctx: EffectCtx<this>) => unknown): TRefinement<this> {
     return TRefinement.create(this, refinement, this.options())
   }
 
-  transform<Out>(transform: (data: Output, ctx: EffectCtx<this>) => Out | Promise<Out>): TTransform<this, Out> {
+  transform<NewOut>(
+    transform: (data: Output, ctx: EffectCtx<this>) => NewOut | Promise<NewOut>
+  ): TTransform<this, NewOut> {
     return TTransform.create(this, transform, this.options())
   }
 

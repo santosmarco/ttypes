@@ -4,7 +4,7 @@ import type { TOptions } from '../options'
 import type { AsyncParseResultOf, ParseContextOf, ParsePath, ParseResultOf, SyncParseResultOf } from '../parse'
 import { TTypeName } from '../type-names'
 import { u } from '../utils'
-import { TType, type InputOf, type ManifestOf, type OutputOf, type TUnwrappable, type UnwrapDeep } from './_internal'
+import { TType, type InputOf, type OutputOf, type TUnwrappable, type UnwrapDeep } from './_internal'
 
 /* ----------------------------------------------------------------------------------------------------------------- - */
 /*                                                      TEffects                                                      */
@@ -30,7 +30,7 @@ export type PreprocessEffect<T extends TType> = EffectBase<EffectKind.Preprocess
 
 export type RefinementEffect<T extends TType> = EffectBase<
   EffectKind.Refinement,
-  (data: OutputOf<T>, ctx: u.Simplify<EffectCtx<T>>) => boolean | Promise<boolean>
+  (data: OutputOf<T>, ctx: u.Simplify<EffectCtx<T>>) => Promise<boolean> | boolean
 >
 
 export type TransformEffect<T extends TType, U> = EffectBase<
@@ -43,7 +43,7 @@ export type TEffect<T extends TType = TType, U = unknown> =
   | RefinementEffect<T>
   | TransformEffect<T, U>
 
-export type RefinementMessage<T extends TType> = string | CustomIssue | ((data: OutputOf<T>) => string | CustomIssue)
+export type RefinementMessage<T extends TType> = CustomIssue | string | ((data: OutputOf<T>) => CustomIssue | string)
 
 export interface TEffectsDef<T extends TType> extends TDef {
   readonly typeName: TTypeName.Effects
@@ -174,9 +174,9 @@ export class TPreprocess<T extends TType, I extends InputOf<T>> extends TEffects
 
 /* --------------------------------------------------- TRefinement -------------------------------------------------- */
 
-export type RefinementIssue = Partial<u.StripKey<CustomIssue, 'kind' | 'data'>>
+export type RefinementIssue = Partial<u.StripKey<CustomIssue, 'code' | 'data'>>
 
-const handleStringOrCustomIssue = (strOrCustomIssue: string | RefinementIssue): RefinementIssue =>
+const handleStringOrCustomIssue = (strOrCustomIssue: RefinementIssue | string): RefinementIssue =>
   typeof strOrCustomIssue === 'string' ? { message: strOrCustomIssue } : strOrCustomIssue
 
 export class TRefinement<T extends TType, O extends OutputOf<T> = OutputOf<T>> extends TEffects<T, O> {
@@ -188,7 +188,7 @@ export class TRefinement<T extends TType, O extends OutputOf<T> = OutputOf<T>> e
   static create<T extends TType>(
     underlying: T,
     refinement:
-      | ((data: OutputOf<T>, ctx: EffectCtx<T>) => boolean | Promise<boolean>)
+      | ((data: OutputOf<T>, ctx: EffectCtx<T>) => Promise<boolean> | boolean)
       | ((data: OutputOf<T>, ctx: EffectCtx<T>) => unknown),
     options?: TOptions & { readonly refinementMessage?: RefinementMessage<T> }
   ): TRefinement<T>
@@ -197,7 +197,7 @@ export class TRefinement<T extends TType, O extends OutputOf<T> = OutputOf<T>> e
     refinement: (data: OutputOf<T>, ctx: EffectCtx<T>) => unknown,
     options?: TOptions & { readonly refinementMessage?: RefinementMessage<T> }
   ): TRefinement<T> {
-    const handler: (data: OutputOf<T>, ctx: EffectCtx<T>) => boolean | Promise<boolean> = (data, ctx) => {
+    const handler: (data: OutputOf<T>, ctx: EffectCtx<T>) => Promise<boolean> | boolean = (data, ctx) => {
       const setError = (): void => {
         const issue: RefinementIssue = options?.refinementMessage
           ? handleStringOrCustomIssue(
@@ -208,7 +208,7 @@ export class TRefinement<T extends TType, O extends OutputOf<T> = OutputOf<T>> e
           : {}
 
         ctx.addIssue({
-          kind: IssueKind.Custom,
+          code: IssueKind.Custom,
           message: issue.message ?? '',
           payload: issue.payload ?? {},
           path: issue.path ?? [],

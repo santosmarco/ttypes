@@ -31,7 +31,7 @@ export type TFunctionInnerIO<T extends TType | null, A extends AnyTTuple, R exte
   : (...args: OutputOf<A>) => InputOf<R>
 
 export type TFunctionOptions = MakeTOptions<{
-  additionalIssueKind: IssueKind.InvalidThisType | IssueKind.InvalidArguments | IssueKind.InvalidReturnType
+  additionalIssueKind: IssueKind.InvalidArguments | IssueKind.InvalidReturnType | IssueKind.InvalidThisType
 }>
 
 export interface TFunctionDef<T extends TType | null, A extends AnyTTuple, R extends TType> extends TDef {
@@ -64,10 +64,10 @@ export class TFunction<T extends TType | null, A extends AnyTTuple, R extends TT
     }
 
     const makeError =
-      <K extends IssueKind.InvalidThisType | IssueKind.InvalidArguments | IssueKind.InvalidReturnType>(kind: K) =>
+      <K extends IssueKind.InvalidArguments | IssueKind.InvalidReturnType | IssueKind.InvalidThisType>(kind: K) =>
       <T extends TType>(ctx: ParseContextOf<T>, issues: readonly TIssue[]): TError<InputOf<T>> =>
         ctx
-          .addIssue<IssueKind.InvalidThisType | IssueKind.InvalidArguments | IssueKind.InvalidReturnType>(
+          .addIssue<IssueKind.InvalidArguments | IssueKind.InvalidReturnType | IssueKind.InvalidThisType>(
             kind,
             { issues },
             this.options().messages?.[u.toCamelCase(kind)]
@@ -237,7 +237,7 @@ export class TFunction<T extends TType | null, A extends AnyTTuple, R extends TT
   ): TFunction<T, TTuple<A, TUnknown>, R>
   static create(
     first?: TFunctionOptions | TTupleItems | TType,
-    second?: TFunctionOptions | TType | TTupleItems,
+    second?: TFunctionOptions | TTupleItems | TType,
     third?: TFunctionOptions | TType,
     fourth?: TFunctionOptions
   ) {

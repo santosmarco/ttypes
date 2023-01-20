@@ -161,8 +161,3 @@ export type TTypeNameMap<T extends TTypeName = TTypeName> = {
   [TTypeName.Unknown]: TUnknown
   [TTypeName.Void]: TVoid
 }[T]
-
-type c = Exclude<
-  Extract<TTypeNameMap, { underlying: any }>,
-  AnyTBrand | AnyTCatch | AnyTDefault | AnyTDefined | AnyTEffects | AnyTLazy
->

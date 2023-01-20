@@ -11,6 +11,7 @@ import {
   type TBooleanCasting,
   type TDateCasting,
   type TType,
+  type unsetMarker,
 } from './_internal'
 
 /* ------------------------------------------------------------------------------------------------------------------ */
@@ -21,7 +22,7 @@ export const TCoerce = {
   boolean(...args: Parameters<typeof TBoolean.create>): TBoolean<true> {
     return TBoolean.create(...args).coerce(true)
   },
-  buffer(...args: Parameters<typeof TBuffer.create>): TBuffer<true> {
+  buffer(...args: Parameters<typeof TBuffer.create>): TBuffer<'fromString'> {
     return TBuffer.create(...args).coerce(true)
   },
   date(...args: Parameters<typeof TDate.create>): TDate<true> {
@@ -36,10 +37,10 @@ export const TCoerce = {
   bigint(...args: Parameters<typeof TBigInt.create>): TBigInt<true> {
     return TBigInt.create(...args).coerce(true)
   },
-  array<T extends TType>(...args: Parameters<typeof TArray.create<T>>): TArray<T, 'many', true> {
+  array<T extends TType>(...args: Parameters<typeof TArray.create<T>>): TArray<T, 'many', 'fromSet'> {
     return TArray.create(...args).coerce(true)
   },
-  set<T extends TType>(...args: Parameters<typeof TSet.create<T>>): TSet<T, true> {
+  set<T extends TType>(...args: Parameters<typeof TSet.create<T>>): TSet<T, 'fromArray'> {
     return TSet.create(...args).coerce(true)
   },
 } as const
@@ -55,7 +56,7 @@ export const TCast = {
   ): TBoolean<false, C> {
     return TBoolean.create(...args).cast(value)
   },
-  buffer(...args: Parameters<typeof TBuffer.create>): TBuffer<false, true> {
+  buffer(...args: Parameters<typeof TBuffer.create>): TBuffer<unsetMarker, 'toString'> {
     return TBuffer.create(...args).cast(true)
   },
   date<C extends Exclude<TDateCasting, 'date'> = 'number'>(
@@ -73,10 +74,10 @@ export const TCast = {
   ): TBigInt<false, C> {
     return TBigInt.create(...args).cast(value)
   },
-  array<T extends TType>(...args: Parameters<typeof TArray.create<T>>): TArray<T, 'many', false, true> {
+  array<T extends TType>(...args: Parameters<typeof TArray.create<T>>): TArray<T, 'many', unsetMarker, 'toSet'> {
     return TArray.create(...args).cast(true)
   },
-  set<T extends TType>(...args: Parameters<typeof TSet.create<T>>): TSet<T, false, true> {
+  set<T extends TType>(...args: Parameters<typeof TSet.create<T>>): TSet<T, unsetMarker, 'toArray'> {
     return TSet.create(...args).cast(true)
   },
 } as const

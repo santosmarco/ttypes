@@ -1,5 +1,5 @@
 import type { TDef } from '../def'
-import { TManifest, type TManifest } from '../manifest'
+import { TManifest } from '../manifest'
 import type { TOptions } from '../options'
 import { TParsedType, type ParseContextOf, type ParseResultOf } from '../parse'
 import { TTypeName } from '../type-names'

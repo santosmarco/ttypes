@@ -1,6 +1,10 @@
 import { getGlobal } from './global'
 import * as t from './types/_internal'
+
+export * from './issues'
+export * from './type-names'
 export * from './types/_internal'
+export * from './parse'
 
 export const anyType = t.TAny.create
 export const arrayType = t.TArray.create

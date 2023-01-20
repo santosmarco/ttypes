@@ -14,6 +14,7 @@ import {
   type OutputOf,
   type TDefined,
   type TOptional,
+  unsetMarker,
 } from './_internal'
 
 /* ----------------------------------------------------------------------------------------------------------------- - */
@@ -199,7 +200,7 @@ export class TTuple<T extends readonly TType[], R extends TType | null = null> e
 
   filter<F extends readonly [T[number], ...Array<T[number]>]>(...types: F): TTuple<u.Filter<T, F[number]>, R>
   filter<F extends T[number]>(fn: (t: T[number], i: number) => t is F): TTuple<u.Filter<T, F>, R>
-  filter<F extends T[number]>(...typesOrFn: [T[number], ...Array<T[number]>] | [(t: T[number], i: number) => t is F]) {
+  filter<F extends T[number]>(...typesOrFn: [(t: T[number], i: number) => t is F] | [T[number], ...Array<T[number]>]) {
     const maybeFn = u.head(typesOrFn)
     return new TTuple({
       ...this._def,
@@ -261,8 +262,8 @@ export class TTuple<T extends readonly TType[], R extends TType | null = null> e
           : 'many'
         : 'atleastone',
       checks: [],
-      coerce: false,
-      cast: false,
+      coerce: unsetMarker,
+      cast: unsetMarker,
     }) as TTupleToArray<T, R>
   }
 

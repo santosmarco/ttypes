@@ -49,7 +49,7 @@ export type SchemaColorOptions = {
 /**
  * Library-wide, global options.
  */
-export type GlobalOptions = {} & GlobalColorOptions
+export type GlobalOptions = GlobalColorOptions
 
 /**
  * Options used on parsing.
@@ -64,27 +64,25 @@ export type ParseOptions = {
  * The `TOptions` type. This is the official `options` type,
  * extending all others.
  */
-export type TOptions = SchemaColorOptions &
-  GlobalOptions &
-  ParseOptions & {
+export type TOptions = GlobalOptions &
+  ParseOptions &
+  SchemaColorOptions & {
     readonly schemaErrorMap?: TErrorMap
     readonly messages?: {
-      readonly [K in IssueKind.Required | IssueKind.InvalidType as u.CamelCase<K>]?: string
+      readonly [K in IssueKind.InvalidType | IssueKind.Required as u.CamelCase<K>]?: string
     }
   } extends infer X
   ? { [K in keyof X]: X[K] }
   : never
 
 export type MakeTOptions<
-  P extends { readonly additionalIssueKind?: Exclude<IssueKind, IssueKind.Required | IssueKind.InvalidType> }
+  P extends { readonly additionalIssueKind?: Exclude<IssueKind, IssueKind.InvalidType | IssueKind.Required> }
 > = Omit<TOptions, 'messages'> & {
   readonly messages?: {
     readonly [K in
-      | IssueKind.Required
       | IssueKind.InvalidType
-      | ('additionalIssueKind' extends keyof P ? P['additionalIssueKind'] & string : never) as u.CamelCase<
-      K & string
-    >]?: string
+      | IssueKind.Required
+      | ('additionalIssueKind' extends keyof P ? P['additionalIssueKind'] : never) as u.CamelCase<K & string>]?: string
   }
 } extends infer X
   ? { [K in keyof X]: X[K] }

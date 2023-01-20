@@ -1,4 +1,4 @@
-import { type TIssue } from './issues'
+import type { FullIssue } from './issues'
 import type { TType } from './types/_internal'
 import type { u } from './utils'
 
@@ -42,7 +42,7 @@ export namespace TChecks {
 
   /* ---------------------------------------------------------------------------------------------------------------- */
 
-  export type FromIssue<T extends TIssue, Extra extends readonly Base[] = []> = ReadonlyArray<
+  export type FromIssue<T extends FullIssue, Extra extends readonly Base[] = []> = ReadonlyArray<
     | (u.LooseStripKey<T['_internals']['fullPayload'], 'received'> & { readonly message: string | undefined })
     | Extra[number]
   >

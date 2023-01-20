@@ -8,6 +8,7 @@
     "declarationMap": true,
     "downlevelIteration": true,
     "esModuleInterop": true,
+    "experimentalDecorators": true,
     "forceConsistentCasingInFileNames": true,
     "isolatedModules": true,
     "module": "commonjs",
@@ -27,11 +28,21 @@
     "strict": true,
     "strictBindCallApply": true,
     "strictFunctionTypes": true,
+    "importHelpers": true,
     "strictNullChecks": true,
     "strictPropertyInitialization": true,
-    "target": "es2016",
+    "target": "es5",
     "useUnknownInCatchVariables": true,
-    "experimentalDecorators": true
+    "plugins": [
+      {
+        "transform": "typia/lib/transform"
+      }
+    ]
   },
-  "exclude": ["node_modules", "src/__tests__", "src/_playground.ts"]
+  "exclude": [
+    "node_modules",
+    "src/__tests__",
+    "src/_playground.ts",
+    "out"
+  ]
 }

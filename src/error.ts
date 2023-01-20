@@ -1,6 +1,7 @@
 import util from 'util'
 import { getGlobal } from './global'
 import { IssueKind, type TIssue } from './issues'
+import { TManifest } from './manifest'
 import type { ParseContextOf } from './parse'
 import type { InputOf, TDef, TType } from './types/_internal'
 import { u } from './utils'
@@ -20,23 +21,23 @@ export const DEFAULT_ERROR_FORMATTER: TErrorFormatter = (issues) =>
     sorted: true,
   })
 
-export type ErrorMapIssueInput = u.StripKey<TIssue, 'message' | '_internals'>
+export type ErrorMapIssueInput = u.StripKey<TIssue, 'message'>
 export type TErrorMapFn = (issue: ErrorMapIssueInput) => string
 export type TErrorMapDict = { readonly [K in IssueKind]?: (issue: Extract<ErrorMapIssueInput, { kind: K }>) => string }
-export type TErrorMap = TErrorMapFn | TErrorMapDict
+export type TErrorMap = TErrorMapDict | TErrorMapFn
 
 export const DEFAULT_ERROR_MAP: TErrorMapFn = (issue) => {
-  switch (issue.kind) {
+  switch (issue.code) {
     case IssueKind.Required:
       return 'Required'
     case IssueKind.InvalidType:
-      return `Expected ${issue.payload.expected}, received ${issue.payload.received}`
+      return `Expected ${TManifest.unwrapType([issue.payload.expected], 'union')}, received ${issue.payload.received}`
     case IssueKind.InvalidLiteral:
-      return `Expected the literal value ${String(issue.payload.expected.formatted)}, got ${String(
-        issue.payload.received.formatted
-      )}`
+      return `Data must be exactly the literal value \`${issue.payload.expected.formatted}\`; received \`${issue.payload.received.formatted}\``
     case IssueKind.InvalidEnumValue:
-      return `Expected one of: ${issue.payload.expected.formatted.join(' | ')}; got ${issue.payload.received.formatted}`
+      return `Expected one of: ${issue.payload.expected.formatted.join(' | ')}; received ${
+        issue.payload.received.formatted
+      }`
     case IssueKind.InvalidThisType:
       return 'Invalid `this` context type'
     case IssueKind.InvalidArguments:
@@ -51,6 +52,8 @@ export const DEFAULT_ERROR_MAP: TErrorMapFn = (issue) => {
       return `Unrecognized key(s) found in object: ${issue.payload.keys.map(u.literalize).join(', ')}`
     case IssueKind.InvalidUnion:
       return 'Invalid union'
+    case IssueKind.InvalidDiscriminator:
+      return 'Invalid discriminator'
     case IssueKind.InvalidIntersection:
       return 'Invalid intersection'
     case IssueKind.InvalidString:
@@ -169,6 +172,8 @@ export const DEFAULT_ERROR_MAP: TErrorMapFn = (issue) => {
       return TError.assertNever(issue.payload)
     case IssueKind.InvalidTuple:
       return 'Invalid tuple'
+    case IssueKind.InvalidRecord:
+      return 'Invalid record'
     case IssueKind.InvalidBuffer:
       if (issue.payload.check === 'min')
         return `Buffer must contain ${issue.payload.expected.inclusive ? 'at least' : 'over'} ${
@@ -186,7 +191,7 @@ export const DEFAULT_ERROR_MAP: TErrorMapFn = (issue) => {
       return 'message' in issue && typeof issue.message === 'string' ? issue.message : 'Custom error'
 
     default:
-      return TError.assertNever(issue)
+      return TError.assertNever(issue.code as Extract<typeof issue.code, IssueKind>)
   }
 }
 
@@ -197,7 +202,7 @@ export const resolveErrorMaps = (maps: ReadonlyArray<TErrorMap | undefined>): TE
       .map((map) =>
         (typeof map === 'function'
           ? map
-          : (issue: ErrorMapIssueInput): string | undefined => (map?.[issue.kind] as TErrorMapFn | undefined)?.(issue))(
+          : (issue: ErrorMapIssueInput): string | undefined => (map?.[issue.code] as TErrorMapFn | undefined)?.(issue))(
           issue
         )
       )

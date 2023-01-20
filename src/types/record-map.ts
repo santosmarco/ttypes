@@ -16,7 +16,7 @@ export type TRecordInput<
   K extends TType<PropertyKey, TDef, PropertyKey>,
   V extends TType,
   Coerce extends boolean
-> = Coerce extends true ? Record<InputOf<K>, InputOf<V>> | Map<InputOf<K>, InputOf<V>> : Record<InputOf<K>, InputOf<V>>
+> = Coerce extends true ? Map<InputOf<K>, InputOf<V>> | Record<InputOf<K>, InputOf<V>> : Record<InputOf<K>, InputOf<V>>
 
 const handleRecordEntry = <T>([k, v]: readonly [PropertyKey, T]): readonly [PropertyKey, T] => [
   typeof k === 'symbol' ? k : Number.isNaN(Number(k)) ? k : Number(k),
@@ -222,7 +222,7 @@ export class TRecord<
   ): TRecord<K, V>
   static create(
     first: TType<PropertyKey, TDef, PropertyKey>,
-    second?: TType | TOptions,
+    second?: TOptions | TType,
     third?: TOptions
   ): TRecord<TType<PropertyKey, TDef, PropertyKey>, TType> {
     if (second instanceof TType) {

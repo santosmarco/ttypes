@@ -15,12 +15,12 @@ import { TType, type OutputOf, type TSuperDefault } from './_internal'
 /* ------------------------------------------------------------------------------------------------------------------ */
 
 export type TStringTransform =
-  | { readonly kind: 'lowercase' }
-  | { readonly kind: 'uppercase' }
   | { readonly kind: 'capitalize' }
-  | { readonly kind: 'uncapitalize' }
-  | { readonly kind: 'trim' }
+  | { readonly kind: 'lowercase' }
   | { readonly kind: 'replace'; readonly search: RegExp | string; readonly replace: string; readonly all?: boolean }
+  | { readonly kind: 'trim' }
+  | { readonly kind: 'uncapitalize' }
+  | { readonly kind: 'uppercase' }
 
 export type TStringInput<Coerce extends boolean> = Coerce extends true ? any : string
 
@@ -270,7 +270,7 @@ export class TString<
 
   pattern(
     pattern: RegExp,
-    options?: { readonly type?: 'enforce' | 'disallow'; readonly name?: string; readonly message?: string }
+    options?: { readonly type?: 'disallow' | 'enforce'; readonly name?: string; readonly message?: string }
   ): this {
     return this._addCheck({
       check: 'pattern',
@@ -282,7 +282,7 @@ export class TString<
 
   regex(
     pattern: RegExp,
-    options?: { readonly type?: 'enforce' | 'disallow'; readonly name?: string; readonly message?: string }
+    options?: { readonly type?: 'disallow' | 'enforce'; readonly name?: string; readonly message?: string }
   ): this {
     return this.pattern(pattern, options)
   }

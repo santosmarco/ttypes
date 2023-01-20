@@ -2,9 +2,9 @@ import type { TDef } from './def'
 import { TError, resolveErrorMaps } from './error'
 import { getGlobal } from './global'
 import { IssueKind, type TIssue } from './issues'
-import { type ManifestType } from './manifest'
-import { type ParseOptions } from './options'
-import { emptyMarker, type InputOf, type OutputOf, type TType } from './types/_internal'
+import type { ManifestType } from './manifest'
+import type { ParseOptions } from './options'
+import { type InputOf, type OutputOf, type TType } from './types/_internal'
 import { u } from './utils'
 
 /* --------------------------------------------------- TParsedType -------------------------------------------------- */
@@ -31,7 +31,6 @@ export enum TParsedType {
   Null = 'null',
   Number = 'number',
   Object = 'object',
-  Primitive = 'string | number | bigint | boolean | symbol | null | undefined',
   Promise = 'Promise',
   PropertyKey = 'string | number | symbol',
   RegExp = 'RegExp',
@@ -55,8 +54,6 @@ export namespace TParsedType {
   /* eslint-disable @typescript-eslint/no-unnecessary-qualifier */
 
   export const get = (x: unknown): TParsedType => {
-    if (x === emptyMarker) return TParsedType.NoData
-
     switch (typeof x) {
       case 'string':
         return TParsedType.String
@@ -75,18 +72,16 @@ export namespace TParsedType {
         if (u.isConstructor(x)) return TParsedType.Constructor
         return TParsedType.Function
       case 'object':
-        if (u.isArray(x)) return TParsedType.Array
-        if (u.isAsync(x)) return TParsedType.Promise
-        if (u.isBuffer(x)) return TParsedType.Buffer
-        if (u.isDate(x)) return TParsedType.Date
-        if (u.isFunction(x)) return TParsedType.Function
-        if (u.isMap(x)) return TParsedType.Map
-        if (u.isNull(x)) return TParsedType.Null
-        if (u.isRegExp(x)) return TParsedType.RegExp
-        if (u.isSet(x)) return TParsedType.Set
-        if (u.isTypedArray(x)) return TParsedType.TypedArray
-        if (u.isWeakMap(x)) return TParsedType.WeakMap
-        if (u.isWeakSet(x)) return TParsedType.WeakSet
+        if (x === null) return TParsedType.Null
+        if (Array.isArray(x)) return TParsedType.Array
+        if (Buffer.isBuffer(x)) return TParsedType.Buffer
+        if (x instanceof Date) return TParsedType.Date
+        if (x instanceof Map) return TParsedType.Map
+        if (x instanceof Promise) return TParsedType.Promise
+        if (x instanceof RegExp) return TParsedType.RegExp
+        if (x instanceof Set) return TParsedType.Set
+        if (x instanceof WeakMap) return TParsedType.WeakMap
+        if (x instanceof WeakSet) return TParsedType.WeakSet
         return TParsedType.Object
 
       default:
@@ -94,12 +89,12 @@ export namespace TParsedType {
     }
   }
 
-  export const Literal = (x: u.Primitive): TParsedType => {
-    if (u.isNull(x)) {
+  export const Literal = (value: u.Primitive): TParsedType => {
+    if (value === null) {
       return TParsedType.Null
     }
 
-    switch (typeof x) {
+    switch (typeof value) {
       case 'string':
         return TParsedType.String
       case 'number':
@@ -114,14 +109,29 @@ export namespace TParsedType {
         return TParsedType.Undefined
 
       default:
-        return TParsedType.Unknown
+        return TParsedType.Never
     }
   }
 
-  export const Enum = (values: ReadonlyArray<string | number>): TParsedType => {
+  export const Enum = (values: ReadonlyArray<number | string>): TParsedType => {
     const types = [...new Set(values.map(TParsedType.Literal))]
     return types.length === 1 ? types[0] : TParsedType.StringOrNumber
   }
+
+  export function AnyOf(...values: readonly TParsedType[]) {
+    const unique = [...new Set(values)]
+    return unique.sort((a, b) => String(a).localeCompare(String(b))).join(' | ')
+  }
+
+  export const Primitive = AnyOf(
+    TParsedType.String,
+    TParsedType.Number,
+    TParsedType.BigInt,
+    TParsedType.Boolean,
+    TParsedType.Symbol,
+    TParsedType.Null,
+    TParsedType.Undefined
+  )
 
   /* eslint-enable @typescript-eslint/no-unnecessary-qualifier */
 }
@@ -140,9 +150,9 @@ export interface FailedParseResult<I> {
   readonly error: TError<I>
 }
 
-export type SyncParseResult<O, I> = SuccessfulParseResult<O> | FailedParseResult<I>
+export type SyncParseResult<O, I> = FailedParseResult<I> | SuccessfulParseResult<O>
 export type AsyncParseResult<O, I> = Promise<SyncParseResult<O, I>>
-export type ParseResult<O, I> = SyncParseResult<O, I> | AsyncParseResult<O, I>
+export type ParseResult<O, I> = AsyncParseResult<O, I> | SyncParseResult<O, I>
 
 export type SuccessfulParseResultOf<T extends TType> = SuccessfulParseResult<OutputOf<T>>
 export type FailedParseResultOf<T extends TType> = FailedParseResult<InputOf<T>>
@@ -150,8 +160,9 @@ export type SyncParseResultOf<T extends TType> = SyncParseResult<OutputOf<T>, In
 export type AsyncParseResultOf<T extends TType> = AsyncParseResult<OutputOf<T>, InputOf<T>>
 export type ParseResultOf<T extends TType> = ParseResult<OutputOf<T>, InputOf<T>>
 
-export const OK = <O>(data: O): SuccessfulParseResult<O> => ({ ok: true, data })
-export const FAIL = <I>(error: TError<I>): FailedParseResult<I> => ({ ok: false, error })
+export type AnySyncParseResult = SyncParseResult<any, any>
+export type AnyAsyncParseResult = AsyncParseResult<any, any>
+export type AnyParseResult = ParseResult<any, any>
 
 /* ------------------------------------------------------------------------------------------------------------------ */
 /*                                                    ParseContext                                                    */
@@ -162,7 +173,7 @@ export enum ParseStatus {
   Invalid = 'invalid',
 }
 
-export type ParsePath = ReadonlyArray<string | number>
+export type ParsePath = ReadonlyArray<number | string>
 
 export interface ParseContextCommon extends ParseOptions {
   readonly async: boolean
@@ -180,7 +191,7 @@ export interface ParseContextInternals {
   status: ParseStatus
   data: unknown
   readonly ownChildren: AnyParseContext[]
-  readonly ownIssues: Array<u.LooseStripKey<TIssue, '_internals'>>
+  readonly ownIssues: TIssue[]
 }
 
 export interface ParseContext<O, I = O> {
@@ -194,8 +205,8 @@ export interface ParseContext<O, I = O> {
   readonly common: ParseContextCommon
   readonly ownChildren: readonly AnyParseContext[]
   readonly allChildren: readonly AnyParseContext[]
-  readonly ownIssues: ReadonlyArray<u.LooseStripKey<TIssue, '_internals'>>
-  readonly allIssues: ReadonlyArray<u.LooseStripKey<TIssue, '_internals'>>
+  readonly ownIssues: readonly TIssue[]
+  readonly allIssues: readonly TIssue[]
   setData(data: unknown): this
   isValid(): boolean
   isInvalid(): boolean
@@ -203,16 +214,16 @@ export interface ParseContext<O, I = O> {
   child<T extends TType>(schema: T, data: unknown, path?: ReadonlyArray<ParsePath[number] | symbol>): ParseContextOf<T>
   clone<T extends TType>(schema: T, data: unknown, path?: ReadonlyArray<ParsePath[number] | symbol>): ParseContextOf<T>
   _addIssue<K extends IssueKind>(
-    issue: u.LooseStripKey<TIssue<K>, 'path' | 'data' | '_internals'> & {
+    issue: u.StripKey<TIssue<K>, 'data' | 'path'> & {
       readonly path?: ParsePath
       readonly fatal?: boolean
     }
   ): void
-  addIssue<K extends IssueKind>(
-    kind: K,
-    ...args: 'payload' extends u.OptionalKeysOf<TIssue<K>>
+  addIssue<T extends IssueKind>(
+    code: T,
+    ...args: 'payload' extends u.OptionalKeysOf<TIssue<T>>
       ? [message: string | undefined]
-      : [payload: TIssue<K>['payload'], message: string | undefined]
+      : [payload: TIssue<T>['payload'], message: string | undefined]
   ): this
   invalidType(payload: { readonly expected: ManifestType }): this
   success<T>(data: T): SuccessfulParseResult<T>
@@ -237,6 +248,7 @@ export const ParseContext = <T extends TType>({
     ownIssues: [],
   })
 
+  // @ts-expect-error
   const ctx: ParseContextOf<T> = {
     get status() {
       return _internals.status
@@ -342,10 +354,10 @@ export const ParseContext = <T extends TType>({
         this.setInvalid()
       }
 
-      let issueWithPath = { ...issue, path: this.path.concat(issue.path ?? []), data: this.data }
+      const issueWithPath = { ...issue, path: this.path.concat(issue.path ?? []), data: this.data }
 
       if (issueWithPath.payload === undefined) {
-        issueWithPath = u.omit(issueWithPath, ['payload']) as typeof issueWithPath
+        Reflect.deleteProperty(issueWithPath, 'payload')
       }
 
       const issueMsg =
@@ -360,10 +372,10 @@ export const ParseContext = <T extends TType>({
       _internals.ownIssues.push({ ...issueWithPath, message: issueMsg })
     },
 
-    addIssue(kind, ...args) {
+    addIssue(code, ...args) {
       const [payload, message] = args.length === 2 ? args : [undefined, args[0]]
 
-      this._addIssue({ kind, payload, message } as TIssue)
+      this._addIssue({ code, payload, message } as TIssue)
 
       return this
     },
@@ -381,11 +393,11 @@ export const ParseContext = <T extends TType>({
     },
 
     success(data) {
-      return OK(data)
+      return { ok: true, data }
     },
 
     abort() {
-      return FAIL(TError.fromContext(this))
+      return { ok: false, error: TError.fromContext(this) }
     },
   }
 

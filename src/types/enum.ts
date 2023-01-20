@@ -15,13 +15,13 @@ export type TEnumOptions = MakeTOptions<{
   additionalIssueKind: IssueKind.InvalidEnumValue
 }>
 
-export interface TEnumDef<T extends ReadonlyArray<string | number>> extends TDef {
+export interface TEnumDef<T extends ReadonlyArray<number | string>> extends TDef {
   readonly typeName: TTypeName.Enum
   readonly options: TEnumOptions
   readonly values: T
 }
 
-export class TEnum<T extends ReadonlyArray<string | number>> extends TType<T[number], TEnumDef<T>> {
+export class TEnum<T extends ReadonlyArray<number | string>> extends TType<T[number], TEnumDef<T>> {
   get _manifest() {
     return TManifest<T[number]>()({
       type: TParsedType.Enum(this.values),
@@ -38,7 +38,7 @@ export class TEnum<T extends ReadonlyArray<string | number>> extends TType<T[num
     const expectedParsedTypes = [...new Set(values.map(TParsedType.Literal))]
 
     if (
-      !((data: unknown): data is string | number =>
+      !((data: unknown): data is number | string =>
         (expectedParsedTypes.includes(TParsedType.String) && typeof data === 'string') ||
         (expectedParsedTypes.includes(TParsedType.Number) && typeof data === 'number'))(data)
     ) {
@@ -96,16 +96,16 @@ export class TEnum<T extends ReadonlyArray<string | number>> extends TType<T[num
 
   /* ---------------------------------------------------------------------------------------------------------------- */
 
-  static create<T extends string | number, U extends readonly [T, ...T[]]>(
+  static create<T extends number | string, U extends readonly [T, ...T[]]>(
     values: U,
     options?: TEnumOptions
   ): TEnum<U> {
     return this._create(values, options)
   }
 
-  static _create<T extends string | number, U extends readonly T[]>(values: U, options?: TEnumOptions): TEnum<U> {
+  static _create<T extends number | string, U extends readonly T[]>(values: U, options?: TEnumOptions): TEnum<U> {
     return new TEnum({ typeName: TTypeName.Enum, values, options: { ...options } })
   }
 }
 
-export type AnyTEnum = TEnum<Array<string | number>>
+export type AnyTEnum = TEnum<Array<number | string>>

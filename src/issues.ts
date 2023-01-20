@@ -1,6 +1,6 @@
 import type { TChecks } from './checks'
 import { type ManifestType } from './manifest'
-import type { ParsePath, TParsedType } from './parse'
+import type { ParsePath } from './parse'
 import type { u } from './utils'
 
 /* ------------------------------------------------------------------------------------------------------------------ */
@@ -34,49 +34,27 @@ export enum IssueKind {
   Custom = 'custom',
 }
 
-export type TIssue<K extends IssueKind = IssueKind> = {
-  [IssueKind.Required]: RequiredIssue
-  [IssueKind.InvalidType]: InvalidTypeIssue
-  [IssueKind.InvalidLiteral]: InvalidLiteralIssue
-  [IssueKind.InvalidEnumValue]: InvalidEnumValueIssue
-  [IssueKind.InvalidThisType]: InvalidThisTypeIssue
-  [IssueKind.InvalidArguments]: InvalidArgumentsIssue
-  [IssueKind.InvalidReturnType]: InvalidReturnTypeIssue
-  [IssueKind.InvalidInstance]: InvalidInstanceIssue
-  [IssueKind.MissingKeys]: MissingKeysIssue
-  [IssueKind.UnrecognizedKeys]: UnrecognizedKeysIssue
-  [IssueKind.InvalidUnion]: InvalidUnionIssue
-  [IssueKind.InvalidDiscriminator]: InvalidDiscriminatorIssue
-  [IssueKind.InvalidIntersection]: InvalidIntersectionIssue
-  [IssueKind.InvalidString]: InvalidStringIssue
-  [IssueKind.InvalidNumber]: InvalidNumberIssue
-  [IssueKind.InvalidBigInt]: InvalidBigIntIssue
-  [IssueKind.InvalidDate]: InvalidDateIssue
-  [IssueKind.InvalidArray]: InvalidArrayIssue
-  [IssueKind.InvalidSet]: InvalidSetIssue
-  [IssueKind.InvalidTuple]: InvalidTupleIssue
-  [IssueKind.InvalidRecord]: InvalidRecordIssue
-  [IssueKind.InvalidBuffer]: InvalidBufferIssue
-  [IssueKind.Forbidden]: ForbiddenIssue
-  [IssueKind.Custom]: CustomIssue
-}[K]
+export type IssueCode<K extends IssueKind> = K | `${K}`
+
+export type WithPayload<P extends object | null> = P extends null
+  ? { readonly payload?: never }
+  : { readonly payload: Readonly<Omit<P, `_${string}`>> }
 
 export type IssueBase<K extends IssueKind, P extends object | null = null> = u.SimplifyDeep<
-  {
-    readonly kind: K
+  WithPayload<P> & {
+    readonly code: IssueCode<K>
     readonly path: ParsePath
     readonly data: unknown
     readonly message: string
-  } & (P extends null ? { readonly payload?: never } : { readonly payload: Readonly<Omit<P, `_${string}`>> }) & {
-      readonly _internals: { readonly fullPayload: P }
-    }
+    readonly _internals: { readonly fullPayload: P }
+  }
 >
 
 export type RequiredIssue = IssueBase<IssueKind.Required>
 
 export type InvalidTypeIssue = IssueBase<
   IssueKind.InvalidType,
-  { readonly expected: ManifestType; readonly received: TParsedType }
+  { readonly expected: ManifestType; readonly received: string }
 >
 
 export type InvalidLiteralIssue = IssueBase<
@@ -118,10 +96,8 @@ export type InvalidIntersectionIssue = IssueBase<IssueKind.InvalidIntersection>
 
 export type InvalidStringIssue = IssueBase<
   IssueKind.InvalidString,
-  | TChecks.Min
-  | TChecks.Max
-  | TChecks.Length
   | TChecks.Format<'alphanum'>
+  | TChecks.Format<'base64', { readonly options: { readonly paddingRequired: boolean; readonly urlSafe: boolean } }>
   | TChecks.Format<'cuid'>
   | TChecks.Format<'email'>
   | TChecks.Format<'iso_date'>
@@ -129,22 +105,20 @@ export type InvalidStringIssue = IssueBase<
   | TChecks.Format<'numeric'>
   | TChecks.Format<'url'>
   | TChecks.Format<'uuid'>
-  | TChecks.Format<'base64', { readonly options: { readonly paddingRequired: boolean; readonly urlSafe: boolean } }>
+  | TChecks.Length
   | TChecks.Make<
       'pattern',
-      { readonly pattern: RegExp; readonly options: { readonly type: 'enforce' | 'disallow'; readonly name: string } }
+      { readonly pattern: RegExp; readonly options: { readonly type: 'disallow' | 'enforce'; readonly name: string } }
     >
-  | TChecks.Make<'starts_with', { readonly expected: string }>
   | TChecks.Make<'ends_with', { readonly expected: string }>
   | TChecks.Make<'includes', { readonly expected: string }>
+  | TChecks.Make<'starts_with', { readonly expected: string }>
+  | TChecks.Max
+  | TChecks.Min
 >
 
 export type InvalidNumberIssue = IssueBase<
   IssueKind.InvalidNumber,
-  | TChecks.Min
-  | TChecks.Max
-  | TChecks.Range
-  | TChecks.Make<'integer'>
   | TChecks.Make<
       'precision',
       {
@@ -153,30 +127,36 @@ export type InvalidNumberIssue = IssueBase<
         readonly received: number
       }
     >
-  | TChecks.Make<'port'>
-  | TChecks.Make<'multiple', { readonly expected: number }>
   | TChecks.Make<'finite', { readonly enabled: boolean }>
+  | TChecks.Make<'integer'>
+  | TChecks.Make<'multiple', { readonly expected: number }>
+  | TChecks.Make<'port'>
   | TChecks.Make<'safe', { readonly enabled: boolean }>
+  | TChecks.Max
+  | TChecks.Min
+  | TChecks.Range
 >
 
 export type InvalidBigIntIssue = IssueBase<
   IssueKind.InvalidBigInt,
-  | TChecks.Min<bigint>
-  | TChecks.Max<bigint>
-  | TChecks.Range<bigint>
   | TChecks.Make<'multiple', { readonly expected: bigint }>
+  | TChecks.Max<bigint>
+  | TChecks.Min<bigint>
+  | TChecks.Range<bigint>
 >
 
 export type InvalidDateIssue = IssueBase<
   IssueKind.InvalidDate,
-  TChecks.Min<Date | 'now', Date> | TChecks.Max<Date | 'now', Date> | TChecks.Range<Date | 'now', Date>
+  TChecks.Max<Date | 'now', Date> | TChecks.Min<Date | 'now', Date> | TChecks.Range<Date | 'now', Date>
 >
 
 export type InvalidArrayIssue = IssueBase<
   IssueKind.InvalidArray,
-  | TChecks.Min
-  | TChecks.Max
   | TChecks.Length
+  | TChecks.Make<
+      'sorted',
+      { readonly _sortFn: ((a: unknown, b: unknown) => number) | undefined; readonly enforce: boolean }
+    >
   | TChecks.Make<
       'unique',
       {
@@ -185,32 +165,67 @@ export type InvalidArrayIssue = IssueBase<
         readonly received: { readonly nonUnique: readonly unknown[] }
       }
     >
-  | TChecks.Make<
-      'sorted',
-      { readonly _sortFn: ((a: unknown, b: unknown) => number) | undefined; readonly enforce: boolean }
-    >
+  | TChecks.Max
+  | TChecks.Min
 >
 
-export type InvalidSetIssue = IssueBase<IssueKind.InvalidSet, TChecks.Min | TChecks.Max | TChecks.Size>
+export type InvalidSetIssue = IssueBase<IssueKind.InvalidSet, TChecks.Max | TChecks.Min | TChecks.Size>
 
 export type InvalidTupleIssue = IssueBase<IssueKind.InvalidTuple, TChecks.Length>
 
 export type InvalidRecordIssue = IssueBase<
   IssueKind.InvalidRecord,
   | {
-      readonly check: 'min_keys'
+      readonly check: 'max_keys'
       readonly expected: { readonly value: number; readonly inclusive: boolean }
       readonly received: number
     }
   | {
-      readonly check: 'max_keys'
+      readonly check: 'min_keys'
       readonly expected: { readonly value: number; readonly inclusive: boolean }
       readonly received: number
     }
 >
 
-export type InvalidBufferIssue = IssueBase<IssueKind.InvalidBuffer, TChecks.Min | TChecks.Max | TChecks.Length>
+export type InvalidBufferIssue = IssueBase<IssueKind.InvalidBuffer, TChecks.Length | TChecks.Max | TChecks.Min>
 
 export type ForbiddenIssue = IssueBase<IssueKind.Forbidden>
 
 export type CustomIssue = IssueBase<IssueKind.Custom, Record<string, unknown>>
+
+type IssueMap<K extends IssueKind = IssueKind> = K extends unknown
+  ? {
+      [IssueKind.Required]: RequiredIssue
+      [IssueKind.InvalidType]: InvalidTypeIssue
+      [IssueKind.InvalidLiteral]: InvalidLiteralIssue
+      [IssueKind.InvalidEnumValue]: InvalidEnumValueIssue
+      [IssueKind.InvalidThisType]: InvalidThisTypeIssue
+      [IssueKind.InvalidArguments]: InvalidArgumentsIssue
+      [IssueKind.InvalidReturnType]: InvalidReturnTypeIssue
+      [IssueKind.InvalidInstance]: InvalidInstanceIssue
+      [IssueKind.MissingKeys]: MissingKeysIssue
+      [IssueKind.UnrecognizedKeys]: UnrecognizedKeysIssue
+      [IssueKind.InvalidUnion]: InvalidUnionIssue
+      [IssueKind.InvalidDiscriminator]: InvalidDiscriminatorIssue
+      [IssueKind.InvalidIntersection]: InvalidIntersectionIssue
+      [IssueKind.InvalidString]: InvalidStringIssue
+      [IssueKind.InvalidNumber]: InvalidNumberIssue
+      [IssueKind.InvalidBigInt]: InvalidBigIntIssue
+      [IssueKind.InvalidDate]: InvalidDateIssue
+      [IssueKind.InvalidArray]: InvalidArrayIssue
+      [IssueKind.InvalidSet]: InvalidSetIssue
+      [IssueKind.InvalidTuple]: InvalidTupleIssue
+      [IssueKind.InvalidRecord]: InvalidRecordIssue
+      [IssueKind.InvalidBuffer]: InvalidBufferIssue
+      [IssueKind.Forbidden]: ForbiddenIssue
+      [IssueKind.Custom]: CustomIssue
+    }[K]
+  : never
+
+export type FullIssue<K extends IssueKind = IssueKind> = IssueMap<K>
+
+export type TIssue<K extends IssueKind = IssueKind> = u.StripKey<FullIssue<K>, '_internals'>
+
+export type OptionalDataIssue<K extends IssueKind = IssueKind> = u.StripKey<TIssue<K>, 'data'> & {
+  readonly data?: unknown
+}

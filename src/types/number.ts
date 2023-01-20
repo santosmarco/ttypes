@@ -7,7 +7,7 @@ import type { TOptions } from '../options'
 import { TParsedType, type ParseContextOf, type ParseResultOf } from '../parse'
 import { TTypeName } from '../type-names'
 import { u } from '../utils'
-import { TBigInt, TType, type OutputOf, type TSuperDefault } from './_internal'
+import { TBigInt, TType, unsetMarker, type OutputOf, type TSuperDefault } from './_internal'
 
 /* ----------------------------------------------------------------------------------------------------------------- - */
 /*                                                       TNumber                                                      */
@@ -73,7 +73,7 @@ export class TNumber<Coerce extends boolean = false, Cast extends boolean = fals
     }
 
     for (const check of this._def.checks.filter(
-      (c): c is Exclude<typeof c, { readonly check: 'safe' | 'finite' }> => !['safe', 'finite'].includes(c.check)
+      (c): c is Exclude<typeof c, { readonly check: 'finite' | 'safe' }> => !['safe', 'finite'].includes(c.check)
     )) {
       if (check.check === 'min' || check.check === 'max') {
         if (!{ min: TChecks.handleMin, max: TChecks.handleMax }[check.check](data, check.expected)) {
@@ -288,7 +288,7 @@ export class TNumber<Coerce extends boolean = false, Cast extends boolean = fals
 
   /* ---------------------------------------------------------------------------------------------------------------- */
 
-  toBigInt(): TBigInt<Coerce, Cast extends true ? 'string' : 'bigint'> {
+  toBigInt(): TBigInt<Coerce, Cast extends true ? 'string' : unsetMarker> {
     let bigint = TBigInt.create(this.options())
 
     for (const check of this._def.checks) {
@@ -316,7 +316,7 @@ export class TNumber<Coerce extends boolean = false, Cast extends boolean = fals
 
     return bigint
       .coerce(this._def.coerce)
-      .cast((this._def.cast ? 'string' : 'bigint') as Cast extends true ? 'string' : 'bigint')
+      .cast((this._def.cast ? 'string' : unsetMarker) as Cast extends true ? 'string' : unsetMarker)
       .manifest({ ...manifest, ...(examples && { examples: examples.map((ex) => BigInt(ex)) }) })
   }
 

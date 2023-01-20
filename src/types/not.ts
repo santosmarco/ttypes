@@ -26,8 +26,7 @@ export class TNot<T extends TType, Forbidden extends readonly TType[]>
   extends TType<
     u.Not<OutputOf<T>, OutputOf<Forbidden[number]>>,
     TNotDef<T, Forbidden>,
-    u.Not<InputOf<T>, InputOf<Forbidden[number]>>,
-    Forbidden
+    u.Not<InputOf<T>, InputOf<Forbidden[number]>>
   >
   implements TUnwrappable<T>
 {

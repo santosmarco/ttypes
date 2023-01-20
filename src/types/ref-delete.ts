@@ -20,24 +20,19 @@ import {
 /*                                                        TRef                                                        */
 /* ------------------------------------------------------------------------------------------------------------------ */
 
-export type TRefContext = Record<string, TType | AnyTRef> | readonly TType[]
+export type TRefContext = Record<string, AnyTRef | TType> | readonly TType[]
 
 export type TTuplePaths<T extends readonly TType[]> = u.ConditionalOmit<
   u.OmitIndexSignature<{ [K in keyof T as `${K & number}` extends `${number}` ? K : never]: K }>,
   never
 > extends infer X
   ? {
-      [K in keyof X]: K extends infer K_ extends string
-        ?
-            | `[${K_}]`
-            | `.${K_}`
-            | (K_ extends keyof T
-                ? UnwrapUntil<T[K_], AnyTObject> extends AnyTObject
-                  ? `${`[${K_}]` | `.${K_}`}.${TObjectShapePaths<UnwrapUntil<T[K_], AnyTObject>['shape']>}`
-                  : UnwrapUntil<T[K_], AnyTTuple> extends AnyTTuple
-                  ? `${`[${K_}]` | `.${K_}`}${TTuplePaths<UnwrapUntil<T[K_], AnyTTuple>['items']>}`
-                  : never
-                : never)
+      [K in keyof X]: K | `.${u.Str<K>}` | `[${u.Str<K>}]` extends keyof T
+        ? UnwrapUntil<T[K & keyof T], AnyTObject> extends AnyTObject
+          ? `${`.${u.Str<K>}` | `[${u.Str<K>}]`}.${TObjectShapePaths<UnwrapUntil<T[K & keyof T], AnyTObject>['shape']>}`
+          : UnwrapUntil<T[K & keyof T], AnyTTuple> extends AnyTTuple
+          ? `${`.${u.Str<K>}` | `[${u.Str<K>}]`}${TTuplePaths<UnwrapUntil<T[K & keyof T], AnyTTuple>['items']>}`
+          : never
         : never
     }[keyof X]
   : never
@@ -53,7 +48,7 @@ export type TObjectShapePaths<T extends TObjectShapeWithRefs> = {
 }[keyof T] &
   string
 
-export type _ReachSchema<R extends string, Ctx extends TRefContext> = u.ReplaceAll<
+type _ReachSchema<R extends string, Ctx extends TRefContext> = u.ReplaceAll<
   u.ReplaceAll<R, '[', '.'>,
   ']',
   '.'
@@ -106,7 +101,7 @@ export class TRef<Ref extends string> {
 
   /* ---------------------------------------------------------------------------------------------------------------- */
 
-  resolve(ctx: TRefContext): TType {
+  _resolve(ctx: TRefContext): TType {
     if (!ctx) {
       throw new Error(`Unable to resolve path for $ref: ${this.ref}`)
     }

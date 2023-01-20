@@ -48,7 +48,7 @@ export type TObjectIO<
     >
   : never
 
-export type TObjectShapeWithRefs = Record<string, TType | AnyTRef>
+export type TObjectShapeWithRefs = Record<string, AnyTRef | TType>
 
 export type ResolveShapeReferences<S extends TObjectShapeWithRefs> = {
   [K in keyof S]: S[K] extends TRef<infer R> ? ReachSchema<R, S> : S[K]
@@ -57,21 +57,9 @@ export type ResolveShapeReferences<S extends TObjectShapeWithRefs> = {
   : never
 
 const resolveShapeReferences = <S extends TObjectShapeWithRefs>(shape: S): ResolveShapeReferences<S> => {
-  const resolvedShape = {} as Record<keyof S, unknown>
-
-  for (const k of u.keys(shape)) {
-    const v = shape[k]
-
-    if (v instanceof TRef) {
-      resolvedShape[k] = v.resolve(shape)
-    } else if (v.isT(TTypeName.Object)) {
-      resolvedShape[k] = v.extend(resolveShapeReferences(v.shape))
-    } else {
-      resolvedShape[k] = v
-    }
-  }
-
-  return resolvedShape as ResolveShapeReferences<S>
+  return u.fromEntries(
+    u.entries(shape).map(([k, v]) => [k, v instanceof TRef ? v._resolve(shape) : v])
+  ) as ResolveShapeReferences<S>
 }
 
 export type TObjectKeysUnion<S extends TObjectShape> = string extends keyof S
@@ -81,7 +69,7 @@ export type TObjectKeysUnion<S extends TObjectShape> = string extends keyof S
   : TUnion<u.Try<u.UnionToTuple<{ [K in keyof S]: TLiteral<K> }[keyof S]>, readonly TType[]>>
 
 export type TObjectKeysEnum<S extends TObjectShape> = (
-  string extends keyof S ? TEnum<[]> : TEnum<u.Try<u.UnionToTuple<keyof S>, ReadonlyArray<string | number>>>
+  string extends keyof S ? TEnum<[]> : TEnum<u.Try<u.UnionToTuple<keyof S>, ReadonlyArray<number | string>>>
 ) extends infer X
   ? X
   : never
@@ -94,62 +82,62 @@ export type TObjectValues<S extends TObjectShape> = u.UnionToTuple<S[keyof S]> e
 
 export type ModifyShape<
   Mod extends 'partial' | 'required' | 'schema',
-  Depth extends 'flat' | 'deep',
-  S extends TObjectShape,
-  K extends Mod extends 'schema' ? TType : Depth extends 'flat' ? ReadonlyArray<keyof S> : never = Mod extends 'schema'
+  Depth extends 'deep' | 'flat',
+  Shape extends TObjectShape,
+  KeysOrTType extends Mod extends 'schema'
     ? TType
     : Depth extends 'flat'
-    ? ReadonlyArray<keyof S>
-    : never
-> = {
-  partial: {
-    flat: { [K_ in keyof S]: K_ extends (K & readonly unknown[])[number] ? TOptional<S[K_]> : S[K_] }
-    deep: {
-      [K in keyof S]: TOptional<
-        S[K] extends TObject<infer S_, infer UK, infer C> ? TObject<ModifyShape<'partial', Depth, S_>, UK, C> : S[K]
-      >
+    ? ReadonlyArray<keyof Shape>
+    : never = Mod extends 'schema' ? TType : Depth extends 'flat' ? ReadonlyArray<keyof Shape> : never
+> = u._<
+  {
+    partial: {
+      flat: {
+        [P in keyof Shape]: P extends (KeysOrTType & readonly unknown[])[number] ? TOptional<Shape[P]> : Shape[P]
+      }
+      deep: {
+        [K in keyof Shape]: TOptional<
+          Shape[K] extends TObject<infer S, infer UK, infer C>
+            ? TObject<ModifyShape<'partial', Depth, S>, UK, C>
+            : Shape[K]
+        >
+      }
     }
-  }
-  required: {
-    flat: { [K_ in keyof S]: K_ extends (K & readonly unknown[])[number] ? TDefined<S[K_]> : S[K_] }
-    deep: {
-      [K in keyof S]: TDefined<
-        S[K] extends TObject<infer S_, infer UK, infer C> ? TObject<ModifyShape<'required', Depth, S_>, UK, C> : S[K]
-      >
+    required: {
+      flat: { [P in keyof Shape]: P extends (KeysOrTType & readonly unknown[])[number] ? TDefined<Shape[P]> : Shape[P] }
+      deep: {
+        [K in keyof Shape]: TDefined<
+          Shape[K] extends TObject<infer S, infer UK, infer C>
+            ? TObject<ModifyShape<'required', Depth, S>, UK, C>
+            : Shape[K]
+        >
+      }
     }
-  }
-  schema: {
-    flat: { [K_ in keyof S]: K }
-    deep: {
-      [K_ in keyof S]: S[K_] extends TObject<infer S_, infer UK, infer C>
-        ? K extends TType
-          ? TObject<ModifyShape<'schema', Depth, S_, K>, UK, C>
-          : never
-        : K
+    schema: {
+      flat: { [P in keyof Shape]: KeysOrTType }
+      deep: {
+        [P in keyof Shape]: Shape[P] extends TObject<infer S, infer UK, infer C>
+          ? KeysOrTType extends TType
+            ? TObject<ModifyShape<'schema', Depth, S, KeysOrTType>, UK, C>
+            : never
+          : KeysOrTType
+      }
     }
-  }
-}[Mod][Depth]
-
-export type PickOptionalShape<S extends TObjectShape> = {
-  [K in keyof S as undefined extends OutputOf<S[K]> ? K : never]: S[K]
-}
-
-export type PickRequiredShape<S extends TObjectShape> = {
-  [K in keyof S as undefined extends OutputOf<S[K]> ? never : K]: S[K]
-}
+  }[Mod][Depth]
+>
 
 export type TObjectCondition<T extends AnyTObject = AnyTObject> = {
-  [K in TObjectShapePaths<T['shape']>]: {
-    readonly key: K
-  } & u.RequireExactlyOne<{
-    readonly is: any
-    readonly not: any
-    readonly exists: boolean
+  [K in TObjectShapePaths<T['shape']>]: u.RequireAtLeastOne<{
+    readonly then: (obj: T) => AnyTObject
+    readonly otherwise: (obj: T) => AnyTObject
   }> &
-    u.RequireAtLeastOne<{
-      readonly then: (obj: T) => AnyTObject
-      readonly otherwise: (obj: T) => AnyTObject
-    }>
+    u.RequireExactlyOne<{
+      readonly is: any
+      readonly not: any
+      readonly exists: boolean
+    }> & {
+      readonly key: K
+    }
 }[TObjectShapePaths<T['shape']>]
 
 export type TObjectOptions = MakeTOptions<{
@@ -176,7 +164,7 @@ export class TObject<
       type: TParsedType.Object,
       properties: TManifest.mapShape(this.shape),
       unknownKeys: this._def.unknownKeys,
-      catchall: this._def.catchall?.manifest() ?? null,
+      catchall: TManifest.get(this._def.catchall),
     })
   }
 
@@ -347,6 +335,8 @@ export class TObject<
     return new TObject({ ...this._def, catchall: null }).strip()
   }
 
+  /* ---------------------------------------------------------------------------------------------------------------- */
+
   keyof(): TObjectKeysEnum<S> {
     return TEnum._create(Object.keys(this.shape), this.options()) as TObjectKeysEnum<S>
   }
@@ -358,7 +348,7 @@ export class TObject<
         ? TLiteral.create(keys[0], this.shape[keys[0]].options())
         : keys.length
         ? TUnion._create(
-            u.keys(this.shape).map((k) => TLiteral.create(k, this.shape[k].options())),
+            keys.map((k) => TLiteral.create(k, this.shape[k].options())),
             this.options()
           )
         : TNever.create(this.options())
@@ -366,15 +356,17 @@ export class TObject<
   }
 
   values(): TObjectValues<S> {
-    const vals = u.values(this.shape)
+    const values = u.values(this.shape)
     return (
-      vals.length === 1
-        ? vals[0]
-        : vals.length
-        ? TUnion._create(u.values(this.shape), this.options())
+      values.length === 1
+        ? values[0]
+        : values.length
+        ? TUnion._create(values, this.options())
         : TNever.create(this.options())
     ) as TObjectValues<S>
   }
+
+  /* ---------------------------------------------------------------------------------------------------------------- */
 
   pick<K extends readonly [keyof S, ...Array<keyof S>]>(keys: K): TObject<Pick<S, K[number]>, UK, C> {
     return this._setShape(u.pick(this.shape, keys))
@@ -384,6 +376,8 @@ export class TObject<
     return this._setShape(u.omit(this.shape, keys))
   }
 
+  /* ---------------------------------------------------------------------------------------------------------------- */
+
   augment<T extends TObjectShape>(shape: T): TObject<u.Merge<S, T>, UK, C> {
     return this._setShape(u.merge(this.shape, shape))
   }
@@ -392,13 +386,9 @@ export class TObject<
     return this.augment(shape)
   }
 
-  setKey<K extends string, T extends TType>(key: K, type: T): TObject<u.Merge<S, { [K_ in K]: T }>, UK, C> {
-    return this.augment({ [key]: type } as { [K_ in K]: T })
-  }
-
-  merge<S_ extends TObjectShape, UK_ extends TObjectUnknownKeys | null, C_ extends TType | null>(
-    object: TObject<S_, UK_, C_>
-  ): TObject<u.Merge<S, S_>, UK_, C_> {
+  merge<IncS extends TObjectShape, IncUK extends TObjectUnknownKeys | null, IncC extends TType | null>(
+    object: TObject<IncS, IncUK, IncC>
+  ): TObject<u.Merge<S, IncS>, IncUK, IncC> {
     return object._setShape(this.augment(object.shape).shape)
   }
 
@@ -409,6 +399,28 @@ export class TObject<
   diff<T extends TObjectShape>(shape: T): TObject<u.Diff<S, T>, UK, C> {
     return this._setShape(u.diff(this.shape, shape))
   }
+
+  patch<T extends TObjectShape, U extends TType>(
+    shape: T,
+    type: U
+  ): TObject<{ [K in keyof S]: S[K] extends U ? (K extends keyof T ? T[K] : TNever) : S[K] }, UK, C> {
+    return this._setShape(
+      u.fromEntries(
+        u
+          .entries(this.shape)
+          .map(([k, v]) => [
+            k,
+            v.isT(type.typeName) ? (k in shape ? shape[k as keyof T] : TNever.create(v.options())) : v,
+          ])
+      ) as { [K in keyof S]: S[K] extends U ? (K extends keyof T ? T[K] : TNever) : S[K] }
+    )
+  }
+
+  setKey<K extends string, T extends TType>(key: K, type: T): TObject<u.Merge<S, { [P in K]: T }>, UK, C> {
+    return this.augment({ [key]: type } as { [P in K]: T })
+  }
+
+  /* ---------------------------------------------------------------------------------------------------------------- */
 
   partial(): TObject<ModifyShape<'partial', 'flat', S>, UK, C>
   partial<K extends readonly [keyof S, ...Array<keyof S>]>(
@@ -442,17 +454,23 @@ export class TObject<
     return this._setShapeDeep({ onObject: (t) => t.deepRequired(), onAny: (t) => t.defined() })
   }
 
-  pickOptional(): TObject<PickOptionalShape<S>, UK, C> {
+  /* ---------------------------------------------------------------------------------------------------------------- */
+
+  conditionalPick<T extends TType>(type: T) {
+    type PickedShape = u._<{ [K in keyof S as S[K] extends T ? K : never]: S[K] }>
     return this._setShape(
-      Object.fromEntries(Object.entries(this.shape).filter(([_, v]) => v.isOptional)) as PickOptionalShape<S>
+      u.fromEntries(u.entries(this.shape).filter(([_, v]) => v.isT(type.typeName))) as unknown as PickedShape
     )
   }
 
-  pickRequired(): TObject<PickRequiredShape<S>, UK, C> {
+  conditionalOmit<T extends TType>(type: T) {
+    type OmittedShape = u._<{ [K in keyof S as S[K] extends T ? never : K]: S[K] }>
     return this._setShape(
-      Object.fromEntries(Object.entries(this.shape).filter(([_, v]) => v.isRequired)) as PickRequiredShape<S>
+      u.fromEntries(u.entries(this.shape).filter(([_, v]) => !v.isT(type.typeName))) as unknown as OmittedShape
     )
   }
+
+  /* ---------------------------------------------------------------------------------------------------------------- */
 
   toSchema<T extends TType>(
     type: T,
@@ -465,7 +483,7 @@ export class TObject<
   toSchema<T extends TType>(
     type: T,
     options?: { readonly deep?: boolean }
-  ): TObject<ModifyShape<'schema', 'flat' | 'deep', S, T>, UK, C> {
+  ): TObject<ModifyShape<'schema', 'deep' | 'flat', S, T>, UK, C> {
     return this._setShapeDeep({
       onObject: (t) => (options?.deep === false ? type : t.toSchema(type)),
       onOthers: () => type,
@@ -476,17 +494,19 @@ export class TObject<
     return this.toSchema(TString.create(), { deep: false })
   }
 
+  /* ---------------------------------------------------------------------------------------------------------------- */
+
   when<Conditions extends readonly [TObjectCondition<this>, ...Array<TObjectCondition<this>>]>(
     conditions: Conditions
   ):
-    | ReturnType<Extract<Conditions[number], { readonly then: u.Fn }>['then']>
-    | ReturnType<Extract<Conditions[number], { readonly otherwise: u.Fn }>['otherwise']> {
+    | ReturnType<Extract<Conditions[number], { readonly otherwise: u.Fn }>['otherwise']>
+    | ReturnType<Extract<Conditions[number], { readonly then: u.Fn }>['then']> {
     return new TObject({
       ...this._def,
       conditions: [...this._def.conditions, ...(conditions as unknown as TObjectCondition[])],
     }) as
-      | ReturnType<Extract<Conditions[number], { readonly then: u.Fn }>['then']>
       | ReturnType<Extract<Conditions[number], { readonly otherwise: u.Fn }>['otherwise']>
+      | ReturnType<Extract<Conditions[number], { readonly then: u.Fn }>['then']>
   }
 
   /* ---------------------------------------------------------------------------------------------------------------- */

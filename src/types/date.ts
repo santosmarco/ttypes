@@ -12,11 +12,11 @@ import { TType } from './_internal'
 /*                                                        TDate                                                       */
 /* ------------------------------------------------------------------------------------------------------------------ */
 
-export type TDateCasting = 'date' | 'number' | 'iso' | 'utc'
+export type TDateCasting = 'date' | 'iso' | 'number' | 'utc'
 
-export type TDateCheckInput = Date | number | u.LiteralUnion<'now', string>
+export type TDateCheckInput = Date | u.LiteralUnion<'now', string> | number
 
-export type TDateInput<Coerce extends boolean> = Coerce extends true ? Date | string | number : Date
+export type TDateInput<Coerce extends boolean> = Coerce extends true ? Date | number | string : Date
 
 export type TDateOutput<Cast extends TDateCasting> = Cast extends 'number'
   ? number
@@ -24,8 +24,9 @@ export type TDateOutput<Cast extends TDateCasting> = Cast extends 'number'
   ? string
   : Date
 
-export const handleTDateCheckInput = (value: Date | 'now', currentDate: Date): Date =>
-  value === 'now' ? currentDate : value
+function handleTDateCheckInput(value: Date | 'now', currentDate: Date): Date {
+  return value === 'now' ? currentDate : value
+}
 
 export interface TDateDef<Coerce extends boolean, Cast extends TDateCasting> extends TDef {
   readonly typeName: TTypeName.Date
